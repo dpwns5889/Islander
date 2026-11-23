@@ -21,7 +21,7 @@ func _initialize() -> void:
 	fails += _check("웨이브 4 예고: 해적 3명 (해적선 1척)" in main.wave_info.text, "4웨이브 예고: " + main.wave_info.text)
 	gs.wave = 5
 	main._refresh_hud()
-	fails += _check("해적 4명 (해적선 2척)" in main.wave_info.text, "5웨이브 예고: " + main.wave_info.text)
+	fails += _check("석궁수 1명 · 해적 3명 (해적선 2척)" in main.wave_info.text, "5웨이브 예고: " + main.wave_info.text)
 	gs.wave = 1
 	main.start_wave()
 	fails += _check(not main.wave_info.visible, "전투 중에는 예고를 숨긴다")

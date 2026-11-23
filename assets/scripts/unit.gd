@@ -12,7 +12,8 @@ var base_y: float
 ## 해적선 전용: 멈출 바다 위치, 상륙할 땅 위치
 var stop: Vector3
 var landing: Vector3
-var crew: int = 0 ## 해적선이 태운 해적 수
+var crew: int = 0 ## 해적선이 태운 적 수
+var crew_kinds: Array[int] = [] ## 해적선이 태운 적 종류(강한 적이 먼저)
 ## 이동: 경로 칸 목록과 다음 경로 계산까지 남은 시간
 var path: Array[Vector2i] = []
 var repath: float = 0.0
@@ -54,11 +55,12 @@ func setup(k: int, mult: float) -> void:
 		mi.mesh = bm
 		base_y = 0.15
 	else:
+		var sc: float = Balance.UNIT_SCALE.get(k, 1.0)
 		var cm: CapsuleMesh = CapsuleMesh.new()
-		cm.radius = 0.12
-		cm.height = 0.42
+		cm.radius = 0.12 * sc
+		cm.height = 0.42 * sc
 		mi.mesh = cm
-		base_y = Field.BLOCK_H + 0.21
+		base_y = Field.BLOCK_H + 0.21 * sc
 	mi.material_override = mat
 	add_child(mi)
 	body = mi

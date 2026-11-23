@@ -67,6 +67,36 @@ func _initialize() -> void:
 	g.place(plug, Vector2i(3, 5))
 	fails += _check(not g.is_post_open(post), "실제로 놓으면 닫힌다")
 	fails += _check(g.trading_post() == post, "건물은 그대로 남는다(복구·철거 없음)")
+	# 4. 바다 칸은 기존 땅을 물로 깎아 닫힌 바다를 다시 열 수 있다
+	var carve: Piece = Piece.new()
+	carve.cells.assign([Vector2i(0, 0)])
+	carve.terrain.assign([Piece.SEA])
+	fails += _check(g.carve_count(carve, Vector2i(3, 5)) == 1 and g.carve_count(carve, Vector2i(12, 10)) == 0, "깎을 땅 칸 수 계산")
+	fails += _check(g.can_place(carve, Vector2i(3, 5)), "바다 칸은 기존 땅 위에 놓을 수 있다")
+	fails += _check(g.post_open_after(post, carve, Vector2i(3, 5)), "깎으면 열린다고 미리 계산 (지금은 닫혀 있어도)")
+	fails += _check(not g.is_post_open(post) and g.cells.has(Vector2i(3, 5)), "미리 계산은 필드를 바꾸지 않는다")
+	var nodes_before: int = g.get_child_count()
+	g.place(carve, Vector2i(3, 5))
+	fails += _check(not g.cells.has(Vector2i(3, 5)) and g.water.has(Vector2i(3, 5)), "땅이 물 타일로 바뀐다")
+	fails += _check(g.is_post_open(post), "교역소가 다시 열린 바다와 맞닿는다 (되돌림)")
+	fails += _check(g.can_place(plug, Vector2i(3, 5)) == false, "물 타일이 된 칸에는 다시 땅을 못 놓는다")
+	# 5. 깎을 수 없는 곳: 건물, 본부, 이미 있는 물 타일. 땅 칸은 여전히 빈 칸에만
+	fails += _check(g.can_build(Balance.HOUSE, Vector2i(5, 6)), "깎기 전에는 땅에 집을 지을 수 있다")
+	g.build(Balance.HOUSE, Vector2i(5, 6))
+	fails += _check(not g.can_place(carve, Vector2i(5, 6)), "건물이 있는 칸은 깎을 수 없다")
+	fails += _check(not g.can_place(carve, Vector2i(4, 4)), "본부 칸은 깎을 수 없다")
+	fails += _check(not g.can_place(carve, Vector2i(3, 5)), "이미 물 타일인 칸에는 못 놓는다")
+	fails += _check(not g.can_place(plug, Vector2i(5, 5)), "땅 칸 조각은 기존 땅 위에 못 놓는다")
+	# 6. 깎인 땅은 블록도 사라진다 (이전 블록 노드가 남지 않는다)
+	var g2: Field = Field.new()
+	g2.place(strip, Vector2i(4, 4))
+	var before_nodes: int = g2.get_child_count()
+	g2.place(carve, Vector2i(5, 5))
+	var land_blocks: int = 0
+	for ch in g2.get_children():
+		if ch is MeshInstance3D and not ch.is_queued_for_deletion() and ch.mesh == g2.block_mesh:
+			land_blocks += 1
+	fails += _check(land_blocks == 5 and g2.cells.size() == 5, "땅 6칸 중 1칸이 깎여 블록 5개 (%d)" % land_blocks)
 	print("바다 타일·물가 검사 점검 실패 %d건" % fails)
 	quit(fails)
 

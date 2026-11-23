@@ -18,11 +18,21 @@ var soldiers: Array[Unit] = []
 var pirates: Array[Unit] = []
 var done: bool = false
 var time: float = 0.0
-var land_nav: AStarGrid2D
+var land_nav: AStarGrid2D ## 아군용 땅 길찾기 (성벽을 그냥 지난다)
+var enemy_nav: AStarGrid2D ## 적용 땅 길찾기 (성벽 칸은 비용이 높다) (기획서 6장)
+var _tower_cd: Dictionary = {} ## 방어탑 위치 → 다음 공격까지 남은 시간
+var _fx: Array = [] ## 방어탑 공격 선 표시 {node, t}
+var _queue: Array[int] = [] ## 아직 해적선에 태우지 않은 적 종류(강한 적이 먼저)
 var sea_nav: AStarGrid2D
 var islands: Dictionary = {} ## 땅 칸 → 섬 번호
 var _ships_left: int = 0
-var _pirates_left: int = 0 ## 아직 해적선에 태우지 않은 해적 수
+## 아직 해적선에 태우지 않은 적 수 (테스트에서 0으로 줄여 웨이브를 끝낼 수 있다)
+var _pirates_left: int:
+	get:
+		return _queue.size()
+	set(v):
+		while _queue.size() > maxi(v, 0):
+			_queue.pop_back()
 var _ship_timer: float = 0.0
 var speed_scale: float = 1.0 ## 전투 배속
 var _mult: float = 1.0
@@ -33,10 +43,11 @@ func setup(f: Field, g: Node, w: int) -> void:
 	gs = g
 	wave = w
 	land_nav = f.nav(false)
+	enemy_nav = f.nav(false, true)
 	sea_nav = f.nav(true)
 	islands = f.island_map()
 	_ships_left = Balance.ship_count(w)
-	_pirates_left = Balance.pirate_count(w)
+	_queue = Balance.enemy_queue(w)
 	_mult = Balance.enemy_mult(f.land_count(), f.expansions)
 	rng.randomize()
 	for hq_cell in f.hqs: # 본부마다 수비병 (기획서 5.5)
@@ -115,6 +126,7 @@ func tick(dt: float) -> void:
 		_pirate_turn(u, dt)
 	for b in boats.duplicate():
 		_boat_turn(b, dt)
+	_towers_turn(dt)
 	for u in soldiers:
 		u.animate(dt)
 	for u in pirates:
@@ -140,6 +152,9 @@ func _finish(victory: bool) -> void:
 	for b in boats:
 		for r in b.cargo:
 			r.queue_free()
+	for e in _fx:
+		e["node"].queue_free()
+	_fx.clear()
 	for arr in [ships, boats, soldiers, pirates]:
 		for u: Unit in arr:
 			u.queue_free()
@@ -157,7 +172,7 @@ func _add_unit(kind: int, pos: Vector3, mult: float) -> Unit:
 	add_child(u)
 	if Balance.SOLDIER_KINDS.has(kind):
 		soldiers.append(u)
-	elif kind == Balance.U_PIRATE:
+	elif Balance.ENEMY_KINDS.has(kind):
 		pirates.append(u)
 	elif kind == Balance.U_BOAT:
 		boats.append(u)
@@ -227,7 +242,8 @@ func _walk(u: Unit, goal: Vector2i, dt: float) -> void:
 	u.repath -= dt
 	if u.repath <= 0.0:
 		u.repath = 0.5
-		u.path = field.path(land_nav, field.world_to_cell(u.position), goal)
+		var nav: AStarGrid2D = enemy_nav if Balance.ENEMY_KINDS.has(u.kind) else land_nav
+		u.path = field.path(nav, field.world_to_cell(u.position), goal)
 	_follow(u, dt)
 
 
@@ -316,7 +332,22 @@ func _port_on_island(u: Unit) -> Vector2i:
 	return best
 
 
+## 적이 가려는 다음 칸이 성벽이고 바로 앞이면 그 성벽 칸, 아니면 (-1, -1) (기획서 6장)
+func _blocking_wall(u: Unit) -> Vector2i:
+	if u.path.is_empty() or not field.is_wall(u.path[0]):
+		return Vector2i(-1, -1)
+	return u.path[0] if _dist(u.position, field.cell_to_world(u.path[0])) <= 1.3 else Vector2i(-1, -1)
+
+
 func _pirate_turn(u: Unit, dt: float) -> void:
+	var wall: Vector2i = _blocking_wall(u)
+	if wall.x >= 0: # 길을 막은 성벽은 부수고 지나간다
+		u.cooldown = maxf(0.0, u.cooldown - dt)
+		if u.cooldown <= 0.0:
+			u.cooldown = Balance.ATTACK_INTERVAL
+			u.lunge(field.cell_to_world(wall))
+			field.damage(wall, u.atk)
+		return
 	var best_d: float = INF
 	var tpos: Vector3 = u.position
 	var tunit: Unit = null
@@ -346,6 +377,51 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 		tunit.hp -= u.atk
 	elif field.damage(tcell, u.atk): # 본부가 파괴되면 보유 골드·식량이 줄어든다 (기획서 5.5)
 		gs.lose_share(Balance.HQ_LOSS_RATE)
+
+
+## 방어탑: 사거리 안에서 가장 가까운 적 유닛을 1초마다 하나씩 공격한다 (해적선 제외) (기획서 6장)
+func _towers_turn(dt: float) -> void:
+	for c in field.buildings:
+		if field.buildings[c] != Balance.TOWER:
+			continue
+		_tower_cd[c] = maxf(0.0, float(_tower_cd.get(c, 0.0)) - dt)
+		if _tower_cd[c] > 0.0:
+			continue
+		var lv: int = field.levels[c]
+		var from: Vector3 = field.cell_to_world(c)
+		var t: Unit = null
+		var best: float = Balance.TOWER_RANGE_LV[lv - 1]
+		for e in pirates:
+			var d: float = _dist(from, e.position)
+			if d <= best:
+				best = d
+				t = e
+		if t != null:
+			t.hp -= Balance.TOWER_ATK_LV[lv - 1]
+			_tower_cd[c] = Balance.TOWER_INTERVAL
+			_shot_fx(from, t.position)
+	for i in range(_fx.size() - 1, -1, -1):
+		_fx[i]["t"] -= dt
+		if _fx[i]["t"] <= 0.0:
+			_fx[i]["node"].queue_free()
+			_fx.remove_at(i)
+
+
+## 방어탑에서 적에게 가는 짧은 선
+func _shot_fx(from: Vector3, to: Vector3) -> void:
+	var d: Vector3 = Vector3(to.x - from.x, 0.0, to.z - from.z)
+	var m: MeshInstance3D = MeshInstance3D.new()
+	var bm: BoxMesh = BoxMesh.new()
+	bm.size = Vector3(0.05, 0.05, maxf(d.length(), 0.1))
+	m.mesh = bm
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(1.0, 0.85, 0.2)
+	m.material_override = mat
+	m.position = Vector3(from.x + d.x / 2.0, Field.BLOCK_H + 0.6, from.z + d.z / 2.0)
+	m.rotation.y = atan2(d.x, d.z)
+	add_child(m)
+	_fx.append({"node": m, "t": 0.12})
 
 
 func _boat_turn(b: Unit, dt: float) -> void:
@@ -408,8 +484,11 @@ func _spawn_ships(dt: float) -> void:
 		return
 	_ship_timer = Balance.SHIP_INTERVAL
 	_ships_left -= 1
-	var crew: int = mini(Balance.PIRATES_PER_SHIP, _pirates_left)
-	_pirates_left -= crew
+	var load: Array[int] = [] # 강한 적이 먼저 탄다
+	for i in Balance.PIRATES_PER_SHIP:
+		if _queue.is_empty():
+			break
+		load.append(_queue.pop_front())
 	var from: Vector2i = _edge_cell()
 	var tgt: Dictionary = _pick_landing(field.cell_to_world(from))
 	if tgt.is_empty():
@@ -421,7 +500,8 @@ func _spawn_ships(dt: float) -> void:
 	s.path = route
 	s.landing = field.cell_to_world(tgt["land"])
 	s.island = tgt["island"]
-	s.crew = crew
+	s.crew = load.size()
+	s.crew_kinds = load
 
 
 ## 필드 밖 지형 가장자리의 바다 칸 (기획서 3장)
@@ -464,7 +544,7 @@ func _pick_landing(from: Vector3) -> Dictionary:
 func _ship_turn(s: Unit, dt: float) -> void:
 	if not _follow(s, dt):
 		return
-	for i in s.crew: # 모래·평원 어느 해안이든 상륙한다 (기획서 6장)
-		var p: Unit = _add_unit(Balance.U_PIRATE, s.landing + Vector3(rng.randf_range(-0.2, 0.2), 0.0, rng.randf_range(-0.2, 0.2)), _mult)
+	for kind in s.crew_kinds: # 모래·평원 어느 해안이든 상륙한다 (기획서 6장)
+		var p: Unit = _add_unit(kind, s.landing + Vector3(rng.randf_range(-0.2, 0.2), 0.0, rng.randf_range(-0.2, 0.2)), _mult)
 		p.island = s.island
 	s.hp = 0.0

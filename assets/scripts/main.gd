@@ -49,8 +49,10 @@ var category_buttons: Array[Button] = [] ## 건설 메뉴 카테고리 버튼
 var dropdown_panel: PanelContainer ## 카테고리를 누르면 위로 펼쳐지는 목록
 var dropdown_lists: Array[VBoxContainer] = []
 var open_category: int = -1
+var _tower_hints: Node3D = null ## 방어탑을 지을 수 있는 성벽 칸 표시 (기획서 6장)
 var _warn: bool = false ## 지금 들고 있는 타일이 교역소를 바다와 끊는지 (미리보기 경고) (기획서 5.6)
 var _warn_key: String = ""
+var _carve_n: int = 0 ## 지금 들고 있는 타일의 바다 칸이 물로 깎을 땅 칸 수
 var npc_next_wave: int = -1 ## 교역 NPC가 다음에 방문할 웨이브, 교역소가 없으면 -1 (기획서 5.6)
 var npc_present: bool = false ## 교역 NPC가 와 있는지 (기획서 5.6)
 var npc_node: MeshInstance3D = null
@@ -383,8 +385,33 @@ func set_build(id: int) -> void:
 		_rebuild_ghost()
 	open_category = -1 # 건물을 고르거나 설치 모드가 끝나면 목록을 닫는다
 	_update_dropdown()
+	_update_tower_hints()
 	_note = ""
 	_refresh_hud()
+
+
+## 방어탑을 짓는 동안 지을 수 있는 성벽 칸을 하늘색으로 표시한다
+func _update_tower_hints() -> void:
+	if _tower_hints != null:
+		_tower_hints.queue_free()
+		_tower_hints = null
+	if build_id != Balance.TOWER:
+		return
+	_tower_hints = Node3D.new()
+	for c in field.buildings:
+		if field.can_build(Balance.TOWER, c):
+			var m: MeshInstance3D = MeshInstance3D.new()
+			var bm: BoxMesh = BoxMesh.new()
+			bm.size = Vector3(0.9, 0.06, 0.9)
+			m.mesh = bm
+			var mat: StandardMaterial3D = StandardMaterial3D.new()
+			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			mat.albedo_color = Color(0.1, 0.85, 1.0, 0.8)
+			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			m.material_override = mat
+			m.position = field.cell_to_world(c) + Vector3(0, Field.BLOCK_H + 0.55, 0)
+			_tower_hints.add_child(m)
+	add_child(_tower_hints)
 
 
 ## 건설 메뉴 카테고리를 열고 닫는다 (기획서 7.2)
@@ -626,7 +653,10 @@ func try_build(c: Vector2i) -> bool:
 	if not _build_ok(c):
 		return false
 	GameState.spend(_cost_of(build_id))
-	field.build(build_id, c)
+	if build_id == Balance.TOWER:
+		field.build_tower(c) # 성벽이 방어탑으로 바뀐다 (레벨·체력 비율 유지)
+	else:
+		field.build(build_id, c)
 	if build_id == Balance.TRADING_POST: # 설치한 다음 라운드에 첫 방문 (기획서 5.6)
 		npc_next_wave = GameState.wave + 1
 	set_build(0) # 건물을 하나 지으면 설치 모드가 끝난다
@@ -828,6 +858,7 @@ func _set_pitch(deg: float) -> void:
 func _rebuild_ghost() -> void:
 	_warn = false # 들고 있는 조각이 바뀌면 경고도 다시 계산한다
 	_warn_key = ""
+	_carve_n = 0
 	for c in ghost.get_children():
 		ghost.remove_child(c)
 		c.queue_free()
@@ -847,6 +878,8 @@ func _ghost_mat(t: int, ok: bool, warn: bool = false) -> StandardMaterial3D:
 		var c: Color = Field.color_of(t) if ok else Color(0.9, 0.2, 0.2)
 		if t == -1 and ok:
 			c = Color(0.1, 0.85, 1.0)
+		if t == -2 and ok:
+			c = Color(0.05, 0.4, 0.85)
 		if warn and ok: # 놓을 수는 있지만 교역소가 바다와 끊긴다
 			c = Color(1.0, 0.55, 0.1)
 		c.a = 0.75
@@ -886,7 +919,10 @@ func _process(_delta: float) -> void:
 		for i in current.cells.size():
 			var m: MeshInstance3D = ghost.get_child(i) as MeshInstance3D
 			m.position = field.cell_to_world(origin + current.cells[i]) + Vector3(0, GHOST_Y, 0)
-			m.material_override = _ghost_mat(current.terrain[i], ok, _warn)
+			var gt: int = current.terrain[i]
+			if gt == Piece.SEA and field.cells.has(origin + current.cells[i]):
+				gt = -2 # 땅을 물로 깎는 칸은 진한 파랑
+			m.material_override = _ghost_mat(gt, ok, _warn)
 	else:
 		var c: Vector2i = _hover_cell()
 		cursor.visible = true
@@ -902,8 +938,10 @@ func _update_warn(origin: Vector2i, ok: bool) -> void:
 		return
 	_warn_key = key
 	var warn: bool = ok and post.x >= 0 and field.is_post_open(post) and not field.post_open_after(post, current, origin)
-	if warn != _warn:
+	var carve: int = field.carve_count(current, origin) if ok else 0
+	if warn != _warn or carve != _carve_n:
 		_warn = warn
+		_carve_n = carve
 		_refresh_hud()
 
 
@@ -977,8 +1015,14 @@ func _refresh_hud() -> void:
 	research_toggle.text = "연구 (연구포인트 %d)" % GameState.research_points
 	# 이번 웨이브의 적을 미리 알려 준다. 해적의 세기는 땅 칸 수·확장 횟수에 따라 바뀐다 (기획서 6장)
 	wave_info.visible = battle == null
-	var pirates_n: int = Balance.pirate_count(GameState.wave)
-	wave_info.text = "웨이브 %d 예고: 해적 %d명 (해적선 %d척) · 체력·공격 ×%.2f" % [GameState.wave, pirates_n, Balance.ship_count(GameState.wave), Balance.enemy_mult(field.land_count(), field.expansions)]
+	var comp: Dictionary = Balance.enemy_composition(GameState.wave)
+	var comp_parts: Array[String] = []
+	for kind in comp:
+		comp_parts.append("%s %d명" % [Balance.UNITS[kind]["name"], comp[kind]])
+	wave_info.text = "웨이브 %d 예고: %s (해적선 %d척) · 체력·공격 ×%.2f" % [GameState.wave, " · ".join(comp_parts), Balance.ship_count(GameState.wave), Balance.enemy_mult(field.land_count(), field.expansions)]
+	for nk in Balance.new_enemy_kinds(GameState.wave): # 새 종류가 처음 나오는 웨이브 안내
+		var info: Dictionary = Balance.UNITS[nk]
+		wave_info.text += "\n새 적: %s (체력 %d · 공격 %d%s)" % [info["name"], info["hp"], info["atk"], (" · 사거리 %.1f칸" % info["reach"]) if info["reach"] > 2.0 else ""]
 	if pending_hq:
 		wave_info.text += "\n본부 조각을 먼저 놓으세요 (아래 '본부 조각' 카드)"
 	if tiles_required > 0:
@@ -1058,6 +1102,8 @@ func _refresh_hud() -> void:
 		s = "본부 조각: 좌클릭 배치 · R/우클릭 회전 (놓아야 웨이브를 시작할 수 있습니다)"
 	elif current != null:
 		s = "조각: 좌클릭 배치 · R/우클릭 회전 · 고르지 않은 조각은 버려집니다"
+		if _carve_n > 0:
+			s += "\n땅 %d칸이 물로 바뀝니다 (진한 파랑, 되돌릴 수 없음)" % _carve_n
 		if _warn:
 			s += "\n⚠ 이 자리에 놓으면 교역소가 바다와 끊겨 교역 NPC가 오지 못합니다 (주황색)"
 	elif pending_hq:

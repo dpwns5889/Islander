@@ -1,0 +1,216 @@
+extends SceneTree
+## 적 곡선·적 종류·성벽·방어탑 점검: godot --headless --script tests/m17_check.gd
+
+
+func _initialize() -> void:
+	var fails: int = 0
+	# 1. 적 수 곡선: 기준점, 단조 증가, 곡선(아래로 볼록)
+	var want: Array[int] = [1, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+	for i in want.size():
+		fails += _check(Balance.pirate_count(i + 1) == want[i], "웨이브 %d: %d명 (%d)" % [i + 1, want[i], Balance.pirate_count(i + 1)])
+	fails += _check(Balance.pirate_count(15) == 15 and Balance.pirate_count(20) == 22 and Balance.pirate_count(25) == 29 and Balance.pirate_count(30) == 36, "15/20/25/30웨이브: 15/22/29/36명")
+	var mono: bool = true
+	for n in range(1, 41):
+		mono = mono and Balance.pirate_count(n + 1) >= Balance.pirate_count(n)
+	fails += _check(mono, "웨이브가 오를수록 줄지 않는다")
+	fails += _check(Balance.pirate_count(30) - Balance.pirate_count(20) > Balance.pirate_count(10) - Balance.pirate_count(1), "뒤로 갈수록 가파르다(곡선)")
+	# 2. 구성: 합계, 선장은 보스 라운드만, 새 종류는 정해진 웨이브부터
+	var comp_ok: bool = true
+	for n in range(1, 41):
+		var comp: Dictionary = Balance.enemy_composition(n)
+		var total: int = 0
+		for k in comp:
+			total += comp[k]
+			if Balance.ENEMY_FIRST_WAVE.has(k) and n < Balance.ENEMY_FIRST_WAVE[k]:
+				comp_ok = false
+		comp_ok = comp_ok and total == Balance.pirate_count(n)
+	fails += _check(comp_ok, "모든 웨이브: 구성 합계 = 적 수, 새 종류는 첫 등장 웨이브부터")
+	var caps: Array[int] = []
+	for n in range(1, 41):
+		caps.append(Balance.enemy_composition(n).get(Balance.U_CAPTAIN, 0))
+	fails += _check(caps[9] == 1 and caps[19] == 2 and caps[29] == 2, "선장: 10웨이브 1, 20웨이브 2, 30웨이브 2")
+	var other_caps: int = 0
+	for n in range(1, 41):
+		if n != 10 and n != 20 and n != 30:
+			other_caps += caps[n - 1]
+	fails += _check(other_caps == 0, "보스 라운드가 아니면 선장이 없다")
+	fails += _check(Balance.enemy_composition(5) == {Balance.U_CROSSBOW: 1, Balance.U_PIRATE: 3}, "5웨이브: 석궁수 1 + 해적 3")
+	fails += _check(Balance.enemy_composition(12) == {Balance.U_SHIELD: 1, Balance.U_AXE: 3, Balance.U_CROSSBOW: 2, Balance.U_PIRATE: 5}, "12웨이브: 방패병 1 · 도끼병 3 · 석궁수 2 · 해적 5")
+	fails += _check(Balance.new_enemy_kinds(5) == [Balance.U_CROSSBOW] and Balance.new_enemy_kinds(8) == [Balance.U_AXE] and Balance.new_enemy_kinds(10) == [Balance.U_CAPTAIN] and Balance.new_enemy_kinds(12) == [Balance.U_SHIELD] and Balance.new_enemy_kinds(6).is_empty(), "새 적 등장 웨이브")
+	# 갈수록 강하다: 적 전체 체력 합
+	var hp_sum: Callable = func(n: int) -> float:
+		var t: float = 0.0
+		var cmp: Dictionary = Balance.enemy_composition(n)
+		for k in cmp:
+			t += float(Balance.UNITS[k]["hp"]) * cmp[k]
+		return t
+	fails += _check(hp_sum.call(4) < hp_sum.call(10) and hp_sum.call(10) < hp_sum.call(20) and hp_sum.call(20) < hp_sum.call(30), "적 전체 체력이 웨이브마다 늘어난다")
+	var avg4: float = hp_sum.call(4) / Balance.pirate_count(4)
+	var avg30: float = hp_sum.call(30) / Balance.pirate_count(30)
+	fails += _check(avg30 > avg4 * 2.5, "한 명당 평균 체력도 크게 늘어난다 (%.0f → %.0f)" % [avg4, avg30])
+	# 3. 능력치
+	var stats: Dictionary = {Balance.U_CROSSBOW: [18.0, 3.0, 1.1, 3.5], Balance.U_AXE: [50.0, 4.0, 1.2, 0.9], Balance.U_SHIELD: [100.0, 2.5, 0.9, 0.9], Balance.U_CAPTAIN: [350.0, 6.0, 1.1, 0.9]}
+	var stats_ok: bool = true
+	for k in stats:
+		var u: Dictionary = Balance.UNITS[k]
+		stats_ok = stats_ok and u["hp"] == stats[k][0] and u["atk"] == stats[k][1] and u["speed"] == stats[k][2] and u["reach"] == stats[k][3]
+	fails += _check(stats_ok, "적 능력치 표")
+	# 4. 배: 강한 적이 먼저 타고, 합치면 구성과 같다
+	var q: Array[int] = Balance.enemy_queue(12)
+	fails += _check(q[0] == Balance.U_SHIELD and q[q.size() - 1] == Balance.U_PIRATE, "대기열: 강한 적이 먼저")
+	fails += _check(Balance.enemy_queue(10)[0] == Balance.U_CAPTAIN, "보스 라운드는 선장이 먼저")
+	var island: Field = _island(5, 5)
+	var gs: Node = load("res://assets/scripts/game_state.gd").new()
+	var b: Battle = Battle.new()
+	b.setup(island, gs, 12)
+	b.rng.seed = 3
+	var kinds: Dictionary = {}
+	var first_ship_first: int = -1
+	for _i in 600:
+		b.tick(0.1)
+		for s in b.ships:
+			if first_ship_first == -1 and not s.crew_kinds.is_empty():
+				first_ship_first = s.crew_kinds[0]
+			for idx in s.crew_kinds.size():
+				kinds["%d_%d" % [s.get_instance_id(), idx]] = s.crew_kinds[idx]
+		if b.done or b._ships_left == 0 and b.ships.is_empty():
+			break
+	var counted: Dictionary = {}
+	for key in kinds:
+		counted[kinds[key]] = int(counted.get(kinds[key], 0)) + 1
+	fails += _check(counted == Balance.enemy_composition(12) and first_ship_first == Balance.U_SHIELD, "12웨이브 배에 실린 적 = 구성, 첫 배 맨 앞은 방패병 (%s)" % str(counted))
+	# 석궁수는 3.5칸 거리에서 쏜다
+	var cb: Battle = Battle.new()
+	cb.setup(_island(5, 5), load("res://assets/scripts/game_state.gd").new(), 1)
+	cb._ships_left = 1
+	cb._ship_timer = 9999.0
+	var xbow: Unit = cb._add_unit(Balance.U_CROSSBOW, cb.soldiers[0].position + Vector3(3.0, 0.0, 0.0), 1.0)
+	xbow.island = cb.soldiers[0].island
+	xbow.cooldown = 0.0
+	var pos0: Vector3 = xbow.position
+	fails += _check(cb._engage(xbow, cb.soldiers[0].position, 0.1) and xbow.position == pos0, "석궁수는 3칸 거리에서 움직이지 않고 쏜다")
+	# 5. 성벽: 땅에만, 목표가 아니다
+	var f: Field = _island(9, 5)
+	fails += _check(f.can_build(Balance.WALL, Vector2i(5, 4)) and not f.can_build(Balance.WALL, Vector2i(0, 0)), "성벽은 땅 위에만")
+	f.build(Balance.WALL, Vector2i(8, 6))
+	fails += _check(f.is_wall(Vector2i(8, 6)) and not f.targets().has(Vector2i(8, 6)), "성벽은 있지만 적의 목표는 아니다")
+	f.build(Balance.HOUSE, Vector2i(7, 6))
+	fails += _check(f.targets().has(Vector2i(7, 6)), "일반 건물은 목표")
+	# 6. 길찾기: 돌아갈 수 있으면 돌아가고, 막히면 성벽을 지난다. 아군은 성벽을 그냥 지난다
+	var d1: Field = _island(9, 5) # 땅 (4..12, 4..8)
+	for y in range(4, 8): # x=8 열에 성벽, y=8 한 칸은 비워 둔다 (돌아가는 길)
+		d1.build(Balance.WALL, Vector2i(8, y))
+	var enemy1: AStarGrid2D = d1.nav(false, true)
+	var ally1: AStarGrid2D = d1.nav(false)
+	var p_enemy: Array[Vector2i] = d1.path(enemy1, Vector2i(5, 6), Vector2i(11, 6))
+	var p_ally: Array[Vector2i] = d1.path(ally1, Vector2i(5, 6), Vector2i(11, 6))
+	var enemy_crosses: bool = false
+	for c in p_enemy:
+		enemy_crosses = enemy_crosses or d1.is_wall(c)
+	var ally_crosses: bool = false
+	for c in p_ally:
+		ally_crosses = ally_crosses or d1.is_wall(c)
+	fails += _check(not p_enemy.is_empty() and not enemy_crosses, "적은 열린 틈이 있으면 성벽을 돌아간다")
+	fails += _check(ally_crosses, "아군은 성벽 칸을 그냥 지난다")
+	d1.build(Balance.WALL, Vector2i(8, 8)) # 이제 완전히 막힘
+	var p_blocked: Array[Vector2i] = d1.path(d1.nav(false, true), Vector2i(5, 6), Vector2i(11, 6))
+	var blocked_crosses: bool = false
+	for c in p_blocked:
+		blocked_crosses = blocked_crosses or d1.is_wall(c)
+	fails += _check(not p_blocked.is_empty() and blocked_crosses, "완전히 막히면 성벽을 지나는 길(부수고 간다)")
+	# 7. 전투: 길을 막은 성벽은 적이 부수고 지나간다
+	var w: Field = _island(9, 5)
+	for y in range(4, 9):
+		w.build(Balance.WALL, Vector2i(8, y))
+	var gsw: Node = load("res://assets/scripts/game_state.gd").new()
+	var bw: Battle = Battle.new()
+	bw.setup(w, gsw, 1)
+	bw._ships_left = 1
+	bw._ship_timer = 9999.0
+	var raider: Unit = bw._add_unit(Balance.U_PIRATE, w.cell_to_world(Vector2i(11, 6)), 40.0) # 한 방이 센 해적
+	raider.island = bw.islands[w.hq]
+	var wall_hp0: float = 0.0
+	for y in range(4, 9):
+		wall_hp0 += w.hp[Vector2i(8, y)]
+	for _i in 400:
+		bw.tick(0.1)
+	var wall_hp1: float = 0.0
+	var walls_left: int = 0
+	for y in range(4, 9):
+		if w.buildings.has(Vector2i(8, y)):
+			walls_left += 1
+			wall_hp1 += w.hp[Vector2i(8, y)]
+	fails += _check(walls_left < 5 or wall_hp1 < wall_hp0, "적이 길을 막은 성벽을 공격했다 (성벽 %d개, 체력 %.0f → %.0f)" % [walls_left, wall_hp0, wall_hp1])
+	# 8. 방어탑: 성벽 위에만, 레벨·체력 비율을 이어받는다
+	var t: Field = _island(9, 5)
+	t.build(Balance.WALL, Vector2i(8, 6))
+	fails += _check(t.can_build(Balance.TOWER, Vector2i(8, 6)) and not t.can_build(Balance.TOWER, Vector2i(7, 6)), "방어탑은 성벽 위에만")
+	t.upgrade(Vector2i(8, 6))
+	t.damage(Vector2i(8, 6), t.hp[Vector2i(8, 6)] / 2.0)
+	var ratio: float = t.hp[Vector2i(8, 6)] / t.max_hp(Vector2i(8, 6))
+	t.build_tower(Vector2i(8, 6))
+	fails += _check(t.buildings[Vector2i(8, 6)] == Balance.TOWER and t.levels[Vector2i(8, 6)] == 2 and absf(t.hp[Vector2i(8, 6)] / t.max_hp(Vector2i(8, 6)) - ratio) < 0.001, "성벽 → 방어탑: 레벨 2·체력 비율 유지")
+	fails += _check(t.is_wall(Vector2i(8, 6)) and t.targets().has(Vector2i(8, 6)), "방어탑은 길을 막고 목표가 된다")
+	fails += _check(not t.can_build(Balance.TOWER, Vector2i(8, 6)), "이미 방어탑인 칸에는 또 못 짓는다")
+	# 9. 방어탑 공격: 사거리 안의 적만 1초마다, 레벨별 공격력
+	for lv in [1, 2, 3]:
+		var tf: Field = _island(9, 5)
+		tf.build(Balance.WALL, Vector2i(8, 6))
+		for _u in lv - 1:
+			tf.upgrade(Vector2i(8, 6))
+		tf.build_tower(Vector2i(8, 6))
+		var tb: Battle = Battle.new()
+		tb.setup(tf, load("res://assets/scripts/game_state.gd").new(), 1)
+		tb._ships_left = 1
+		tb._ship_timer = 9999.0
+		var tpos: Vector3 = tf.cell_to_world(Vector2i(8, 6))
+		var near: Unit = tb._add_unit(Balance.U_SHIELD, tpos + Vector3(Balance.TOWER_RANGE_LV[lv - 1] - 0.3, 0.0, 0.0), 1.0)
+		near.island = tb.islands[tf.hq]
+		near.speed = 0.0 # 움직이지 않게 고정
+		var far: Unit = tb._add_unit(Balance.U_SHIELD, tpos + Vector3(Balance.TOWER_RANGE_LV[lv - 1] + 1.0, 0.0, 0.0), 1.0)
+		far.island = near.island
+		far.speed = 0.0
+		var hp_near: float = near.hp
+		var hp_far: float = far.hp
+		tb._towers_turn(0.0)
+		fails += _check(absf(near.hp - (hp_near - Balance.TOWER_ATK_LV[lv - 1])) < 0.001 and far.hp == hp_far, "방어탑 레벨 %d: 사거리 안의 적에게 %.0f 피해, 밖은 무사" % [lv, Balance.TOWER_ATK_LV[lv - 1]])
+		if lv == 1:
+			fails += _check(tb._fx.size() == 1, "공격 선이 표시된다")
+			tb._towers_turn(0.5)
+			fails += _check(absf(near.hp - (hp_near - 4.0)) < 0.001, "1초가 지나기 전에는 다시 쏘지 않는다")
+			tb._towers_turn(0.6)
+			fails += _check(absf(near.hp - (hp_near - 8.0)) < 0.001, "1초 뒤에 다시 쏜다")
+			fails += _check(tb._fx.size() <= 1, "선은 짧게 보였다 사라진다")
+	# 10. 방어탑은 해적선을 공격하지 않는다
+	var sf: Field = _island(9, 5)
+	sf.build(Balance.WALL, Vector2i(8, 6))
+	sf.build_tower(Vector2i(8, 6))
+	var sb: Battle = Battle.new()
+	sb.setup(sf, load("res://assets/scripts/game_state.gd").new(), 1)
+	sb._ships_left = 1
+	sb._ship_timer = 9999.0
+	var ship: Unit = sb._add_unit(Balance.U_SHIP, sf.cell_to_world(Vector2i(8, 6)) + Vector3(1.0, 0.0, 0.0), 1.0)
+	var ship_hp: float = ship.hp
+	sb._towers_turn(0.0)
+	fails += _check(ship.hp == ship_hp, "방어탑은 해적선을 공격하지 않는다")
+	print("적·성벽·방어탑 점검 실패 %d건" % fails)
+	quit(fails)
+
+
+## 가로 w, 세로 h 평원 섬 (4,4)부터. 본부는 가운데 왼쪽
+func _island(w: int, h: int) -> Field:
+	var f: Field = Field.new()
+	var p: Piece = Piece.new()
+	for y in h:
+		for x in w:
+			p.cells.append(Vector2i(x, y))
+			p.terrain.append(Piece.PLAINS)
+	p.hq_index = (h / 2) * w + 1
+	f.place(p, Vector2i(4, 4))
+	return f
+
+
+func _check(ok: bool, msg: String) -> int:
+	if not ok:
+		print("실패: ", msg)
+	return 0 if ok else 1

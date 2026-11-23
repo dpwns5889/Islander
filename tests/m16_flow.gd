@@ -53,6 +53,25 @@ func _initialize() -> void:
 	fails += _check("오지 못했습니다" in main._note, "안내 문구: " + main._note)
 	fails += _check(main.npc_next_wave == 5, "일정은 3라운드 뒤(5웨이브)로 넘어간다")
 	fails += _check(main.field.trading_post() == post, "교역소는 그대로 남는다")
+	# 바다 칸 타일로 막힌 땅을 깎아 되돌리면 NPC가 다시 온다
+	var carve: Piece = Piece.new()
+	carve.cells.assign([Vector2i(0, 0)])
+	carve.terrain.assign([Piece.SEA])
+	main.current = carve
+	main.pieces_left = 1
+	main._update_warn(open_neighbors[0], main.field.can_place(carve, open_neighbors[0]))
+	fails += _check(main._carve_n == 1 and not main._warn, "깎는 칸은 땅 1칸이 물로 바뀐다고 안내, 교역소는 경고 없음")
+	main._refresh_hud()
+	fails += _check("땅 1칸이 물로 바뀝니다" in main.status.text, "안내 문구: " + main.status.text)
+	fails += _check(main.place_current(open_neighbors[0]), "바다 칸을 땅 위에 놓을 수 있다")
+	fails += _check(main.field.is_post_open(post), "교역소가 다시 열린 바다와 맞닿는다")
+	for _i in 3: # 2 → 5웨이브
+		main.tiles_required = 0
+		main.start_wave()
+		main.battle._ships_left = 0
+		main.battle._pirates_left = 0
+		main.battle.tick(0.1)
+	fails += _check(gs.wave == 5 and main.npc_present, "다시 열린 교역소에는 5웨이브에 NPC가 온다")
 	# 10라운드 이후에만 바다 섞인 타일이 후보에 나온다
 	var saw_early: bool = false
 	gs.wave = 10

@@ -9,6 +9,27 @@ func _initialize() -> void:
 	root.add_child(main)
 	await process_frame
 	main.place_current(Vector2i(5, 7))
+	if args.size() > 2 and args[2] == "defense": # 성벽·방어탑과 12웨이브 구성으로 전투
+		main.tiles_required = 0
+		var gs2: Node = root.get_node("GameState")
+		gs2.gold = 1000
+		gs2.researched["archery"] = true
+		gs2.wave = 12
+		var made: int = 0
+		for c in main.field.cells:
+			main.set_build(Balance.WALL)
+			if main.try_build(c):
+				made += 1
+				if made == 1:
+					main.set_build(Balance.TOWER)
+					main.try_build(c)
+				if made >= 4:
+					break
+		main.start_wave()
+		await create_timer(float(args[1])).timeout
+		root.get_texture().get_image().save_png(args[0])
+		quit()
+		return
 	if args.size() > 2 and args[2] == "sea": # 11웨이브부터 나오는 바다 섞인 타일 (카드와 놓은 모습)
 		main.tiles_required = 0
 		root.get_node("GameState").wave = 11

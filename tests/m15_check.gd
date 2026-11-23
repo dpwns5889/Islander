@@ -14,7 +14,7 @@ func _initialize() -> void:
 	for id in Balance.BUILDINGS:
 		all_ids.append(id)
 	all_ids.sort()
-	fails += _check(listed == all_ids and all_ids.size() == 7, "카테고리가 건물 7종을 한 번씩 담는다")
+	fails += _check(listed == all_ids and all_ids.size() == 9, "카테고리가 건물 9종을 한 번씩 담는다")
 	fails += _check(Balance.BUILDINGS[Balance.FISHERY]["cost"] == 25 and Balance.BUILDINGS[Balance.TRADING_POST]["cost"] == 40, "건설비: 낚시터 25, 교역소 40")
 	fails += _check(Balance.BUILDINGS[Balance.TRADING_POST]["tech"] == "trade" and not Balance.BUILDINGS[Balance.FISHERY].has("tech"), "교역소는 교역 연구 필요, 낚시터는 처음부터")
 	# 낚시터 식량: 3 + ⌊칸/6⌋ (최대 9), 레벨 ×1/×1.5/×2

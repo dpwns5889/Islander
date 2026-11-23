@@ -9,6 +9,8 @@ const MARKET: int = 4
 const FARM: int = 5
 const FISHERY: int = 6 ## 낚시터
 const TRADING_POST: int = 7 ## 교역소
+const WALL: int = 8 ## 성벽
+const TOWER: int = 9 ## 방어탑 (성벽 위)
 const MAX_LEVEL: int = 3
 
 ## cost: 건설 골드, hp: 체력(M3부터), sand: 모래 위 건설 가능 여부, sea: 인접 바다 필요 여부
@@ -20,12 +22,14 @@ const BUILDINGS: Dictionary = {
 	FARM: {"name": "밭", "cost": 25, "hp": 50, "sand": false, "sea": false, "color": Color(0.35, 0.55, 0.2)},
 	FISHERY: {"name": "낚시터", "cost": 25, "hp": 50, "sand": true, "sea": false, "on_water": true, "color": Color(0.2, 0.65, 0.75)},
 	TRADING_POST: {"name": "교역소", "cost": 40, "hp": 70, "tech": "trade", "sand": true, "sea": false, "open_sea": true, "unique": true, "color": Color(0.7, 0.35, 0.75)},
+	WALL: {"name": "성벽", "cost": 15, "hp": 200, "sand": true, "sea": false, "wall": true, "passive": true, "color": Color(0.55, 0.55, 0.6)},
+	TOWER: {"name": "방어탑", "cost": 40, "hp": 200, "tech": "archery", "sand": true, "sea": false, "wall": true, "on_wall": true, "color": Color(0.35, 0.4, 0.55)},
 }
 
 ## 건설 메뉴 카테고리 (아래에서 위로 펼쳐지는 드롭다운) (기획서 7.2)
 const CATEGORIES: Array = [
 	{"name": "생산", "ids": [HOUSE, FARM, FISHERY]},
-	{"name": "군사·해상", "ids": [BARRACKS, PORT]},
+	{"name": "군사·해상", "ids": [BARRACKS, PORT, WALL, TOWER]},
 	{"name": "상업", "ids": [MARKET, TRADING_POST]},
 ]
 
@@ -35,6 +39,11 @@ const U_SHIP: int = 2
 const U_BOAT: int = 3
 const U_ARCHER: int = 4
 const U_CAVALRY: int = 5
+const U_CROSSBOW: int = 6 ## 석궁수 (적)
+const U_AXE: int = 7 ## 도끼병 (적)
+const U_SHIELD: int = 8 ## 방패병 (적)
+const U_CAPTAIN: int = 9 ## 선장 (보스 라운드의 적)
+const ENEMY_KINDS: Array[int] = [U_PIRATE, U_CROSSBOW, U_AXE, U_SHIELD, U_CAPTAIN]
 const SOLDIER_KINDS: Array[int] = [U_SOLDIER, U_ARCHER, U_CAVALRY] ## 병영에서 고를 수 있는 병종
 const UNITS: Dictionary = {
 	U_SOLDIER: {"name": "검병", "hp": 30.0, "atk": 5.0, "speed": 1.5, "reach": 0.9, "color": Color(0.2, 0.4, 1.0)},
@@ -43,7 +52,29 @@ const UNITS: Dictionary = {
 	U_BOAT: {"name": "보트", "hp": 1.0, "atk": 0.0, "speed": 2.5, "reach": 0.9, "color": Color(0.85, 0.75, 0.55)},
 	U_ARCHER: {"name": "궁수", "hp": 20.0, "atk": 3.0, "speed": 1.5, "reach": 4.0, "color": Color(0.2, 0.75, 0.3)},
 	U_CAVALRY: {"name": "기병", "hp": 40.0, "atk": 6.0, "speed": 2.5, "reach": 0.9, "color": Color(0.95, 0.55, 0.1)},
+	U_CROSSBOW: {"name": "석궁수", "hp": 18.0, "atk": 3.0, "speed": 1.1, "reach": 3.5, "color": Color(0.55, 0.15, 0.3)},
+	U_AXE: {"name": "도끼병", "hp": 50.0, "atk": 4.0, "speed": 1.2, "reach": 0.9, "color": Color(0.45, 0.1, 0.1)},
+	U_SHIELD: {"name": "방패병", "hp": 100.0, "atk": 2.5, "speed": 0.9, "reach": 0.9, "color": Color(0.3, 0.3, 0.35)},
+	U_CAPTAIN: {"name": "선장", "hp": 350.0, "atk": 6.0, "speed": 1.1, "reach": 0.9, "color": Color(0.7, 0.05, 0.05)},
 }
+const UNIT_SCALE: Dictionary = {U_AXE: 1.1, U_SHIELD: 1.25, U_CAPTAIN: 1.6} ## 강한 적은 더 크게 그린다
+const ENEMY_FIRST_WAVE: Dictionary = {U_CROSSBOW: 5, U_AXE: 8, U_SHIELD: 12, U_CAPTAIN: 10} ## 새 적이 처음 나오는 웨이브 (기획서 6장)
+
+## 적 수 곡선의 기준점 [웨이브, 적 수]. 사이는 선형으로 이어 붙이고 반올림 (기획서 6장)
+const ENEMY_CURVE: Array = [[1, 1], [2, 1], [3, 2], [4, 3], [5, 4], [6, 5], [7, 6], [8, 7], [10, 9], [15, 15], [20, 22], [25, 29], [30, 36]]
+## 웨이브 구간별 종류 비율 [구간 끝 웨이브, {종류: %}]. 해적은 남는 수
+const ENEMY_BANDS: Array = [
+	[4, {}],
+	[7, {U_CROSSBOW: 30}],
+	[11, {U_CROSSBOW: 25, U_AXE: 25}],
+	[17, {U_CROSSBOW: 25, U_AXE: 30, U_SHIELD: 15}],
+	[999, {U_CROSSBOW: 20, U_AXE: 30, U_SHIELD: 35}],
+]
+const CAPTAINS: Dictionary = {10: 1, 20: 2, 30: 2} ## 보스 라운드의 선장 수
+const WALL_PATH_COST: float = 8.0 ## 적 길찾기에서 성벽 칸의 비용 배율
+const TOWER_ATK_LV: Array[float] = [4.0, 6.0, 8.0]
+const TOWER_RANGE_LV: Array[float] = [4.0, 4.5, 5.0]
+const TOWER_INTERVAL: float = 1.0
 const HQ_HP: float = 300.0
 const HQ_PIECE_WAVES: Array[int] = [10, 20] ## 이 웨이브(보스)를 이기면 본부 조각을 하나 더 놓아야 한다 (기획서 5.5)
 const HQ_LOSS_RATE: float = 0.3 ## 본부가 파괴될 때마다 줄어드는 골드·식량 비율
@@ -169,6 +200,10 @@ static func effect_text(id: int, level: int) -> String:
 		return "물 위에 설치 · 정산 식량 +%d~%d (이어진 물가가 넓을수록)" % [fishing_food(0, level), fishing_food(FISH_CAP, level)]
 	if id == TRADING_POST:
 		return "%d웨이브마다 거래 NPC 방문 · 거래 %d개 · 1개만" % [TRADE_INTERVAL, TRADE_OFFERS_LV[i]]
+	if id == WALL:
+		return "적의 길을 막는다 · 체력 %d (아군은 통과)" % roundi(BUILDINGS[WALL]["hp"] * HP_MULT[i])
+	if id == TOWER:
+		return "성벽 위 · 해적 자동 공격 %d · 사거리 %.1f칸" % [roundi(TOWER_ATK_LV[i]), TOWER_RANGE_LV[i]]
 	return ""
 
 
@@ -179,7 +214,59 @@ static func expand_cost(n: int) -> int:
 
 ## 웨이브 n의 해적 수: 1, 1, 2, 3, 4, ... (3웨이브부터 n-1명) (기획서 6장)
 static func pirate_count(wave: int) -> int:
-	return 1 if wave <= 2 else wave - 1
+	var a: Array = ENEMY_CURVE
+	if wave <= a[0][0]:
+		return a[0][1]
+	for i in range(1, a.size()):
+		if wave <= a[i][0]:
+			var t: float = float(wave - a[i - 1][0]) / float(a[i][0] - a[i - 1][0])
+			return roundi(lerpf(float(a[i - 1][1]), float(a[i][1]), t))
+	var last: Array = a[a.size() - 1]
+	var prev: Array = a[a.size() - 2]
+	return roundi(last[1] + float(last[1] - prev[1]) / float(last[0] - prev[0]) * (wave - last[0]))
+
+
+## 웨이브의 적 구성: 종류 → 인원. 보스 라운드에는 선장이 먼저, 나머지는 구간 비율로 채우고 남는 수는 해적 (기획서 6장)
+static func enemy_composition(wave: int) -> Dictionary:
+	var total: int = pirate_count(wave)
+	var out: Dictionary = {}
+	var caps: int = mini(CAPTAINS.get(wave, 0), total)
+	if caps > 0:
+		out[U_CAPTAIN] = caps
+	var rest: int = total - caps
+	var shares: Dictionary = {}
+	for band: Array in ENEMY_BANDS:
+		if wave <= band[0]:
+			shares = band[1]
+			break
+	var used: int = 0
+	for kind in [U_SHIELD, U_AXE, U_CROSSBOW]:
+		var n: int = floori(rest * shares.get(kind, 0) / 100.0)
+		if n > 0:
+			out[kind] = n
+			used += n
+	if rest - used > 0:
+		out[U_PIRATE] = rest - used
+	return out
+
+
+## 해적선에 태우는 순서(강한 적이 먼저)로 늘어놓은 적 종류 목록
+static func enemy_queue(wave: int) -> Array[int]:
+	var q: Array[int] = []
+	var comp: Dictionary = enemy_composition(wave)
+	for kind in comp:
+		for i in comp[kind]:
+			q.append(kind)
+	return q
+
+
+## 이 웨이브에 처음 나오는 새 적 종류
+static func new_enemy_kinds(wave: int) -> Array[int]:
+	var out: Array[int] = []
+	for kind in ENEMY_FIRST_WAVE:
+		if ENEMY_FIRST_WAVE[kind] == wave:
+			out.append(kind)
+	return out
 
 
 ## 해적선은 한 척에 최대 PIRATES_PER_SHIP명을 태운다 (기획서 6장)

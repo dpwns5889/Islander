@@ -16,6 +16,7 @@ var bounds: Rect2i = Rect2i(0, 0, W, H) ## 배치할 수 있는 영역. 확장�
 var expansions: int = 0 ## 확장 횟수 전체 (적 강도에 반영)
 var paid_expansions: int = 0 ## 골드를 내고 한 확장 횟수 (확장 비용 계산에 쓴다)
 var cells: Dictionary = {} ## 땅 칸 → 지형. 없는 칸은 바다
+var _land_nodes: Dictionary = {} ## 땅 칸 위치 → 블록 노드 (바다 칸이 땅을 깎을 때 지우려고 기억한다)
 var water: Dictionary = {} ## 바다 칸이 섞인 타일로 차지된 물 타일 위치 (땅은 아니지만 조각을 놓을 수 없다) (기획서 4장)
 var hqs: Dictionary = {} ## 살아 있는 본부 위치 → 체력 (여러 개일 수 있다) (기획서 5.5)
 var hq_lost: int = 0 ## 영구히 잃은 본부 수
@@ -231,11 +232,22 @@ func hq_status() -> String:
 
 ## 모든 칸이 필드 안이고 빈 칸(바다)이어야 놓을 수 있다 (기획서 4장)
 func can_place(p: Piece, origin: Vector2i) -> bool:
-	for c in p.cells:
-		var cell: Vector2i = origin + c
-		if not bounds.has_point(cell) or cells.has(cell) or water.has(cell) or buildings.has(cell): # 물 타일·수상 건물 칸에는 못 놓는다
+	for i in p.cells.size():
+		var cell: Vector2i = origin + p.cells[i]
+		if not bounds.has_point(cell) or water.has(cell) or buildings.has(cell) or hqs.has(cell): # 물 타일·건물·본부 칸에는 못 놓는다
+			return false
+		if p.terrain[i] != Piece.SEA and cells.has(cell): # 땅 칸은 빈 칸에만. 바다 칸은 기존 땅을 물로 깎을 수 있다 (기획서 4장)
 			return false
 	return true
+
+
+## 조각의 바다 칸이 깎게 될 기존 땅 칸 수 (기획서 4장)
+func carve_count(p: Piece, origin: Vector2i) -> int:
+	var n: int = 0
+	for i in p.cells.size():
+		if p.terrain[i] == Piece.SEA and cells.has(origin + p.cells[i]):
+			n += 1
+	return n
 
 
 ## 건물 위치 → 건물 종류 (본부는 hq에 따로 기록)
@@ -244,6 +256,24 @@ var hp: Dictionary = {} ## 건물 위치 → 체력
 var levels: Dictionary = {} ## 건물 위치 → 레벨 (1~3)
 var barracks_unit: Dictionary = {} ## 병영 위치 → 생산할 병종 (없으면 검병)
 var _nodes: Dictionary = {} ## 건물·본부 위치 → 화면 노드들 (첫 번째가 본체)
+
+
+## 성벽(방어탑 포함)인지: 적의 길을 막는 건물 (기획서 6장)
+func is_wall(c: Vector2i) -> bool:
+	return buildings.has(c) and Balance.BUILDINGS[buildings[c]].get("wall", false)
+
+
+## 성벽을 방어탑으로 바꾼다. 레벨과 체력 비율은 유지한다 (기획서 5.1)
+func build_tower(c: Vector2i) -> void:
+	var lv: int = levels[c]
+	var ratio: float = hp[c] / max_hp(c)
+	for n: Node in _nodes[c]:
+		n.queue_free()
+	_nodes.erase(c)
+	buildings.erase(c)
+	build(Balance.TOWER, c, lv)
+	hp[c] = max_hp(c) * ratio
+	_tint(c)
 
 
 func _next_to_land(c: Vector2i) -> bool:
@@ -260,6 +290,8 @@ func _next_to_sea(c: Vector2i) -> bool:
 ## 땅이고 비어 있으며, 지형·인접 바다 조건을 만족해야 한다 (기획서 3장, 5장)
 func can_build(id: int, c: Vector2i) -> bool:
 	var data: Dictionary = Balance.BUILDINGS[id]
+	if data.get("on_wall", false): # 방어탑: 성벽 위에만 (기획서 5.1)
+		return buildings.get(c, 0) == Balance.WALL
 	if data.get("on_water", false): # 낚시터: 필드 안의 물 위, 땅과 닿은 칸 (기획서 5.1)
 		return bounds.has_point(c) and not cells.has(c) and not buildings.has(c) and _next_to_land(c)
 	if not cells.has(c) or hqs.has(c) or buildings.has(c):
@@ -305,15 +337,22 @@ func is_post_open(c: Vector2i) -> bool:
 ## 조각 p를 origin에 놓으면 교역소(c)가 열린 바다와 끊기는지 미리 계산한다. 끊기면 false (기획서 5.6)
 func post_open_after(c: Vector2i, p: Piece, origin: Vector2i) -> bool:
 	var added: Array[Vector2i] = []
+	var carved: Dictionary = {}
 	for i in p.cells.size():
 		var cell: Vector2i = origin + p.cells[i]
-		if p.terrain[i] != Piece.SEA and not cells.has(cell):
+		if p.terrain[i] == Piece.SEA:
+			if cells.has(cell): # 바다 칸이 땅을 깎으면 그만큼 바다가 열린다
+				carved[cell] = cells[cell]
+				cells.erase(cell)
+		elif not cells.has(cell):
 			cells[cell] = p.terrain[i]
 			added.append(cell)
 	_ver += 1
 	var open: bool = _next_to_open_sea(c)
 	for cell in added:
 		cells.erase(cell)
+	for cell in carved:
+		cells[cell] = carved[cell]
 	_ver += 1
 	return open
 
@@ -432,7 +471,8 @@ func _tint(c: Vector2i) -> void:
 func targets() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for c in buildings:
-		out.append(c)
+		if not Balance.BUILDINGS[buildings[c]].get("passive", false): # 성벽은 목표가 아니다 (기획서 6장)
+			out.append(c)
 	for c in hqs:
 		out.append(c)
 	return out
@@ -507,7 +547,7 @@ func island_map() -> Dictionary:
 
 
 ## 길찾기 격자: sea=true면 바다만, false면 필드 안의 땅만 지나갈 수 있다 (기획서 7.3)
-func nav(sea: bool) -> AStarGrid2D:
+func nav(sea: bool, enemy: bool = false) -> AStarGrid2D:
 	var ext: Rect2i = bounds.grow(M)
 	var a: AStarGrid2D = AStarGrid2D.new()
 	a.region = Rect2i(0, 0, ext.size.x, ext.size.y)
@@ -519,6 +559,8 @@ func nav(sea: bool) -> AStarGrid2D:
 			var c: Vector2i = ext.position + Vector2i(x, y)
 			var walkable: bool = (terrain_at(c) == SEA and not buildings.has(c)) if sea else is_land(c)
 			a.set_point_solid(Vector2i(x, y), not walkable)
+			if enemy and not sea and is_wall(c): # 적에게 성벽 칸은 지나가기 비싼 칸 (기획서 6장)
+				a.set_point_weight_scale(Vector2i(x, y), Balance.WALL_PATH_COST)
 	return a
 
 
@@ -579,7 +621,12 @@ func place(p: Piece, origin: Vector2i) -> void:
 	_ver += 1
 	for i in p.cells.size():
 		var cell: Vector2i = origin + p.cells[i]
-		if p.terrain[i] == Piece.SEA: # 바다 칸: 땅이 되지 않고 물 타일로 남는다
+		if p.terrain[i] == Piece.SEA: # 바다 칸: 땅이 되지 않고 물 타일로 남는다. 기존 땅(건물·본부 없는 칸)은 물로 깎인다
+			if cells.has(cell):
+				cells.erase(cell)
+				if _land_nodes.has(cell):
+					_land_nodes[cell].queue_free()
+					_land_nodes.erase(cell)
 			water[cell] = true
 			var wt: MeshInstance3D = MeshInstance3D.new()
 			var wm: BoxMesh = BoxMesh.new()
@@ -595,6 +642,7 @@ func place(p: Piece, origin: Vector2i) -> void:
 		mi.material_override = _mat(color_of(p.terrain[i]), false)
 		mi.position = cell_to_world(cell) + Vector3(0, BLOCK_H / 2.0, 0)
 		add_child(mi)
+		_land_nodes[cell] = mi
 		if i == p.hq_index:
 			hqs[cell] = Balance.HQ_HP
 			var marker: MeshInstance3D = MeshInstance3D.new()
