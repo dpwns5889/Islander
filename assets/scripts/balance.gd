@@ -1,0 +1,192 @@
+class_name Balance
+extends RefCounted
+## 밸런스 수치 한 곳 (기획서 5장, 6장). 조정은 여기서만 한다.
+
+const HOUSE: int = 1
+const PORT: int = 2
+const BARRACKS: int = 3
+const MARKET: int = 4
+const FARM: int = 5
+const FISHERY: int = 6 ## 낚시터
+const TRADING_POST: int = 7 ## 교역소
+const MAX_LEVEL: int = 3
+
+## cost: 건설 골드, hp: 체력(M3부터), sand: 모래 위 건설 가능 여부, sea: 인접 바다 필요 여부
+const BUILDINGS: Dictionary = {
+	HOUSE: {"name": "집", "cost": 20, "hp": 50, "sand": true, "sea": false, "color": Color(0.6, 0.4, 0.2)},
+	PORT: {"name": "항구", "cost": 50, "hp": 80, "tech": "sail", "sand": true, "sea": true, "color": Color(0.15, 0.25, 0.6)},
+	BARRACKS: {"name": "병영", "cost": 30, "hp": 100, "sand": false, "sea": false, "color": Color(0.45, 0.45, 0.5)},
+	MARKET: {"name": "시장", "cost": 50, "hp": 70, "tech": "trade", "sand": false, "sea": false, "color": Color(0.85, 0.65, 0.1)},
+	FARM: {"name": "밭", "cost": 25, "hp": 50, "sand": false, "sea": false, "color": Color(0.35, 0.55, 0.2)},
+	FISHERY: {"name": "낚시터", "cost": 25, "hp": 50, "sand": true, "sea": false, "on_water": true, "color": Color(0.2, 0.65, 0.75)},
+	TRADING_POST: {"name": "교역소", "cost": 40, "hp": 70, "tech": "trade", "sand": true, "sea": false, "open_sea": true, "unique": true, "color": Color(0.7, 0.35, 0.75)},
+}
+
+## 건설 메뉴 카테고리 (아래에서 위로 펼쳐지는 드롭다운) (기획서 7.2)
+const CATEGORIES: Array = [
+	{"name": "생산", "ids": [HOUSE, FARM, FISHERY]},
+	{"name": "군사·해상", "ids": [BARRACKS, PORT]},
+	{"name": "상업", "ids": [MARKET, TRADING_POST]},
+]
+
+const U_SOLDIER: int = 0
+const U_PIRATE: int = 1
+const U_SHIP: int = 2
+const U_BOAT: int = 3
+const U_ARCHER: int = 4
+const U_CAVALRY: int = 5
+const SOLDIER_KINDS: Array[int] = [U_SOLDIER, U_ARCHER, U_CAVALRY] ## 병영에서 고를 수 있는 병종
+const UNITS: Dictionary = {
+	U_SOLDIER: {"name": "검병", "hp": 30.0, "atk": 5.0, "speed": 1.5, "reach": 0.9, "color": Color(0.2, 0.4, 1.0)},
+	U_PIRATE: {"name": "해적", "hp": 25.0, "atk": 2.0, "speed": 1.2, "reach": 0.9, "color": Color(0.15, 0.05, 0.1)},
+	U_SHIP: {"name": "해적선", "hp": 1.0, "atk": 0.0, "speed": 2.0, "reach": 0.9, "color": Color(0.45, 0.3, 0.15)},
+	U_BOAT: {"name": "보트", "hp": 1.0, "atk": 0.0, "speed": 2.5, "reach": 0.9, "color": Color(0.85, 0.75, 0.55)},
+	U_ARCHER: {"name": "궁수", "hp": 20.0, "atk": 3.0, "speed": 1.5, "reach": 4.0, "color": Color(0.2, 0.75, 0.3)},
+	U_CAVALRY: {"name": "기병", "hp": 40.0, "atk": 6.0, "speed": 2.5, "reach": 0.9, "color": Color(0.95, 0.55, 0.1)},
+}
+const HQ_HP: float = 300.0
+const HQ_PIECE_WAVES: Array[int] = [10, 20] ## 이 웨이브(보스)를 이기면 본부 조각을 하나 더 놓아야 한다 (기획서 5.5)
+const HQ_LOSS_RATE: float = 0.3 ## 본부가 파괴될 때마다 줄어드는 골드·식량 비율
+const UNIT_GAP: float = 0.3 ## 유닛끼리 이 거리보다 가까우면 서로 밀어낸다
+const LUNGE_TIME: float = 0.22 ## 공격할 때 앞으로 약진했다 돌아오는 시간(초)
+const LUNGE_DIST: float = 0.35 ## 약진하는 거리(칸)
+const AGGRO_RANGE: float = 3.0 ## 집결지가 있을 때 병사가 이 거리 안의 적만 상대한다
+const BATTLE_SPEEDS: Array[int] = [1, 2, 4] ## 전투 배속
+const ATTACK_INTERVAL: float = 1.0
+const PIRATES_PER_SHIP: int = 3
+const SHIP_INTERVAL: float = 3.0
+const HQ_GUARDS: int = 2 ## 웨이브 시작 때 본부가 무료로 내보내는 수비병
+const UNIT_TECH: Dictionary = {U_ARCHER: "archery", U_CAVALRY: "cavalry"} ## 병종을 해금하는 연구
+const WAVE_TIME_LIMIT: float = 120.0 ## 이 시간이 지나면 남은 적을 정리하고 웨이브를 끝낸다
+const COMBAT_PITCH: float = 55.0
+const SEA_TILE_WAVE: int = 10 ## 이 웨이브보다 뒤부터 바다 칸이 섞인 타일이 후보에 나온다 (기획서 4장)
+const SEA_TILE_CHANCE: float = 0.4 ## 그때 한 카드가 바다 섞인 타일일 확률
+const PREP_CAM_SIZE: float = 18.0 ## 준비 단계 카메라 크기(작을수록 확대)
+const COMBAT_CAM_SIZE: float = 13.5 ## 전투 카메라는 준비 단계보다 더 확대한다 (기획서 7.2)
+
+const HQ_LEVEL_FOOD: Array[int] = [20, 50, 100, 180, 300, 450, 650, 900, 1200] ## 본부 레벨 2~10이 되는 식량 누적량 (기획서 5.3)
+const EXPAND_BASE: int = 70
+const EXPAND_MULT: float = 1.5
+
+const START_GOLD: int = 50
+const START_FOOD: int = 20
+
+## 건물 레벨별 수치 (인덱스 0 = 레벨 1) (기획서 5.2)
+const HP_MULT: Array[float] = [1.0, 1.5, 2.0]
+const HOUSE_GOLD_LV: Array[int] = [10, 16, 24] ## 모래 위는 ×1.5
+const FARM_FOOD_LV: Array[int] = [5, 8, 12]
+const BARRACKS_SOLDIERS_LV: Array[int] = [3, 4, 5] ## 웨이브 시작 때 한 번만 만드는 병사 수
+const BARRACKS_L3_HP: float = 1.3
+const PORT_CAPACITY_LV: Array[int] = [4, 6, 8]
+const BOAT_SPEED_LV: Array[float] = [1.0, 1.0, 1.3]
+const MARKET_PRICE_LV: Array[int] = [40, 30, 20] ## 조각 구매 골드
+const FISHERY_MULT_LV: Array[float] = [1.0, 1.5, 2.0]
+const FISH_RADIUS: int = 4 ## 낚시터에서 이 거리(물길) 안의 바다 칸을 센다
+const FISH_CAP: int = 40
+const FISH_BASE: int = 3
+const FISH_DIV: int = 6
+const FISH_MAX: int = 9
+const TRADE_INTERVAL: int = 3 ## 교역소가 있으면 이 웨이브마다 거래 NPC가 방문한다 (기획서 5.6)
+const TRADE_OFFERS_LV: Array[int] = [3, 4, 4] ## 교역소 레벨별 거래 수 (거래 풀이 4종)
+const TRADES: Array = [
+	{"id": "food_gold", "name": "식량 10 → 골드 20", "gold": 0, "food": 10},
+	{"id": "gold_rp", "name": "골드 60 → 연구포인트 1", "gold": 60, "food": 0},
+	{"id": "gold_piece", "name": "골드 40 → 놓을 조각 +1", "gold": 40, "food": 0},
+	{"id": "gold_guards", "name": "골드 30 → 다음 전투 수비병 +2", "gold": 30, "food": 0},
+]
+const FOOD_PER_PLAINS: int = 1
+
+
+## 연구 (테크트리): 4갈래 x 3단계, 비용은 단계와 같다. 같은 갈래의 앞 단계가 선행 조건 (기획서 5.4)
+const BRANCHES: Array[String] = ["해상", "경제", "농업", "군사"]
+const TECH_ORDER: Array = [
+	["sail", "ship", "ocean"],
+	["trade", "commerce", "finance"],
+	["tools", "irrigation", "harvest"],
+	["archery", "cavalry", "drill"],
+]
+const TECHS: Dictionary = {
+	"sail": {"name": "항해술", "desc": "항구 해금"},
+	"ship": {"name": "조선술", "desc": "항구당 보트 +1척, 보트 속도 +30%"},
+	"ocean": {"name": "대양 항해", "desc": "보트 탑승 +2명"},
+	"trade": {"name": "교역", "desc": "시장 해금"},
+	"commerce": {"name": "상업", "desc": "집 골드 +20%"},
+	"finance": {"name": "금융", "desc": "건설·레벨업 비용 -15%"},
+	"tools": {"name": "농기구", "desc": "밭 식량 +30%"},
+	"irrigation": {"name": "관개", "desc": "평원 칸 식량 +1 → +1.5"},
+	"harvest": {"name": "대풍작", "desc": "밭 식량 +50%"},
+	"archery": {"name": "궁술", "desc": "궁수 해금"},
+	"cavalry": {"name": "기마술", "desc": "기병 해금"},
+	"drill": {"name": "단련", "desc": "모든 병사 체력·공격 +20%"},
+}
+
+
+static func tech_cost(id: String) -> int:
+	for branch: Array in TECH_ORDER:
+		if branch.has(id):
+			return branch.find(id) + 1
+	return 99
+
+
+static func tech_prereq(id: String) -> String:
+	for branch: Array in TECH_ORDER:
+		var i: int = branch.find(id)
+		if i > 0:
+			return branch[i - 1]
+	return ""
+
+
+## 건물을 to_level로 올리는 비용: 레벨 2는 건설비 ×1, 레벨 3은 ×1.5 (기획서 5.2)
+static func upgrade_cost(id: int, to_level: int) -> int:
+	var base: int = BUILDINGS[id]["cost"]
+	return base if to_level <= 2 else roundi(base * 1.5)
+
+
+static func house_gold(level: int, sand: bool) -> int:
+	return roundi(HOUSE_GOLD_LV[level - 1] * (1.5 if sand else 1.0))
+
+
+## 낚시터 식량: 이어진 바다 칸 수와 레벨로 정한다 (기획서 5.1)
+static func fishing_food(sea_cells: int, level: int) -> int:
+	var base: int = mini(FISH_MAX, FISH_BASE + floori(mini(sea_cells, FISH_CAP) / float(FISH_DIV)))
+	return floori(base * FISHERY_MULT_LV[level - 1])
+
+
+## 레벨별 효과 설명 (UI)
+static func effect_text(id: int, level: int) -> String:
+	var i: int = level - 1
+	if id == HOUSE:
+		return "정산 골드 +%d (모래 위 +%d)" % [house_gold(level, false), house_gold(level, true)]
+	if id == FARM:
+		return "정산 식량 +%d" % FARM_FOOD_LV[i]
+	if id == BARRACKS:
+		return "웨이브 시작 병사 %d명%s" % [BARRACKS_SOLDIERS_LV[i], ", 병사 체력 +30%" if level == MAX_LEVEL else ""]
+	if id == PORT:
+		return "보트 탑승 %d명%s" % [PORT_CAPACITY_LV[i], ", 보트 속도 +30%" if level == MAX_LEVEL else ""]
+	if id == MARKET:
+		return "조각 구매 %d골드" % MARKET_PRICE_LV[i]
+	if id == FISHERY:
+		return "물 위에 설치 · 정산 식량 +%d~%d (이어진 물가가 넓을수록)" % [fishing_food(0, level), fishing_food(FISH_CAP, level)]
+	if id == TRADING_POST:
+		return "%d웨이브마다 거래 NPC 방문 · 거래 %d개 · 1개만" % [TRADE_INTERVAL, TRADE_OFFERS_LV[i]]
+	return ""
+
+
+## n번째 필드 확장 비용 (기획서 3장)
+static func expand_cost(n: int) -> int:
+	return roundi(EXPAND_BASE * pow(EXPAND_MULT, n))
+
+
+## 웨이브 n의 해적 수: 1, 1, 2, 3, 4, ... (3웨이브부터 n-1명) (기획서 6장)
+static func pirate_count(wave: int) -> int:
+	return 1 if wave <= 2 else wave - 1
+
+
+## 해적선은 한 척에 최대 PIRATES_PER_SHIP명을 태운다 (기획서 6장)
+static func ship_count(wave: int) -> int:
+	return ceili(pirate_count(wave) / float(PIRATES_PER_SHIP))
+
+
+## 해적 체력·공격 배율: 땅 칸 수와 확장 횟수에 비례 (기획서 6장)
+static func enemy_mult(land_cells: int, expansions: int) -> float:
+	return 1.0 + 0.05 * (land_cells / 10.0) + 0.1 * expansions
