@@ -26,6 +26,8 @@ var territory_enabled: bool = false ## true면 건설·생산이 본부 영역 �
 var _terr_rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _terr_nodes: Array[Node] = []
 var hq_lost: int = 0 ## 영구히 잃은 본부 수
+var hq_level: Dictionary = {} ## 본부 위치 → 그 본부의 레벨 (본부마다 따로) (기획서 5.3)
+var hq_food: Dictionary = {} ## 본부 위치 → 그 본부 영역에서 번 식량 누적
 ## 첫 번째 본부 위치 (없으면 (-1, -1))
 var hq: Vector2i:
 	get:
@@ -157,40 +159,116 @@ func in_territory(c: Vector2i) -> bool:
 	return not territory_enabled or territory.has(c)
 
 
-## 새 본부의 시작 영역: 본부 칸 주변 3x3 (필드 안만) (기획서 5.3)
+## 이 칸을 차지한 본부, 없으면 (-999, -999). 영역은 겹치지 않는다 (기획서 5.3)
+func owner_of(c: Vector2i) -> Vector2i:
+	for h in territory_of:
+		if territory_of[h].has(c):
+			return h
+	return Vector2i(-999, -999)
+
+
+## 새 본부의 시작 영역: 본부 칸 주변 3x3 중 아직 아무도 차지하지 않은 필드 안 칸. 레벨은 살아 있는 본부 최고 레벨의 절반(최소 1)에서 시작하고
+## 그 레벨만큼 영역을 더 받는다 (기획서 5.3)
 func claim_start(hq_cell: Vector2i) -> void:
+	var best: int = 1
+	for h in hq_level:
+		best = maxi(best, hq_level[h])
+	var lvl: int = maxi(1, best / 2)
 	var set: Dictionary = {}
 	var r: int = Balance.TERRITORY_START_RADIUS
 	for dy in range(-r, r + 1):
 		for dx in range(-r, r + 1):
 			var c: Vector2i = hq_cell + Vector2i(dx, dy)
-			if bounds.has_point(c):
+			if bounds.has_point(c) and owner_of(c).x == -999:
 				set[c] = true
+	set[hq_cell] = true # 본부 칸 자체는 항상 자기 영역이다(다른 본부 영역 안이면 가져온다)
+	for h in territory_of:
+		territory_of[h].erase(hq_cell)
 	territory_of[hq_cell] = set
+	hq_level[hq_cell] = lvl
+	hq_food[hq_cell] = Balance.HQ_LEVEL_FOOD[lvl - 2] if lvl > 1 else 0
+	grow_territory(hq_cell, lvl - 1)
 	_rebuild_territory()
 
 
-## 영역에 4방향으로 붙은 필드 안의 칸 중 무작위로 n칸을 더한다 (기획서 5.3)
-func grow_territory(hq_cell: Vector2i, n: int) -> void:
+## 영역에 칸을 n개 더한다: 정사각형 우선 확률로 외곽 사각형을 채우고, 아니면 붙은 칸 중 무작위. 남의 영역 칸은 못 가져온다 (기획서 5.3)
+func grow_territory(hq_cell: Vector2i, n: int, square_chance: float = Balance.TERRITORY_SQUARE_CHANCE) -> void:
 	if not territory_of.has(hq_cell):
 		return
 	var set: Dictionary = territory_of[hq_cell]
 	for _i in n:
-		var cand: Array[Vector2i] = []
-		for c in set:
-			for d in DIRS:
-				var q: Vector2i = c + d
-				if bounds.has_point(q) and not set.has(q) and not cand.has(q):
-					cand.append(q)
-		if cand.is_empty():
-			break
-		set[cand[_terr_rng.randi() % cand.size()]] = true
+		var pick: Vector2i = _square_pick(hq_cell, set) if _terr_rng.randf() < square_chance else Vector2i(-999, -999)
+		if pick.x == -999:
+			var cand: Array[Vector2i] = _adjacent_free(hq_cell, set)
+			if cand.is_empty():
+				break
+			pick = cand[_terr_rng.randi() % cand.size()]
+		set[pick] = true
 	_rebuild_territory()
 
 
-func grow_all_territories(n: int) -> void:
-	for h in territory_of:
-		grow_territory(h, n)
+## 영역과 4방향으로 붙은, 필드 안의 아직 아무도 차지하지 않은 칸
+func _adjacent_free(hq_cell: Vector2i, set: Dictionary) -> Array[Vector2i]:
+	var cand: Array[Vector2i] = []
+	for c in set:
+		for d in DIRS:
+			var q: Vector2i = c + d
+			if bounds.has_point(q) and not set.has(q) and not cand.has(q) and owner_of(q).x == -999:
+				cand.append(q)
+	return cand
+
+
+## 정사각형 우선: 외곽 사각형 안의 빈 칸 → 없으면 짧은 변(같으면 무작위)을 한 줄 늘린 칸. 고를 칸이 없으면 (-999, -999)
+func _square_pick(hq_cell: Vector2i, set: Dictionary) -> Vector2i:
+	var free: Array[Vector2i] = _adjacent_free(hq_cell, set)
+	var lo: Vector2i = Vector2i(99999, 99999)
+	var hi: Vector2i = Vector2i(-99999, -99999)
+	for c in set:
+		lo = Vector2i(mini(lo.x, c.x), mini(lo.y, c.y))
+		hi = Vector2i(maxi(hi.x, c.x), maxi(hi.y, c.y))
+	var inside: Array[Vector2i] = []
+	for q in free:
+		if q.x >= lo.x and q.x <= hi.x and q.y >= lo.y and q.y <= hi.y:
+			inside.append(q)
+	if not inside.is_empty():
+		return inside[_terr_rng.randi() % inside.size()]
+	var w: int = hi.x - lo.x + 1
+	var h: int = hi.y - lo.y + 1
+	var widen: bool = w < h or (w == h and _terr_rng.randi() % 2 == 0)
+	var sides: Array[Vector2i] = []
+	sides.assign([Vector2i(-1, 0), Vector2i(1, 0)] if widen else [Vector2i(0, -1), Vector2i(0, 1)])
+	if _terr_rng.randi() % 2 == 0:
+		sides.reverse()
+	for sd in sides:
+		var line: Array[Vector2i] = []
+		for q in free:
+			var on_side: bool = (q.x == lo.x - 1 if sd.x < 0 else q.x == hi.x + 1) if widen else (q.y == lo.y - 1 if sd.y < 0 else q.y == hi.y + 1)
+			if on_side and (q.y >= lo.y and q.y <= hi.y if widen else q.x >= lo.x and q.x <= hi.x):
+				line.append(q)
+		if not line.is_empty():
+			return line[_terr_rng.randi() % line.size()]
+	return Vector2i(-999, -999)
+
+
+## 웨이브 정산: 본부마다 자기 영역의 식량을 누적에 더하고, 기준을 넘으면 그 본부의 레벨과 영역이 오른다. 본부 → 오른 레벨 수 (기획서 5.3)
+func settle_levels(techs: Dictionary) -> Dictionary:
+	var ups: Dictionary = {}
+	for h in hqs:
+		hq_food[h] = int(hq_food.get(h, 0)) + income(techs, h).y
+		var up: int = 0
+		while hq_level[h] - 1 < Balance.HQ_LEVEL_FOOD.size() and hq_food[h] >= Balance.HQ_LEVEL_FOOD[hq_level[h] - 1]:
+			hq_level[h] += 1
+			up += 1
+		if up > 0:
+			grow_territory(h, up)
+			ups[h] = up
+	return ups
+
+
+## 본부의 다음 레벨까지 필요한 식량 누적, 최고 레벨이면 -1
+func next_level_food(h: Vector2i) -> int:
+	var lv: int = hq_level.get(h, 1)
+	return Balance.HQ_LEVEL_FOOD[lv - 1] if lv - 1 < Balance.HQ_LEVEL_FOOD.size() else -1
 
 
 ## 합집합을 다시 만들고, 바깥 경계선만 그린다: 영역이 겹치면 경계가 이어진다 (문명5 방식) (기획서 5.3)
@@ -586,6 +664,8 @@ func damage(c: Vector2i, amount: float) -> bool:
 		if hqs[c] <= 0.0:
 			hqs.erase(c)
 			hq_lost += 1
+			hq_level.erase(c)
+			hq_food.erase(c)
 			territory_of.erase(c) # 본부가 무너지면 그 영역도 사라진다 (기획서 5.3)
 			_rebuild_territory()
 			for n: Node in _nodes[c]:
@@ -768,13 +848,14 @@ func research_income() -> int:
 
 
 ## 웨이브 정산 수입: x = 골드, y = 식량 (기획서 5장)
-func income(techs: Dictionary = {}) -> Vector2i:
+## owner가 있으면 그 본부 영역의 수입만 (기획서 5.3)
+func income(techs: Dictionary = {}, owner: Vector2i = Vector2i(-999, -999)) -> Vector2i:
 	var gold: float = 0.0
 	var food: float = 0.0
 	var house_mult: float = 1.2 if techs.has("commerce") else 1.0
 	var farm_mult: float = 1.0 + (0.3 if techs.has("tools") else 0.0) + (0.5 if techs.has("harvest") else 0.0)
 	for c in buildings:
-		if not in_territory(c): # 영역 밖 건물은 생산하지 않는다 (기획서 5.3)
+		if not _counts(c, owner): # 영역 밖 건물은 생산하지 않는다 (기획서 5.3)
 			continue
 		if buildings[c] == Balance.HOUSE:
 			gold += Balance.house_gold(levels[c], cells[c] == Piece.SAND) * (house_mult + _market_bonus(c))
@@ -787,11 +868,18 @@ func income(techs: Dictionary = {}) -> Vector2i:
 	var per_plain: float = Balance.FOOD_PER_PLAINS * (1.5 if techs.has("irrigation") else 1.0)
 	var plains: int = 0
 	for c in cells:
-		if cells[c] == Piece.PLAINS and in_territory(c):
+		if cells[c] == Piece.PLAINS and _counts(c, owner):
 			plains += 1
 	food += plains * per_plain
-	gold += Balance.HQ_BASE_GOLD * hqs.size() # 살아 있는 본부마다 기본 골드 (기획서 5.1)
+	gold += Balance.HQ_BASE_GOLD * (hqs.size() if owner.x == -999 else 1) # 살아 있는 본부마다 기본 골드 (기획서 5.1)
 	return Vector2i(floori(gold), floori(food))
+
+
+## 생산을 세는 칸인지: owner가 없으면 영역 안, 있으면 그 본부 영역 안
+func _counts(c: Vector2i, owner: Vector2i) -> bool:
+	if owner.x == -999:
+		return in_territory(c)
+	return territory_of.has(owner) and territory_of[owner].has(c)
 
 
 func place(p: Piece, origin: Vector2i) -> void:

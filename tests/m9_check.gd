@@ -4,23 +4,27 @@ extends SceneTree
 
 func _initialize() -> void:
 	var fails: int = 0
-	# 테크트리 구조: 12개, 비용은 단계와 같고 선행은 같은 갈래의 앞 단계
-	var n: int = 0
-	for branch: Array in Balance.TECH_ORDER:
-		for i in branch.size():
-			n += 1
-			fails += _check(Balance.tech_cost(branch[i]) == i + 1, "%s 비용 %d" % [branch[i], i + 1])
-			fails += _check(Balance.tech_prereq(branch[i]) == (branch[i - 1] if i > 0 else ""), "%s 선행" % branch[i])
-	fails += _check(n == 12 and Balance.TECHS.size() == 12, "연구 12개")
+	# 테크트리 구조: 13개, 비용은 열 번호(1~4점), 선행은 모두 존재하는 연구 (문명5식)
+	fails += _check(Balance.TECHS.size() == 13, "연구 13개")
+	var total: int = 0
+	for id in Balance.TECHS:
+		total += Balance.tech_cost(id)
+		for pre: String in Balance.tech_prereqs(id):
+			fails += _check(Balance.TECHS.has(pre) and Balance.TECHS[pre]["col"] < Balance.TECHS[id]["col"], "%s 선행 %s는 앞 열" % [id, pre])
+	fails += _check(total == 31, "전부 연구하면 31점 (%d)" % total)
+	fails += _check(Balance.tech_prereqs("trade") == ["tools", "mining"] and Balance.tech_prereqs("drill") == ["archery", "cavalry"], "선행이 둘인 연구")
 	# 연구: 포인트와 선행 조건
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
-	gs.research_points = 1
+	gs.research_points = 9
 	fails += _check(not gs.can_research("ship"), "선행(항해술) 없이는 조선술 불가")
-	fails += _check(gs.research("sail") and gs.research_points == 0 and gs.has_tech("sail"), "항해술 연구: 포인트 1 소모")
+	fails += _check(not gs.can_research("sail"), "선행(채광) 없이는 항해술 불가")
+	fails += _check(gs.research("mining") and gs.research_points == 8, "채광 연구: 포인트 1 소모")
+	fails += _check(gs.research("sail") and gs.research_points == 6 and gs.has_tech("sail"), "항해술 연구: 포인트 2 소모")
+	fails += _check(not gs.can_research("trade"), "교역은 농기구도 필요하다")
 	fails += _check(not gs.research("sail"), "같은 연구를 두 번 못 한다")
 	gs.research_points = 1
-	fails += _check(not gs.can_research("ship"), "포인트 부족 (조선술 2점)")
-	gs.research_points = 2
+	fails += _check(not gs.can_research("ship"), "포인트 부족 (조선술 3점)")
+	gs.research_points = 3
 	fails += _check(gs.research("ship") and gs.research_points == 0, "조선술 연구")
 	fails += _check(gs.discounted(20) == 20, "금융 전 할인 없음")
 	gs.researched["finance"] = true

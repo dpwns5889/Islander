@@ -38,16 +38,7 @@ func _initialize() -> void:
 	fails += _check(f.bounds.size == Vector2i(Field.MAX_W, Field.MAX_H) and not f.can_expand(Vector2i.RIGHT) and not f.can_expand(Vector2i.UP), "최대 40x30")
 	# 적 강도: 땅 칸 수와 확장 횟수가 늘면 강해진다
 	fails += _check(Balance.enemy_mult(100, 3) > Balance.enemy_mult(100, 0) and Balance.enemy_mult(200, 0) > Balance.enemy_mult(100, 0), "넓힐수록 적이 강해진다")
-	# 본부 레벨
-	var gs: Node = load("res://assets/scripts/game_state.gd").new()
-	gs.add(0, 4)
-	fails += _check(gs.check_level() == 0 and gs.hq_level == 1, "식량 4: 레벨 1")
-	gs.add(0, 1)
-	fails += _check(gs.check_level() == 1 and gs.hq_level == 2, "식량 5: 레벨 2")
-	gs.add(0, 115)
-	fails += _check(gs.check_level() == 6 and gs.hq_level == 8 and gs.next_level_food() == 125, "식량 120: 레벨 8, 다음은 125")
-	gs.spend(0, 50)
-	fails += _check(gs.food_total == 120, "식량을 써도 누적은 줄지 않는다")
+	# 본부 레벨은 본부마다 따로이고 m24_check에서 점검한다
 	# 확장한 필드에서도 전투가 끝까지 돈다
 	var g2: Node = load("res://assets/scripts/game_state.gd").new()
 	var f2: Field = _island()

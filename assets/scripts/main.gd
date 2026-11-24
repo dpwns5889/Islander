@@ -38,6 +38,7 @@ var unit_row: VBoxContainer
 var unit_buttons: Dictionary = {} ## 병종 → 버튼
 var research_panel: PanelContainer
 var research_buttons: Dictionary = {} ## 연구 id → 버튼
+var tech_lines: Control ## 연구 선행 연결선을 그리는 판
 var research_toggle: Button
 var stats: Label
 var status: Label
@@ -257,25 +258,24 @@ func _build_ui() -> void:
 	upgrade_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 54) # 건설 메뉴 위
 	upgrade_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	upgrade_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	# 가운데: 연구 패널 (4갈래 x 3단계)
+	# 가운데: 연구 패널 (4열 13개, 문명5식)
 	var rbox: VBoxContainer = VBoxContainer.new()
 	var rtitle: Label = Label.new()
 	rtitle.text = "연구 — 연구포인트로 즉시 연구합니다 (취소 없음)"
 	rbox.add_child(rtitle)
-	var grid: GridContainer = GridContainer.new()
-	grid.columns = Balance.BRANCHES.size()
-	for bname in Balance.BRANCHES:
-		var hl: Label = Label.new()
-		hl.text = bname
-		grid.add_child(hl)
-	for tier in 3:
-		for br in Balance.BRANCHES.size():
-			var tid: String = Balance.TECH_ORDER[br][tier]
-			var tb: Button = Button.new()
-			tb.custom_minimum_size = Vector2(190, 62)
-			tb.pressed.connect(research.bind(tid))
-			research_buttons[tid] = tb
-			grid.add_child(tb)
+	# 문명5식 연구 화면: 열은 왼쪽에서 오른쪽, 선행 연구에서 후속 연구로 선을 긋는다 (기획서 5.4)
+	var tree: Control = Control.new()
+	tree.custom_minimum_size = Vector2(Balance.TECH_COLS * 270 - 50, Balance.TECH_ROWS * 74)
+	for tid in Balance.TECHS:
+		var tb: Button = Button.new()
+		tb.size = Vector2(220, 62)
+		tb.position = _tech_pos(tid)
+		tb.pressed.connect(research.bind(tid))
+		research_buttons[tid] = tb
+		tree.add_child(tb)
+	tech_lines = tree
+	tree.draw.connect(_draw_tech_lines)
+	var grid: Control = tree
 	rbox.add_child(grid)
 	var rclose: Button = Button.new()
 	rclose.text = "닫기"
@@ -597,8 +597,6 @@ func place_current(hover: Vector2i) -> bool:
 		return false
 	var piece_hq: bool = current.hq_index >= 0
 	field.place(current, origin)
-	if piece_hq and GameState.hq_level > 1: # 새 본부는 현재 레벨만큼 영역을 받는다 (기획서 5.3)
-		field.grow_territory(origin + current.cells[current.hq_index], GameState.hq_level - 1)
 	var was_start: bool = placed_count == 0
 	placed_count += 1
 	var was_hq: bool = placing_hq
@@ -779,9 +777,7 @@ func _on_battle_finished(victory: bool) -> void:
 	var cleared: int = GameState.wave
 	GameState.add(inc.x, inc.y)
 	GameState.next_wave()
-	var levels: int = GameState.check_level() # 본부 레벨 (기획서 5.3)
-	if levels > 0:
-		field.grow_all_territories(levels) # 레벨마다 영역 +1칸 (기획서 5.3)
+	var ups: Dictionary = field.settle_levels(GameState.researched) # 본부마다 자기 영역 식량으로 레벨·영역 상승 (기획서 5.3)
 	var rp_gain: int = GameState.add_research_progress(field.research_income()) # 도서관·연구소 (기획서 5.4)
 	field.repair_all()
 	_tilt(90.0)
@@ -789,8 +785,8 @@ func _on_battle_finished(victory: bool) -> void:
 	side_panel.visible = true
 	_begin_prep()
 	_note = "웨이브 %d 승리: 골드 +%d · 식량 +%d" % [cleared, inc.x, inc.y] + ("\n" + _note if _note != "" else "")
-	if levels > 0:
-		_note += "\n본부 레벨 %d!" % GameState.hq_level
+	for h in ups:
+		_note += "\n본부 %s 레벨 %d!" % [_hq_name(h), field.hq_level[h]]
 	if rp_gain > 0:
 		_note += "\n연구포인트 +%d" % rp_gain
 	_maybe_visit_npc() # 3·6·9… 웨이브의 준비 단계에 교역 NPC가 온다 (기획서 5.6)
@@ -982,7 +978,35 @@ func _unhandled_input(event: InputEvent) -> void:
 			battle.clear_orders()
 
 
+## 본부를 위치 순서로 정렬한 목록 (왼쪽 패널 표시용)
+func _sorted_hqs() -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for h in field.hqs:
+		if field.hq_level.has(h):
+			out.append(h)
+	out.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x or (a.x == b.x and a.y < b.y))
+	return out
+
+
+## 본부 이름: 위치 순서대로 1, 2, 3 …
+func _hq_name(h: Vector2i) -> String:
+	return str(_sorted_hqs().find(h) + 1)
+
+
+func _tech_pos(id: String) -> Vector2:
+	return Vector2(int(Balance.TECHS[id]["col"]) * 270, int(Balance.TECHS[id]["row"]) * 74)
+
+
+## 선행 연구의 오른쪽에서 후속 연구의 왼쪽으로 선을 긋는다. 선행을 마친 선은 밝게 (기획서 5.4)
+func _draw_tech_lines() -> void:
+	for id in Balance.TECHS:
+		for pre: String in Balance.tech_prereqs(id):
+			var col: Color = Color(0.5, 0.9, 0.5) if GameState.has_tech(pre) else Color(0.45, 0.45, 0.5)
+			tech_lines.draw_line(_tech_pos(pre) + Vector2(220, 31), _tech_pos(id) + Vector2(0, 31), col, 2.0)
+
+
 func _refresh_research() -> void:
+	tech_lines.queue_redraw()
 	for id in research_buttons:
 		var b: Button = research_buttons[id]
 		var info: Dictionary = Balance.TECHS[id]
@@ -990,11 +1014,14 @@ func _refresh_research() -> void:
 		b.text = "%s%s\n%s · %d점" % ["✓ " if done else "", info["name"], info["desc"], Balance.tech_cost(id)]
 		b.disabled = done or not GameState.can_research(id)
 		b.modulate = Color(0.55, 1.0, 0.55) if done else Color.WHITE
-		var pre: String = Balance.tech_prereq(id)
+		var missing: Array[String] = []
+		for pre: String in Balance.tech_prereqs(id):
+			if not GameState.has_tech(pre):
+				missing.append(Balance.TECHS[pre]["name"])
 		if done:
 			b.tooltip_text = ""
-		elif pre != "" and not GameState.has_tech(pre):
-			b.tooltip_text = "먼저 %s 연구가 필요합니다" % Balance.TECHS[pre]["name"]
+		elif not missing.is_empty():
+			b.tooltip_text = "먼저 %s 연구가 필요합니다" % ", ".join(missing)
 		else:
 			b.tooltip_text = "연구포인트 %d점 필요 (보유 %d점)" % [Balance.tech_cost(id), GameState.research_points]
 
@@ -1063,8 +1090,11 @@ func _refresh_hud() -> void:
 	panel.visible = battle == null and placed_count > 0 and (pieces_left > 0 or pending_hq)
 	if research_panel.visible:
 		_refresh_research()
-	var nxt: int = GameState.next_level_food()
-	town_label.text = "본부 Lv %d · 영역 %d칸 · 식량 누적 %d%s" % [GameState.hq_level, field.territory.size(), GameState.food_total, "/%d" % nxt if nxt > 0 else " (최고)"]
+	var lines: Array[String] = []
+	for h in _sorted_hqs():
+		var nxt: int = field.next_level_food(h)
+		lines.append("본부 %s Lv %d · 영역 %d칸 · 식량 %d%s" % [_hq_name(h), field.hq_level[h], field.territory_of[h].size(), field.hq_food[h], "/%d" % nxt if nxt > 0 else " (최고)"])
+	town_label.text = "\n".join(lines)
 	if selected_cell.x >= 0 and not field.buildings.has(selected_cell):
 		selected_cell = Vector2i(-1, -1)
 	upgrade_panel.visible = selected_cell.x >= 0 and battle == null

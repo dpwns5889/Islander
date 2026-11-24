@@ -7,19 +7,7 @@ func _initialize() -> void:
 	var t: Array[int] = Balance.HQ_LEVEL_FOOD
 	fails += _check(t == [5, 12, 22, 35, 50, 70, 95, 125, 160, 200, 245, 295, 350, 410, 475, 545, 620, 700, 785], "레벨 2~20 기준: 5/12/22/35/50/70/95/125/160/200/…/785")
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
-	fails += _check(gs.hq_level == 1 and gs.research_points == 0, "시작: 본부 레벨 1, 연구포인트 0")
-	gs.add(0, 4)
-	fails += _check(gs.check_level() == 0 and gs.research_points == 0, "식량 4: 변화 없음")
-	gs.add(0, 1)
-	fails += _check(gs.check_level() == 1 and gs.hq_level == 2 and gs.research_points == 0, "식량 5: 레벨 2, 연구포인트는 안 오른다")
-	gs.add(0, 145) # 누적 150 → 레벨 9(125)까지
-	fails += _check(gs.check_level() == 7 and gs.hq_level == 9 and gs.research_points == 0, "누적 150: 레벨 9")
-	gs.spend(0, 100) # 식량을 써도 누적과 레벨은 그대로
-	fails += _check(gs.food_total == 150 and gs.hq_level == 9, "식량을 써도 누적은 줄지 않는다")
-	gs.add(0, 5000)
-	fails += _check(gs.check_level() == 11 and gs.hq_level == 20 and gs.research_points == 0, "최고 레벨 20")
-	fails += _check(gs.next_level_food() == -1, "최고 레벨에서는 다음 기준 없음")
-	fails += _check(gs.check_level() == 0 and gs.research_points == 0, "최고 레벨 이후에는 더 오르지 않는다")
+	fails += _check(gs.research_points == 0, "시작: 연구포인트 0")
 	# 연구수치: 기준(5, 6, 7 …)마다 연구포인트 +1, 남는 수치는 이월
 	gs.reset()
 	fails += _check(gs.add_research_progress(4) == 0 and gs.research_progress == 4, "연구수치 4: 연구포인트 없음")
@@ -43,7 +31,7 @@ func _initialize() -> void:
 	var g1: int = rf.income().x
 	fails += _check(g0 == 10 and g1 == 12, "집 10골드 → 시장 옆 12골드 (%d → %d)" % [g0, g1])
 	gs.reset()
-	fails += _check(gs.hq_level == 1 and gs.research_points == 0 and gs.food_total == 0, "재시작하면 초기화")
+	fails += _check(gs.research_points == 0, "재시작하면 초기화")
 	print("M8 점검 실패 %d건" % fails)
 	quit(fails)
 

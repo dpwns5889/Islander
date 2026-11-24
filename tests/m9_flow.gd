@@ -17,9 +17,9 @@ func _initialize() -> void:
 	for c in main.field.cells:
 		built = built or main.try_build(c)
 	fails += _check(not built and not main.field.buildings.values().has(Balance.PORT), "항해술 없이는 항구 건설 불가")
-	gs.research_points = 10
-	fails += _check(not main.research("ship"), "선행 연구 없이 조선술 불가")
-	fails += _check(main.research("sail") and gs.research_points == 9, "항해술 연구")
+	gs.research_points = 40
+	fails += _check(not main.research("ship") and not main.research("sail"), "선행 연구 없이 조선술·항해술 불가")
+	fails += _check(main.research("mining") and main.research("sail") and gs.research_points == 37, "채광 → 항해술 연구")
 	main.set_build(Balance.PORT)
 	for c in main.field.cells:
 		if main.try_build(c):
@@ -39,7 +39,7 @@ func _initialize() -> void:
 	fails += _check(main.research("archery") and main.select_unit(Balance.U_ARCHER) and main.field.barracks_unit[barracks] == Balance.U_ARCHER, "궁술 뒤에는 궁수를 고른다")
 	fails += _check(main.select_unit(Balance.U_SOLDIER) and main.field.barracks_unit[barracks] == Balance.U_SOLDIER, "검병으로 되돌릴 수 있다")
 	# 금융: 건설 비용 할인
-	fails += _check(main.research("trade") and main.research("commerce") and main.research("finance"), "교역·상업·금융 연구")
+	fails += _check(main.research("tools") and main.research("trade") and main.research("commerce") and main.research("finance"), "농기구·교역·상업·금융 연구")
 	main.set_build(Balance.HOUSE)
 	fails += _check(main._cost_of(Balance.HOUSE) == 17, "금융: 집 20 → 17골드")
 	main.set_build(0)

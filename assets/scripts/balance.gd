@@ -26,7 +26,7 @@ const BUILDINGS: Dictionary = {
 	TRADING_POST: {"name": "교역소", "cost": 40, "hp": 70, "tech": "trade", "sand": true, "sea": false, "open_sea": true, "unique": true, "color": Color(0.7, 0.35, 0.75)},
 	LIBRARY: {"name": "도서관", "cost": 40, "hp": 60, "sand": true, "sea": false, "color": Color(0.55, 0.35, 0.65)},
 	LAB: {"name": "연구소", "cost": 80, "hp": 70, "sand": false, "sea": false, "color": Color(0.25, 0.7, 0.6)},
-	MINE: {"name": "광산", "cost": 60, "hp": 100, "sand": false, "sea": false, "mountain_only": true, "color": Color(0.5, 0.45, 0.4)},
+	MINE: {"name": "광산", "cost": 60, "hp": 100, "tech": "mining", "sand": false, "sea": false, "mountain_only": true, "color": Color(0.5, 0.45, 0.4)},
 	TOWER: {"name": "방어탑", "cost": 40, "hp": 200, "tech": "archery", "sand": true, "sea": false, "color": Color(0.35, 0.4, 0.55)},
 }
 
@@ -104,6 +104,7 @@ const PREP_CAM_SIZE: float = 18.0 ## 준비 단계 카메라 크기(작을수록
 const COMBAT_CAM_SIZE: float = 13.5 ## 전투 카메라는 준비 단계보다 더 확대한다 (기획서 7.2)
 
 const HQ_LEVEL_FOOD: Array[int] = [5, 12, 22, 35, 50, 70, 95, 125, 160, 200, 245, 295, 350, 410, 475, 545, 620, 700, 785] ## 본부 레벨 2~20이 되는 식량 누적량 (기획서 5.3)
+const TERRITORY_SQUARE_CHANCE: float = 0.6 ## 영역 확장 때 정사각형 우선으로 고를 확률 (나머지는 무작위) (기획서 5.3)
 const TERRITORY_START_RADIUS: int = 1 ## 본부 영역의 시작 크기: 본부 칸 주변 이 거리까지 (3x3) (기획서 5.3)
 const GROW_EVERY: int = 2 ## 이 라운드마다 필드가 4방으로 한 줄씩 넓어진다 (기획서 3장)
 
@@ -127,6 +128,8 @@ const MINE_GOLD_LV: Array[int] = [20, 32, 48] ## 광산 정산 골드 (기획서
 const HQ_BASE_GOLD: int = 20 ## 살아 있는 본부마다 웨이브 정산 때 받는 기본 골드 (기획서 5.1)
 
 const WIN_WAVE: int = 30 ## 이 웨이브를 이기면 승리 화면 (이후 무한 모드로 계속할 수 있다) (기획서 9.1)
+const ENEMY_LAND_RATE: float = 0.035 ## 땅 10칸당 적 체력·공격 증가량 (기획서 6장)
+const ENEMY_EXPAND_RATE: float = 0.07 ## 확장 1회당 적 체력·공격 증가량
 const START_GOLD: int = 50
 const START_FOOD: int = 20
 
@@ -159,28 +162,25 @@ const RESEARCH_STEP: int = 1 ## 포인트를 얻을 때마다 다음 기준이 �
 const HQ_RESEARCH: int = 1 ## 살아 있는 본부마다 정산 때 받는 연구수치
 
 
-## 연구 (테크트리): 4갈래 x 3단계, 비용은 단계와 같다. 같은 갈래의 앞 단계가 선행 조건 (기획서 5.4)
-const BRANCHES: Array[String] = ["해상", "경제", "농업", "군사"]
-const TECH_ORDER: Array = [
-	["sail", "ship", "ocean"],
-	["trade", "commerce", "finance"],
-	["tools", "irrigation", "harvest"],
-	["archery", "cavalry", "drill"],
-]
+## 연구 (테크트리, 문명5식): 4열 13개. 비용은 열 번호(1~4점)와 같고 선행 연구를 모두 마쳐야 한다 (기획서 5.4)
+## col: 열(0~3), row: 화면의 줄, pre: 선행 연구 목록
 const TECHS: Dictionary = {
-	"sail": {"name": "항해술", "desc": "항구 해금"},
-	"ship": {"name": "조선술", "desc": "항구당 보트 +1척, 보트 속도 +30%"},
-	"ocean": {"name": "대양 항해", "desc": "보트 탑승 +2명"},
-	"trade": {"name": "교역", "desc": "시장 해금"},
-	"commerce": {"name": "상업", "desc": "집 골드 +20%"},
-	"finance": {"name": "금융", "desc": "건설·레벨업 비용 -15%"},
-	"tools": {"name": "농기구", "desc": "밭 식량 +30%"},
-	"irrigation": {"name": "관개", "desc": "평원 칸 식량 +1 → +1.5"},
-	"harvest": {"name": "대풍작", "desc": "밭 식량 +50%"},
-	"archery": {"name": "궁술", "desc": "궁수 해금"},
-	"cavalry": {"name": "기마술", "desc": "기병 해금"},
-	"drill": {"name": "단련", "desc": "모든 병사 체력·공격 +20%"},
+	"tools": {"name": "농기구", "desc": "밭 식량 +30%", "col": 0, "row": 0, "pre": []},
+	"mining": {"name": "채광", "desc": "광산 해금", "col": 0, "row": 2, "pre": []},
+	"archery": {"name": "궁술", "desc": "궁수·방어탑 해금", "col": 0, "row": 4, "pre": []},
+	"irrigation": {"name": "관개", "desc": "평원 칸 식량 +1 → +1.5", "col": 1, "row": 0, "pre": ["tools"]},
+	"cavalry": {"name": "기마술", "desc": "기병 해금", "col": 1, "row": 1, "pre": ["tools"]},
+	"trade": {"name": "교역", "desc": "시장·교역소 해금", "col": 1, "row": 2, "pre": ["tools", "mining"]},
+	"sail": {"name": "항해술", "desc": "항구 해금", "col": 1, "row": 3, "pre": ["mining"]},
+	"harvest": {"name": "대풍작", "desc": "밭 식량 +50%", "col": 2, "row": 0, "pre": ["irrigation"]},
+	"drill": {"name": "단련", "desc": "모든 병사 체력·공격 +20%", "col": 2, "row": 1, "pre": ["archery", "cavalry"]},
+	"commerce": {"name": "상업", "desc": "집 골드 +20%", "col": 2, "row": 2, "pre": ["trade"]},
+	"ship": {"name": "조선술", "desc": "보트 +1척, 속도 +30%", "col": 2, "row": 3, "pre": ["sail"]},
+	"finance": {"name": "금융", "desc": "건설·레벨업 비용 -15%", "col": 3, "row": 2, "pre": ["commerce"]},
+	"ocean": {"name": "대양 항해", "desc": "보트 탑승 +2명", "col": 3, "row": 3, "pre": ["ship"]},
 }
+const TECH_COLS: int = 4
+const TECH_ROWS: int = 5
 
 
 ## 연구수치로 이미 포인트를 gained개 얻었을 때 다음 포인트에 필요한 연구수치 (기획서 5.4)
@@ -189,18 +189,11 @@ static func research_threshold(gained: int) -> int:
 
 
 static func tech_cost(id: String) -> int:
-	for branch: Array in TECH_ORDER:
-		if branch.has(id):
-			return branch.find(id) + 1
-	return 99
+	return int(TECHS[id]["col"]) + 1
 
 
-static func tech_prereq(id: String) -> String:
-	for branch: Array in TECH_ORDER:
-		var i: int = branch.find(id)
-		if i > 0:
-			return branch[i - 1]
-	return ""
+static func tech_prereqs(id: String) -> Array:
+	return TECHS[id]["pre"]
 
 
 ## 건물을 to_level로 올리는 비용: 레벨 2는 건설비 ×1, 레벨 3은 ×1.5 (기획서 5.2)
@@ -315,4 +308,4 @@ static func ship_count(wave: int) -> int:
 
 ## 해적 체력·공격 배율: 땅 칸 수와 확장 횟수에 비례 (기획서 6장)
 static func enemy_mult(land_cells: int, expansions: int) -> float:
-	return 1.0 + 0.05 * (land_cells / 10.0) + 0.1 * expansions
+	return 1.0 + ENEMY_LAND_RATE * (land_cells / 10.0) + ENEMY_EXPAND_RATE * expansions
