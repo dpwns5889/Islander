@@ -1,8 +1,8 @@
 class_name Field
 extends Node3D
-## 필드: 지형 격자와 블록 표시. 비어 있는 칸은 바다다. 처음 20x15, 확장으로 최대 40x30 (기획서 3장)
+## 필드: 지형 격자와 블록 표시. 비어 있는 칸은 바다다. 처음 15x15, 확장으로 최대 40x30 (기획서 3장)
 
-const W: int = 20 ## 처음 필드 크기
+const W: int = 15 ## 처음 필드 크기
 const H: int = 15
 const MAX_W: int = 40
 const MAX_H: int = 30
@@ -14,9 +14,10 @@ const DIRS: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vecto
 
 var bounds: Rect2i = Rect2i(0, 0, W, H) ## 배치할 수 있는 영역. 확장하면 커진다
 var expansions: int = 0 ## 확장 횟수 전체 (적 강도에 반영)
-var paid_expansions: int = 0 ## 골드를 내고 한 확장 횟수 (확장 비용 계산에 쓴다)
 var cells: Dictionary = {} ## 땅 칸 → 지형. 없는 칸은 바다
 var _land_nodes: Dictionary = {} ## 땅 칸 위치 → 블록 노드 (바다 칸이 땅을 깎을 때 지우려고 기억한다)
+var ruins: Dictionary = {} ## 아직 털지 않은 유적지 위치 → true (필드 밖 대륙) (기획서 3장)
+var looted: Dictionary = {} ## 이미 턴 유적지
 var water: Dictionary = {} ## 바다 칸이 섞인 타일로 차지된 물 타일 위치 (땅은 아니지만 조각을 놓을 수 없다) (기획서 4장)
 var hqs: Dictionary = {} ## 살아 있는 본부 위치 → 체력 (여러 개일 수 있다) (기획서 5.5)
 var hq_lost: int = 0 ## 영구히 잃은 본부 수
@@ -117,7 +118,14 @@ func _mat(c: Color, unshaded: bool) -> StandardMaterial3D:
 	return _mats[key]
 
 
-## 월드 좌표는 처음 20x15 필드의 중심이 원점이다. 확장해도 기존 칸의 위치는 변하지 않는다
+## 전투 단계에는 땅·바다 바닥을 음영 없이 칠해 입체감을 없앤다 (기획서 2장)
+func set_flat(flat: bool) -> void:
+	for k in _mats:
+		if (k as String).ends_with("false"):
+			(_mats[k] as StandardMaterial3D).shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED if flat else BaseMaterial3D.SHADING_MODE_PER_PIXEL
+
+
+## 월드 좌표는 처음 15x15 필드의 중심이 원점이다. 확장해도 기존 칸의 위치는 변하지 않는다
 func cell_to_world(c: Vector2i) -> Vector3:
 	return Vector3(c.x + 0.5 - W / 2.0, 0.0, c.y + 0.5 - H / 2.0)
 
@@ -154,15 +162,16 @@ func generate_outside(seed_v: int) -> void:
 		n.queue_free()
 	_outer_nodes.clear()
 	_outer.clear()
+	ruins.clear()
 	var noise: FastNoiseLite = FastNoiseLite.new()
 	noise.seed = seed_v
-	noise.frequency = 0.15
+	noise.frequency = Balance.CONTINENT_FREQ
 	var ring: Rect2i = bounds.grow(2)
 	var ext: Rect2i = bounds.grow(M)
 	for y in range(ext.position.y, ext.end.y):
 		for x in range(ext.position.x, ext.end.x):
 			var c: Vector2i = Vector2i(x, y)
-			if not ring.has_point(c) and noise.get_noise_2d(x, y) > 0.2:
+			if not ring.has_point(c) and noise.get_noise_2d(x, y) > Balance.CONTINENT_LEVEL:
 				_outer[c] = Piece.PLAINS
 	var shore: Array[Vector2i] = [] # 바다와 닿은 땅은 모래
 	for c in _outer:
@@ -177,6 +186,26 @@ func generate_outside(seed_v: int) -> void:
 		mi.position = cell_to_world(c) + Vector3(0, BLOCK_H / 2.0, 0)
 		add_child(mi)
 		_outer_nodes.append(mi)
+		# 유적지: 좌표 해시로 정해서 필드를 넓혀도 같은 자리에 남는다 (기획서 3장)
+		if _outer[c] == Piece.PLAINS and not looted.has(c) and (hash([seed_v, c.x, c.y]) % 1000) / 1000.0 < Balance.RUIN_CHANCE:
+			ruins[c] = true
+			var rm: MeshInstance3D = MeshInstance3D.new()
+			var rb: BoxMesh = BoxMesh.new()
+			rb.size = Vector3(0.5, 0.7, 0.5)
+			rm.mesh = rb
+			var rmat: StandardMaterial3D = StandardMaterial3D.new()
+			rmat.albedo_color = Color(1.0, 0.85, 0.1)
+			rmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			rm.material_override = rmat
+			rm.position = cell_to_world(c) + Vector3(0, BLOCK_H + 0.35, 0)
+			add_child(rm)
+			_outer_nodes.append(rm)
+
+
+## 유적지를 턴다: 다시 만들어도 나오지 않게 기억하고 표시를 지운다 (기획서 3장)
+func loot_ruin(c: Vector2i) -> void:
+	looted[c] = true
+	generate_outside(_outer_seed)
 
 
 ## 한 줄 확장할 수 있는지 (최대 40x30) (기획서 3장)
@@ -184,8 +213,8 @@ func can_expand(dir: Vector2i) -> bool:
 	return bounds.size.x < MAX_W if dir.x != 0 else bounds.size.y < MAX_H
 
 
-## dir 방향으로 한 줄 넓힌다. 넓힌 칸은 바다로 비어 있고, 그 줄의 바깥 지형은 다시 만든다
-func expand(dir: Vector2i, free: bool = false) -> void:
+## dir 방향으로 한 줄 넓힌다(경계만). 넓힌 칸은 바다로 비어 있다
+func _grow(dir: Vector2i) -> void:
 	var b: Rect2i = bounds
 	if dir == Vector2i.LEFT:
 		b.position.x -= 1
@@ -198,12 +227,27 @@ func expand(dir: Vector2i, free: bool = false) -> void:
 	else:
 		b.size.y += 1
 	bounds = b
+
+
+func _regrow() -> void:
 	_ver += 1
 	expansions += 1
-	if not free:
-		paid_expansions += 1
 	generate_outside(_outer_seed)
 	_build_frame()
+
+
+## 한 방향으로 한 줄 넓힌다(놓을 자리가 없을 때의 자동 확장). 그 줄의 바깥 지형은 다시 만든다
+func expand(dir: Vector2i) -> void:
+	_grow(dir)
+	_regrow()
+
+
+## 4방향으로 한 줄씩 넓힌다. 확장 횟수는 한 번만 센다 (기획서 3장)
+func expand_all() -> void:
+	for d in DIRS:
+		if can_expand(d):
+			_grow(d)
+	_regrow()
 
 
 ## 조각을 (회전해서라도) 놓을 자리가 필드 안에 있는지 (기획서 5.5)
@@ -258,24 +302,6 @@ var barracks_unit: Dictionary = {} ## 병영 위치 → 생산할 병종 (없으
 var _nodes: Dictionary = {} ## 건물·본부 위치 → 화면 노드들 (첫 번째가 본체)
 
 
-## 성벽(방어탑 포함)인지: 적의 길을 막는 건물 (기획서 6장)
-func is_wall(c: Vector2i) -> bool:
-	return buildings.has(c) and Balance.BUILDINGS[buildings[c]].get("wall", false)
-
-
-## 성벽을 방어탑으로 바꾼다. 레벨과 체력 비율은 유지한다 (기획서 5.1)
-func build_tower(c: Vector2i) -> void:
-	var lv: int = levels[c]
-	var ratio: float = hp[c] / max_hp(c)
-	for n: Node in _nodes[c]:
-		n.queue_free()
-	_nodes.erase(c)
-	buildings.erase(c)
-	build(Balance.TOWER, c, lv)
-	hp[c] = max_hp(c) * ratio
-	_tint(c)
-
-
 func _next_to_land(c: Vector2i) -> bool:
 	for d in DIRS:
 		if cells.has(c + d):
@@ -290,8 +316,6 @@ func _next_to_sea(c: Vector2i) -> bool:
 ## 땅이고 비어 있으며, 지형·인접 바다 조건을 만족해야 한다 (기획서 3장, 5장)
 func can_build(id: int, c: Vector2i) -> bool:
 	var data: Dictionary = Balance.BUILDINGS[id]
-	if data.get("on_wall", false): # 방어탑: 성벽 위에만 (기획서 5.1)
-		return buildings.get(c, 0) == Balance.WALL
 	if data.get("on_water", false): # 낚시터: 필드 안의 물 위, 땅과 닿은 칸 (기획서 5.1)
 		return bounds.has_point(c) and not cells.has(c) and not buildings.has(c) and _next_to_land(c)
 	if not cells.has(c) or hqs.has(c) or buildings.has(c):
@@ -417,17 +441,6 @@ func _label_text(c: Vector2i) -> String:
 	return name.left(1) + (str(levels[c]) if levels[c] > 1 else "")
 
 
-## 가장 싼 시장의 조각 구매 가격, 시장이 없으면 -1
-func market_price() -> int:
-	var best: int = -1
-	for c in buildings:
-		if buildings[c] == Balance.MARKET:
-			var p: int = Balance.MARKET_PRICE_LV[levels[c] - 1]
-			if best < 0 or p < best:
-				best = p
-	return best
-
-
 func build(id: int, c: Vector2i, level: int = 1) -> void:
 	buildings[c] = id
 	levels[c] = level
@@ -471,8 +484,7 @@ func _tint(c: Vector2i) -> void:
 func targets() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
 	for c in buildings:
-		if not Balance.BUILDINGS[buildings[c]].get("passive", false): # 성벽은 목표가 아니다 (기획서 6장)
-			out.append(c)
+		out.append(c)
 	for c in hqs:
 		out.append(c)
 	return out
@@ -559,8 +571,6 @@ func nav(sea: bool, enemy: bool = false) -> AStarGrid2D:
 			var c: Vector2i = ext.position + Vector2i(x, y)
 			var walkable: bool = (terrain_at(c) == SEA and not buildings.has(c)) if sea else is_land(c)
 			a.set_point_solid(Vector2i(x, y), not walkable)
-			if enemy and not sea and is_wall(c): # 적에게 성벽 칸은 지나가기 비싼 칸 (기획서 6장)
-				a.set_point_weight_scale(Vector2i(x, y), Balance.WALL_PATH_COST)
 	return a
 
 
@@ -599,6 +609,26 @@ func coast_for(island_id: int, near: Vector3, islands: Dictionary) -> Dictionary
 	return best
 
 
+## 4방향으로 붙은 시장 중 가장 높은 레벨의 집 골드 보너스 (기획서 5.1)
+func _market_bonus(c: Vector2i) -> float:
+	var best: float = 0.0
+	for d in DIRS:
+		if buildings.get(c + d, 0) == Balance.MARKET:
+			best = maxf(best, Balance.MARKET_HOUSE_BONUS_LV[levels[c + d] - 1])
+	return best
+
+
+## 웨이브 정산 때 얻는 연구수치: 도서관·연구소 레벨 합 (기획서 5.4)
+func research_income() -> int:
+	var n: int = 0
+	for c in buildings:
+		if buildings[c] == Balance.LIBRARY:
+			n += Balance.LIBRARY_RESEARCH_LV[levels[c] - 1]
+		elif buildings[c] == Balance.LAB:
+			n += Balance.LAB_RESEARCH_LV[levels[c] - 1]
+	return n
+
+
 ## 웨이브 정산 수입: x = 골드, y = 식량 (기획서 5장)
 func income(techs: Dictionary = {}) -> Vector2i:
 	var gold: float = 0.0
@@ -607,7 +637,7 @@ func income(techs: Dictionary = {}) -> Vector2i:
 	var farm_mult: float = 1.0 + (0.3 if techs.has("tools") else 0.0) + (0.5 if techs.has("harvest") else 0.0)
 	for c in buildings:
 		if buildings[c] == Balance.HOUSE:
-			gold += Balance.house_gold(levels[c], cells[c] == Piece.SAND) * house_mult
+			gold += Balance.house_gold(levels[c], cells[c] == Piece.SAND) * (house_mult + _market_bonus(c))
 		elif buildings[c] == Balance.FARM:
 			food += Balance.FARM_FOOD_LV[levels[c] - 1] * farm_mult
 		elif buildings[c] == Balance.FISHERY:

@@ -9,7 +9,7 @@ func _initialize() -> void:
 	root.add_child(main)
 	await process_frame
 	main.place_current(Vector2i(5, 7))
-	if args.size() > 2 and args[2] == "defense": # 성벽·방어탑과 12웨이브 구성으로 전투
+	if args.size() > 2 and args[2] == "defense": # 방어탑과 12웨이브 구성으로 전투
 		main.tiles_required = 0
 		var gs2: Node = root.get_node("GameState")
 		gs2.gold = 1000
@@ -17,12 +17,9 @@ func _initialize() -> void:
 		gs2.wave = 12
 		var made: int = 0
 		for c in main.field.cells:
-			main.set_build(Balance.WALL)
+			main.set_build(Balance.TOWER if made == 0 else Balance.HOUSE)
 			if main.try_build(c):
 				made += 1
-				if made == 1:
-					main.set_build(Balance.TOWER)
-					main.try_build(c)
 				if made >= 4:
 					break
 		main.start_wave()
@@ -116,9 +113,7 @@ func _initialize() -> void:
 		if isl[c] == hq_island and main.try_build(c):
 			break
 	main.set_build(0)
-	main.expand(Vector2i.RIGHT)
-	main.expand(Vector2i.LEFT)
-	main.expand(Vector2i.DOWN)
+	main.field.expand_all()
 	if args.size() > 2 and args[2] == "prep":
 		for id in [Balance.HOUSE, Balance.FARM, Balance.BARRACKS]:
 			main.set_build(id)

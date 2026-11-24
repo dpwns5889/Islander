@@ -51,7 +51,6 @@ func _initialize() -> void:
 	fails += _check(not main.wave_button.disabled and not main.hq_card.visible, "놓은 뒤에는 웨이브를 시작할 수 있다")
 	# 자리가 없으면 무료로 확장한다
 	var f: Field = main.field
-	var paid_before: int = f.paid_expansions
 	for y in range(f.bounds.position.y, f.bounds.end.y):
 		for x in range(f.bounds.position.x, f.bounds.end.x):
 			if not f.cells.has(Vector2i(x, y)):
@@ -67,7 +66,6 @@ func _initialize() -> void:
 	main.battle._pirates_left = 0
 	main.battle.tick(0.1)
 	fails += _check(main.pending_hq and f.bounds.size != size_before and f.has_room(main.hq_piece), "꽉 찬 필드는 자리가 생길 때까지 확장된다 (%s → %s)" % [str(size_before), str(f.bounds.size)])
-	fails += _check(f.paid_expansions == paid_before, "무료 확장은 확장 비용 단계를 올리지 않는다")
 	print("M10 흐름 점검 실패 %d건" % fails)
 	quit(fails)
 

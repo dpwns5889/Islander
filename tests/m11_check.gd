@@ -4,19 +4,21 @@ extends SceneTree
 
 func _initialize() -> void:
 	var fails: int = 0
-	# 해적 수: 1웨이브 1, 2웨이브 1, 3웨이브 2, 4웨이브 3, 이후 n-1
-	var want: Array[int] = [1, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+	# 해적 수: 최소 2명(한 명짜리 배 없음), 1·2웨이브 2, 3웨이브 2, 4웨이브 3, 이후 n-1
+	var want: Array[int] = [2, 2, 2, 3, 4, 5, 6, 7, 8, 9]
 	for i in want.size():
 		fails += _check(Balance.pirate_count(i + 1) == want[i], "웨이브 %d: 해적 %d명 (%d)" % [i + 1, want[i], Balance.pirate_count(i + 1)])
 	fails += _check(Balance.pirate_count(30) == 36 and Balance.pirate_count(20) == 22, "30웨이브 36명, 20웨이브 22명")
 	# 해적선은 한 척에 최대 3명
 	fails += _check(Balance.ship_count(1) == 1 and Balance.ship_count(4) == 1 and Balance.ship_count(5) == 2 and Balance.ship_count(10) == 3, "해적선 수: 1/1/2/3")
-	# 실제 전투에서 태운 해적 합계가 웨이브 해적 수와 같다 (4웨이브는 1척에 3명, 5웨이브는 3명 + 1명)
-	for wave in [1, 3, 4, 5, 8]:
+	# 실제 전투에서 태운 해적 합계가 웨이브 해적 수와 같다 (5웨이브는 2명 + 2명)
+	for wave in [1, 3, 4, 5, 8, 11]:
 		var crews: Array[int] = _crews(wave)
 		var total: int = 0
 		for c in crews:
 			total += c
+		var min_crew: int = crews.min() if not crews.is_empty() else 0
+		fails += _check(min_crew >= Balance.MIN_PIRATES_PER_SHIP, "웨이브 %d: 모든 해적선이 2명 이상 (%s)" % [wave, str(crews)])
 		fails += _check(total == Balance.pirate_count(wave) and crews.size() == Balance.ship_count(wave), "웨이브 %d: 해적선 %d척, 합계 %d명 (%s)" % [wave, crews.size(), total, str(crews)])
 	print("웨이브 적 수 점검 실패 %d건" % fails)
 	quit(fails)

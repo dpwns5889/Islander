@@ -9,9 +9,20 @@ func _initialize() -> void:
 	await process_frame
 	var gs: Node = root.get_node("GameState")
 	main.place_current(Vector2i(9, 7))
+	var first_ok: bool = main.tiles_required == 0 and main.pieces_left == 0 and not main.panel.visible
+	main._begin_prep() # 첫 준비 단계는 보상이 없으므로 이후 준비 단계로 대신한다
 	gs.gold = 500
 	gs.researched["sail"] = true
-	# 1. 첫 준비 단계도 타일을 먼저 놓아야 한다
+	fails += _check(first_ok, "첫 준비 단계에는 보상 타일이 없다")
+	var g0: int = gs.gold
+	var ruin: Vector2i = Vector2i(99, 99) # 유적지 원정: 항구가 있어야 하고 준비 단계당 1회
+	main.field.ruins[ruin] = true
+	fails += _check(not main.explore(ruin) and gs.gold == g0, "항구가 없으면 원정 불가")
+	main.field.buildings[Vector2i(98, 98)] = Balance.PORT
+	var rp0: int = gs.research_points
+	fails += _check(main.explore(ruin) and main.explored and (gs.gold > g0 - Balance.EXPLORE_COST or gs.research_points == rp0 + 1), "항구가 있으면 원정 성공")
+	main.field.buildings.erase(Vector2i(98, 98))
+	# 1. 이후 준비 단계도 타일을 먼저 놓아야 한다
 	fails += _check(main.tiles_required == 1 and main._blocked(), "타일을 놓기 전에는 막혀 있다")
 	main.set_build(Balance.HOUSE)
 	fails += _check(main.build_id == 0, "건물 설치 모드가 열리지 않는다")
@@ -20,9 +31,7 @@ func _initialize() -> void:
 	main.start_wave()
 	fails += _check(main.battle == null, "웨이브를 시작할 수 없다")
 	fails += _check("전투 보상" in main.wave_info.text, "안내 문구: " + main.wave_info.text)
-	# 막히는 것은 건설·강화·웨이브 시작이다. 연구·확장·시장 구매는 가능하다
-	var size_before: Vector2i = main.field.bounds.size
-	fails += _check(main.expand(Vector2i.RIGHT) and main.field.bounds.size.x == size_before.x + 1, "확장은 가능하다")
+	# 막히는 것은 건설·강화·웨이브 시작이다. 연구·시장 구매는 가능하다
 	gs.research_points = 1
 	fails += _check(main.research("sail") or gs.has_tech("sail"), "연구는 가능하다")
 	# 2. 타일을 놓으면 풀린다. 건물을 하나 지으면 설치 모드가 끝난다
@@ -73,7 +82,6 @@ func _initialize() -> void:
 	fails += _check(main.battle == null, "보상 타일을 놓기 전에는 다음 웨이브를 시작할 수 없다")
 	# 6. 어느 선택지도 들어갈 자리가 없으면 무료로 확장해 자리를 만든다
 	var f: Field = main.field
-	var paid_before: int = f.paid_expansions
 	for y in range(f.bounds.position.y, f.bounds.end.y):
 		for x in range(f.bounds.position.x, f.bounds.end.x):
 			if not f.cells.has(Vector2i(x, y)):
@@ -90,7 +98,15 @@ func _initialize() -> void:
 	var any_fit: bool = false
 	for p in main.choices:
 		any_fit = any_fit or f.has_room(p)
-	fails += _check(f.bounds.size != full_size and any_fit and f.paid_expansions == paid_before, "자리가 없으면 선택지가 들어갈 때까지 무료 확장 (%s → %s)" % [str(full_size), str(f.bounds.size)])
+	fails += _check(f.bounds.size != full_size and any_fit, "자리가 없으면 선택지가 들어갈 때까지 무료 확장 (%s → %s)" % [str(full_size), str(f.bounds.size)])
+	# 2라운드마다 4방으로 확장: 3·5웨이브 준비 단계에 넓어지고 4웨이브에는 그대로
+	var sz: Vector2i = main.field.bounds.size
+	gs.wave = 3
+	main._begin_prep()
+	fails += _check(main.field.bounds.size == sz + Vector2i(2, 2), "3웨이브 준비 단계에 사방으로 넓어진다 (%s → %s)" % [str(sz), str(main.field.bounds.size)])
+	gs.wave = 4
+	main._begin_prep()
+	fails += _check(main.field.bounds.size == sz + Vector2i(2, 2), "4웨이브에는 넓어지지 않는다")
 	print("보상 타일 흐름 점검 실패 %d건" % fails)
 	quit(fails)
 

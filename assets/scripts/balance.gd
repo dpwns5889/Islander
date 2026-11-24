@@ -9,8 +9,9 @@ const MARKET: int = 4
 const FARM: int = 5
 const FISHERY: int = 6 ## 낚시터
 const TRADING_POST: int = 7 ## 교역소
-const WALL: int = 8 ## 성벽
-const TOWER: int = 9 ## 방어탑 (성벽 위)
+const TOWER: int = 9 ## 방어탑
+const LIBRARY: int = 10 ## 도서관 (임시명)
+const LAB: int = 11 ## 연구소 (임시명)
 const MAX_LEVEL: int = 3
 
 ## cost: 건설 골드, hp: 체력(M3부터), sand: 모래 위 건설 가능 여부, sea: 인접 바다 필요 여부
@@ -22,15 +23,17 @@ const BUILDINGS: Dictionary = {
 	FARM: {"name": "밭", "cost": 25, "hp": 50, "sand": false, "sea": false, "color": Color(0.35, 0.55, 0.2)},
 	FISHERY: {"name": "낚시터", "cost": 25, "hp": 50, "sand": true, "sea": false, "on_water": true, "color": Color(0.2, 0.65, 0.75)},
 	TRADING_POST: {"name": "교역소", "cost": 40, "hp": 70, "tech": "trade", "sand": true, "sea": false, "open_sea": true, "unique": true, "color": Color(0.7, 0.35, 0.75)},
-	WALL: {"name": "성벽", "cost": 15, "hp": 200, "sand": true, "sea": false, "wall": true, "passive": true, "color": Color(0.55, 0.55, 0.6)},
-	TOWER: {"name": "방어탑", "cost": 40, "hp": 200, "tech": "archery", "sand": true, "sea": false, "wall": true, "on_wall": true, "color": Color(0.35, 0.4, 0.55)},
+	LIBRARY: {"name": "도서관", "cost": 40, "hp": 60, "sand": true, "sea": false, "color": Color(0.55, 0.35, 0.65)},
+	LAB: {"name": "연구소", "cost": 80, "hp": 70, "sand": false, "sea": false, "color": Color(0.25, 0.7, 0.6)},
+	TOWER: {"name": "방어탑", "cost": 40, "hp": 200, "tech": "archery", "sand": true, "sea": false, "color": Color(0.35, 0.4, 0.55)},
 }
 
 ## 건설 메뉴 카테고리 (아래에서 위로 펼쳐지는 드롭다운) (기획서 7.2)
 const CATEGORIES: Array = [
 	{"name": "생산", "ids": [HOUSE, FARM, FISHERY]},
-	{"name": "군사·해상", "ids": [BARRACKS, PORT, WALL, TOWER]},
+	{"name": "군사·해상", "ids": [BARRACKS, PORT, TOWER]},
 	{"name": "상업", "ids": [MARKET, TRADING_POST]},
+	{"name": "과학", "ids": [LIBRARY, LAB]},
 ]
 
 const U_SOLDIER: int = 0
@@ -71,7 +74,6 @@ const ENEMY_BANDS: Array = [
 	[999, {U_CROSSBOW: 20, U_AXE: 30, U_SHIELD: 35}],
 ]
 const CAPTAINS: Dictionary = {10: 1, 20: 2, 30: 2} ## 보스 라운드의 선장 수
-const WALL_PATH_COST: float = 8.0 ## 적 길찾기에서 성벽 칸의 비용 배율
 const TOWER_ATK_LV: Array[float] = [4.0, 6.0, 8.0]
 const TOWER_RANGE_LV: Array[float] = [4.0, 4.5, 5.0]
 const TOWER_INTERVAL: float = 1.0
@@ -85,6 +87,7 @@ const AGGRO_RANGE: float = 3.0 ## 집결지가 있을 때 병사가 이 거리 �
 const BATTLE_SPEEDS: Array[int] = [1, 2, 4] ## 전투 배속
 const ATTACK_INTERVAL: float = 1.0
 const PIRATES_PER_SHIP: int = 3
+const MIN_PIRATES_PER_SHIP: int = 2 ## 해적선 한 척의 최소 인원. 한 명만 타고 오는 배는 없다 (기획서 6장)
 const SHIP_INTERVAL: float = 3.0
 const HQ_GUARDS: int = 2 ## 웨이브 시작 때 본부가 무료로 내보내는 수비병
 const UNIT_TECH: Dictionary = {U_ARCHER: "archery", U_CAVALRY: "cavalry"} ## 병종을 해금하는 연구
@@ -96,8 +99,15 @@ const PREP_CAM_SIZE: float = 18.0 ## 준비 단계 카메라 크기(작을수록
 const COMBAT_CAM_SIZE: float = 13.5 ## 전투 카메라는 준비 단계보다 더 확대한다 (기획서 7.2)
 
 const HQ_LEVEL_FOOD: Array[int] = [20, 50, 100, 180, 300, 450, 650, 900, 1200] ## 본부 레벨 2~10이 되는 식량 누적량 (기획서 5.3)
-const EXPAND_BASE: int = 70
-const EXPAND_MULT: float = 1.5
+const GROW_EVERY: int = 2 ## 이 라운드마다 필드가 4방으로 한 줄씩 넓어진다 (기획서 3장)
+
+const EXPLORE_COST: int = 20 ## 유적지 원정 골드 (기획서 3장)
+const EXPLORE_GOLD_MIN: int = 60
+const EXPLORE_GOLD_MAX: int = 100
+const EXPLORE_RP_CHANCE: float = 0.3 ## 골드 대신 연구포인트 +1을 얻을 확률
+const RUIN_CHANCE: float = 0.02 ## 대륙 안쪽 평원 칸이 유적지일 확률
+const CONTINENT_FREQ: float = 0.05 ## 필드 밖 지형 노이즈 주파수(낮을수록 큰 대륙)
+const CONTINENT_LEVEL: float = -0.1 ## 이 값보다 큰 노이즈가 땅
 
 const START_GOLD: int = 50
 const START_FOOD: int = 20
@@ -110,7 +120,6 @@ const BARRACKS_SOLDIERS_LV: Array[int] = [3, 4, 5] ## 웨이브 시작 때 한 �
 const BARRACKS_L3_HP: float = 1.3
 const PORT_CAPACITY_LV: Array[int] = [4, 6, 8]
 const BOAT_SPEED_LV: Array[float] = [1.0, 1.0, 1.3]
-const MARKET_PRICE_LV: Array[int] = [40, 30, 20] ## 조각 구매 골드
 const FISHERY_MULT_LV: Array[float] = [1.0, 1.5, 2.0]
 const FISH_RADIUS: int = 4 ## 낚시터에서 이 거리(물길) 안의 바다 칸을 센다
 const FISH_CAP: int = 40
@@ -126,6 +135,10 @@ const TRADES: Array = [
 	{"id": "gold_guards", "name": "골드 30 → 다음 전투 수비병 +2", "gold": 30, "food": 0},
 ]
 const FOOD_PER_PLAINS: int = 1
+const MARKET_HOUSE_BONUS_LV: Array[float] = [0.25, 0.4, 0.6] ## 시장과 4방향으로 붙은 집의 정산 골드 보너스 (기획서 5.1)
+const LIBRARY_RESEARCH_LV: Array[int] = [3, 4, 5] ## 웨이브 정산 때 얻는 연구수치 (기획서 5.4)
+const LAB_RESEARCH_LV: Array[int] = [6, 8, 10]
+const RESEARCH_THRESHOLD: int = 10 ## 연구수치가 이만큼 쌓일 때마다 연구포인트 +1
 
 
 ## 연구 (테크트리): 4갈래 x 3단계, 비용은 단계와 같다. 같은 갈래의 앞 단계가 선행 조건 (기획서 5.4)
@@ -195,25 +208,26 @@ static func effect_text(id: int, level: int) -> String:
 	if id == PORT:
 		return "보트 탑승 %d명%s" % [PORT_CAPACITY_LV[i], ", 보트 속도 +30%" if level == MAX_LEVEL else ""]
 	if id == MARKET:
-		return "조각 구매 %d골드" % MARKET_PRICE_LV[i]
+		return "붙어 있는 집의 정산 골드 +%d%%" % roundi(MARKET_HOUSE_BONUS_LV[i] * 100.0)
+	if id == LIBRARY:
+		return "정산 연구수치 +%d (%d점마다 연구포인트 1)" % [LIBRARY_RESEARCH_LV[i], RESEARCH_THRESHOLD]
+	if id == LAB:
+		return "정산 연구수치 +%d (%d점마다 연구포인트 1)" % [LAB_RESEARCH_LV[i], RESEARCH_THRESHOLD]
 	if id == FISHERY:
 		return "물 위에 설치 · 정산 식량 +%d~%d (이어진 물가가 넓을수록)" % [fishing_food(0, level), fishing_food(FISH_CAP, level)]
 	if id == TRADING_POST:
 		return "%d웨이브마다 거래 NPC 방문 · 거래 %d개 · 1개만" % [TRADE_INTERVAL, TRADE_OFFERS_LV[i]]
-	if id == WALL:
-		return "적의 길을 막는다 · 체력 %d (아군은 통과)" % roundi(BUILDINGS[WALL]["hp"] * HP_MULT[i])
 	if id == TOWER:
-		return "성벽 위 · 해적 자동 공격 %d · 사거리 %.1f칸" % [roundi(TOWER_ATK_LV[i]), TOWER_RANGE_LV[i]]
+		return "해적 자동 공격 %d · 사거리 %.1f칸" % [roundi(TOWER_ATK_LV[i]), TOWER_RANGE_LV[i]]
 	return ""
-
-
-## n번째 필드 확장 비용 (기획서 3장)
-static func expand_cost(n: int) -> int:
-	return roundi(EXPAND_BASE * pow(EXPAND_MULT, n))
 
 
 ## 웨이브 n의 해적 수: 1, 1, 2, 3, 4, ... (3웨이브부터 n-1명) (기획서 6장)
 static func pirate_count(wave: int) -> int:
+	return maxi(MIN_PIRATES_PER_SHIP, _curve_count(wave))
+
+
+static func _curve_count(wave: int) -> int:
 	var a: Array = ENEMY_CURVE
 	if wave <= a[0][0]:
 		return a[0][1]

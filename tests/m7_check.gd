@@ -36,13 +36,6 @@ func _initialize() -> void:
 	fails += _check(not f.buildings.has(Vector2i(5, 5)) and not f.levels.has(Vector2i(5, 5)), "파괴된 건물은 복구되지 않는다")
 	fails += _check(f.hp[Vector2i(9, 5)] == 50.0, "살아남은 건물의 피해는 회복된다")
 	fails += _check(f.can_build(Balance.HOUSE, Vector2i(5, 5)), "빈 땅이 되어 다시 지을 수 있다")
-	# 시장 가격: 시장이 없으면 -1, 레벨이 오르면 싸진다
-	fails += _check(f.market_price() == -1, "시장 없음")
-	f.build(Balance.MARKET, Vector2i(7, 5))
-	fails += _check(f.market_price() == 40, "시장 레벨 1: 40골드")
-	f.upgrade(Vector2i(7, 5))
-	f.upgrade(Vector2i(7, 5))
-	fails += _check(f.market_price() == 20, "시장 레벨 3: 20골드")
 	# 병영 레벨: 시작 병사 3/4/5명, 레벨 3은 체력 +30%
 	for lv in [1, 2, 3]:
 		var f2: Field = _island()

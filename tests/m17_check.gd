@@ -5,7 +5,7 @@ extends SceneTree
 func _initialize() -> void:
 	var fails: int = 0
 	# 1. 적 수 곡선: 기준점, 단조 증가, 곡선(아래로 볼록)
-	var want: Array[int] = [1, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+	var want: Array[int] = [2, 2, 2, 3, 4, 5, 6, 7, 8, 9]
 	for i in want.size():
 		fails += _check(Balance.pirate_count(i + 1) == want[i], "웨이브 %d: %d명 (%d)" % [i + 1, want[i], Balance.pirate_count(i + 1)])
 	fails += _check(Balance.pirate_count(15) == 15 and Balance.pirate_count(20) == 22 and Balance.pirate_count(25) == 29 and Balance.pirate_count(30) == 36, "15/20/25/30웨이브: 15/22/29/36명")
@@ -89,76 +89,21 @@ func _initialize() -> void:
 	xbow.cooldown = 0.0
 	var pos0: Vector3 = xbow.position
 	fails += _check(cb._engage(xbow, cb.soldiers[0].position, 0.1) and xbow.position == pos0, "석궁수는 3칸 거리에서 움직이지 않고 쏜다")
-	# 5. 성벽: 땅에만, 목표가 아니다
+	# 5. 일반 건물은 목표
 	var f: Field = _island(9, 5)
-	fails += _check(f.can_build(Balance.WALL, Vector2i(5, 4)) and not f.can_build(Balance.WALL, Vector2i(0, 0)), "성벽은 땅 위에만")
-	f.build(Balance.WALL, Vector2i(8, 6))
-	fails += _check(f.is_wall(Vector2i(8, 6)) and not f.targets().has(Vector2i(8, 6)), "성벽은 있지만 적의 목표는 아니다")
 	f.build(Balance.HOUSE, Vector2i(7, 6))
 	fails += _check(f.targets().has(Vector2i(7, 6)), "일반 건물은 목표")
-	# 6. 길찾기: 돌아갈 수 있으면 돌아가고, 막히면 성벽을 지난다. 아군은 성벽을 그냥 지난다
-	var d1: Field = _island(9, 5) # 땅 (4..12, 4..8)
-	for y in range(4, 8): # x=8 열에 성벽, y=8 한 칸은 비워 둔다 (돌아가는 길)
-		d1.build(Balance.WALL, Vector2i(8, y))
-	var enemy1: AStarGrid2D = d1.nav(false, true)
-	var ally1: AStarGrid2D = d1.nav(false)
-	var p_enemy: Array[Vector2i] = d1.path(enemy1, Vector2i(5, 6), Vector2i(11, 6))
-	var p_ally: Array[Vector2i] = d1.path(ally1, Vector2i(5, 6), Vector2i(11, 6))
-	var enemy_crosses: bool = false
-	for c in p_enemy:
-		enemy_crosses = enemy_crosses or d1.is_wall(c)
-	var ally_crosses: bool = false
-	for c in p_ally:
-		ally_crosses = ally_crosses or d1.is_wall(c)
-	fails += _check(not p_enemy.is_empty() and not enemy_crosses, "적은 열린 틈이 있으면 성벽을 돌아간다")
-	fails += _check(ally_crosses, "아군은 성벽 칸을 그냥 지난다")
-	d1.build(Balance.WALL, Vector2i(8, 8)) # 이제 완전히 막힘
-	var p_blocked: Array[Vector2i] = d1.path(d1.nav(false, true), Vector2i(5, 6), Vector2i(11, 6))
-	var blocked_crosses: bool = false
-	for c in p_blocked:
-		blocked_crosses = blocked_crosses or d1.is_wall(c)
-	fails += _check(not p_blocked.is_empty() and blocked_crosses, "완전히 막히면 성벽을 지나는 길(부수고 간다)")
-	# 7. 전투: 길을 막은 성벽은 적이 부수고 지나간다
-	var w: Field = _island(9, 5)
-	for y in range(4, 9):
-		w.build(Balance.WALL, Vector2i(8, y))
-	var gsw: Node = load("res://assets/scripts/game_state.gd").new()
-	var bw: Battle = Battle.new()
-	bw.setup(w, gsw, 1)
-	bw._ships_left = 1
-	bw._ship_timer = 9999.0
-	var raider: Unit = bw._add_unit(Balance.U_PIRATE, w.cell_to_world(Vector2i(11, 6)), 40.0) # 한 방이 센 해적
-	raider.island = bw.islands[w.hq]
-	var wall_hp0: float = 0.0
-	for y in range(4, 9):
-		wall_hp0 += w.hp[Vector2i(8, y)]
-	for _i in 400:
-		bw.tick(0.1)
-	var wall_hp1: float = 0.0
-	var walls_left: int = 0
-	for y in range(4, 9):
-		if w.buildings.has(Vector2i(8, y)):
-			walls_left += 1
-			wall_hp1 += w.hp[Vector2i(8, y)]
-	fails += _check(walls_left < 5 or wall_hp1 < wall_hp0, "적이 길을 막은 성벽을 공격했다 (성벽 %d개, 체력 %.0f → %.0f)" % [walls_left, wall_hp0, wall_hp1])
-	# 8. 방어탑: 성벽 위에만, 레벨·체력 비율을 이어받는다
+	# 8. 방어탑: 땅 위(평원·모래)에 바로 짓고 적의 목표가 된다
 	var t: Field = _island(9, 5)
-	t.build(Balance.WALL, Vector2i(8, 6))
-	fails += _check(t.can_build(Balance.TOWER, Vector2i(8, 6)) and not t.can_build(Balance.TOWER, Vector2i(7, 6)), "방어탑은 성벽 위에만")
-	t.upgrade(Vector2i(8, 6))
-	t.damage(Vector2i(8, 6), t.hp[Vector2i(8, 6)] / 2.0)
-	var ratio: float = t.hp[Vector2i(8, 6)] / t.max_hp(Vector2i(8, 6))
-	t.build_tower(Vector2i(8, 6))
-	fails += _check(t.buildings[Vector2i(8, 6)] == Balance.TOWER and t.levels[Vector2i(8, 6)] == 2 and absf(t.hp[Vector2i(8, 6)] / t.max_hp(Vector2i(8, 6)) - ratio) < 0.001, "성벽 → 방어탑: 레벨 2·체력 비율 유지")
-	fails += _check(t.is_wall(Vector2i(8, 6)) and t.targets().has(Vector2i(8, 6)), "방어탑은 길을 막고 목표가 된다")
-	fails += _check(not t.can_build(Balance.TOWER, Vector2i(8, 6)), "이미 방어탑인 칸에는 또 못 짓는다")
+	fails += _check(t.can_build(Balance.TOWER, Vector2i(8, 6)) and not t.can_build(Balance.TOWER, Vector2i(0, 0)), "방어탑은 빈 땅 위에 짓는다")
+	t.build(Balance.TOWER, Vector2i(8, 6))
+	fails += _check(t.targets().has(Vector2i(8, 6)) and not t.can_build(Balance.TOWER, Vector2i(8, 6)), "방어탑은 목표가 되고 겹쳐 짓지 못한다")
 	# 9. 방어탑 공격: 사거리 안의 적만 1초마다, 레벨별 공격력
 	for lv in [1, 2, 3]:
 		var tf: Field = _island(9, 5)
-		tf.build(Balance.WALL, Vector2i(8, 6))
+		tf.build(Balance.TOWER, Vector2i(8, 6))
 		for _u in lv - 1:
 			tf.upgrade(Vector2i(8, 6))
-		tf.build_tower(Vector2i(8, 6))
 		var tb: Battle = Battle.new()
 		tb.setup(tf, load("res://assets/scripts/game_state.gd").new(), 1)
 		tb._ships_left = 1
@@ -183,8 +128,7 @@ func _initialize() -> void:
 			fails += _check(tb._fx.size() <= 1, "선은 짧게 보였다 사라진다")
 	# 10. 방어탑은 해적선을 공격하지 않는다
 	var sf: Field = _island(9, 5)
-	sf.build(Balance.WALL, Vector2i(8, 6))
-	sf.build_tower(Vector2i(8, 6))
+	sf.build(Balance.TOWER, Vector2i(8, 6))
 	var sb: Battle = Battle.new()
 	sb.setup(sf, load("res://assets/scripts/game_state.gd").new(), 1)
 	sb._ships_left = 1
@@ -193,7 +137,7 @@ func _initialize() -> void:
 	var ship_hp: float = ship.hp
 	sb._towers_turn(0.0)
 	fails += _check(ship.hp == ship_hp, "방어탑은 해적선을 공격하지 않는다")
-	print("적·성벽·방어탑 점검 실패 %d건" % fails)
+	print("적·방어탑 점검 실패 %d건" % fails)
 	quit(fails)
 
 

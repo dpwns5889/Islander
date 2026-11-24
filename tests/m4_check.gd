@@ -22,6 +22,12 @@ func _initialize() -> void:
 					ring_ok = ring_ok and not near
 		fails += _check(ring_ok, "필드 가까이는 바다 (시드 %d)" % sd)
 		land_seeds += 1 if outer_land > 0 else 0
+	var ruin_seeds: int = 0
+	for sd in 20:
+		var fr: Field = Field.new()
+		fr.generate_outside(sd)
+		ruin_seeds += 1 if not fr.ruins.is_empty() else 0
+	fails += _check(ruin_seeds >= 10, "대륙에 유적지가 생긴다 (%d/20)" % ruin_seeds)
 	fails += _check(land_seeds >= 15, "대부분의 시드에서 바깥 땅이 생긴다 (%d/20)" % land_seeds)
 	# 길찾기와 섬
 	var f2: Field = _two_islands(true)

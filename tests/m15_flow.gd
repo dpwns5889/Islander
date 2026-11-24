@@ -13,7 +13,7 @@ func _initialize() -> void:
 	gs.gold = 1000
 	gs.researched["trade"] = true
 	# 1. 건설 메뉴: 카테고리를 누르면 목록이 열리고, 건물을 고르면 닫힌다
-	fails += _check(main.category_buttons.size() == 3 and not main.dropdown_panel.visible, "카테고리 버튼 3개, 목록은 닫혀 있다")
+	fails += _check(main.category_buttons.size() == 4 and not main.dropdown_panel.visible, "카테고리 버튼 4개, 목록은 닫혀 있다")
 	main._toggle_category(2) # 상업
 	fails += _check(main.open_category == 2 and main.dropdown_panel.visible and main.dropdown_lists[2].visible and not main.dropdown_lists[0].visible, "상업 목록이 열린다")
 	fails += _check("교역소" in main.build_buttons[Balance.TRADING_POST].text and "시장" in main.build_buttons[Balance.MARKET].text, "목록에 시장·교역소")

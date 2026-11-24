@@ -4,17 +4,19 @@ extends SceneTree
 
 func _initialize() -> void:
 	var fails: int = 0
-	# 확장 비용
-	fails += _check(Balance.expand_cost(0) == 70 and Balance.expand_cost(1) == 105 and Balance.expand_cost(2) == 158, "확장 비용 70/105/158")
 	# 확장: 한 줄씩, 최대 40x30
 	var f: Field = Field.new()
 	f.generate_outside(1)
+	f.expand_all()
+	fails += _check(f.bounds == Rect2i(-1, -1, 17, 17) and f.expansions == 1, "4방 확장은 한 번으로 센다")
+	f = Field.new()
+	f.generate_outside(1)
 	f.expand(Vector2i.LEFT)
-	fails += _check(f.bounds == Rect2i(-1, 0, 21, 15) and f.expansions == 1, "왼쪽으로 한 줄")
+	fails += _check(f.bounds == Rect2i(-1, 0, 16, 15) and f.expansions == 1, "왼쪽으로 한 줄")
 	f.expand(Vector2i.UP)
 	f.expand(Vector2i.RIGHT)
 	f.expand(Vector2i.DOWN)
-	fails += _check(f.bounds == Rect2i(-1, -1, 22, 17), "네 방향 확장")
+	fails += _check(f.bounds == Rect2i(-1, -1, 17, 17), "네 방향 확장")
 	var piece: Piece = Piece.new()
 	piece.cells.assign([Vector2i(0, 0), Vector2i(1, 0)])
 	piece.terrain.assign([Piece.PLAINS, Piece.PLAINS])

@@ -12,6 +12,7 @@ var cursor: MeshInstance3D ## 건물 건설 위치 표시
 var current: Piece = null ## 배치 중인 조각
 var build_id: int = 0 ## 건설 모드의 건물 종류, 0이면 건설 모드 아님
 var pieces_left: int = 0 ## 이번 준비 단계에 더 놓을 수 있는 조각 수
+var explored: bool = false ## 이번 준비 단계에 유적지 원정을 보냈는지
 var tiles_required: int = 0 ## 이번 준비 단계에 반드시 놓아야 하는 보상 타일 수 (기획서 2장)
 var pending_hq: bool = false ## 10·20웨이브를 이긴 뒤 아직 못 놓은 본부 조각이 있는지 (기획서 5.5)
 var hq_piece: Piece = null
@@ -27,9 +28,6 @@ var top_panel: PanelContainer
 var build_panel: PanelContainer
 var side_panel: PanelContainer
 var town_label: Label
-var expand_label: Label
-var buy_button: Button
-var expand_buttons: Dictionary = {} ## 방향 → 버튼
 var build_buttons: Dictionary = {}
 var selected_cell: Vector2i = Vector2i(-1, -1) ## 레벨업 패널에 보이는 건물
 var upgrade_panel: PanelContainer
@@ -49,7 +47,6 @@ var category_buttons: Array[Button] = [] ## 건설 메뉴 카테고리 버튼
 var dropdown_panel: PanelContainer ## 카테고리를 누르면 위로 펼쳐지는 목록
 var dropdown_lists: Array[VBoxContainer] = []
 var open_category: int = -1
-var _tower_hints: Node3D = null ## 방어탑을 지을 수 있는 성벽 칸 표시 (기획서 6장)
 var _warn: bool = false ## 지금 들고 있는 타일이 교역소를 바다와 끊는지 (미리보기 경고) (기획서 5.6)
 var _warn_key: String = ""
 var _carve_n: int = 0 ## 지금 들고 있는 타일의 바다 칸이 물로 깎을 땅 칸 수
@@ -62,6 +59,7 @@ var trade_button: Button
 var trade_panel: PanelContainer
 var trade_list: VBoxContainer
 var trade_buttons: Dictionary = {}
+var wave_panel: PanelContainer
 var wave_info: Label ## 준비 단계의 이번 웨이브 적 예고
 var battle_speed_index: int = 0
 var layer: CanvasLayer
@@ -171,8 +169,6 @@ func _build_ui() -> void:
 	trade_button.pressed.connect(_toggle_trade)
 	row.add_child(trade_button)
 	top.add_child(row)
-	wave_info = Label.new()
-	top.add_child(wave_info)
 	status = Label.new()
 	top.add_child(status)
 	top_panel = PanelContainer.new()
@@ -180,6 +176,16 @@ func _build_ui() -> void:
 	top_panel.visible = false
 	layer.add_child(top_panel)
 	top_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT, Control.PRESET_MODE_MINSIZE, 10)
+	# 이번 웨이브 예고는 우상단 별도 패널로 분리한다. 좁게 줄바꿈해 필드를 덜 가린다 (기획서 7.2)
+	wave_info = Label.new()
+	wave_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	wave_info.custom_minimum_size = Vector2(300, 0)
+	wave_panel = PanelContainer.new()
+	wave_panel.add_child(wave_info)
+	wave_panel.visible = false
+	layer.add_child(wave_panel)
+	wave_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 10)
+	wave_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	# 하단: 건설 메뉴 = 카테고리 버튼. 누르면 그 위로 건물 목록이 펼쳐진다 (기획서 7.2)
 	var bar: HBoxContainer = HBoxContainer.new()
 	var drop_box: VBoxContainer = VBoxContainer.new()
@@ -213,23 +219,10 @@ func _build_ui() -> void:
 	dropdown_panel.add_child(drop_box)
 	dropdown_panel.visible = false
 	layer.add_child(dropdown_panel)
-	# 왼쪽: 본부 레벨, 조각 구매(시장), 필드 확장(본부)
+	# 왼쪽: 본부 레벨, 연구
 	var side: VBoxContainer = VBoxContainer.new()
 	town_label = Label.new()
 	side.add_child(town_label)
-	buy_button = Button.new()
-	buy_button.pressed.connect(buy_piece)
-	side.add_child(buy_button)
-	expand_label = Label.new()
-	side.add_child(expand_label)
-	var erow: HBoxContainer = HBoxContainer.new()
-	for d in [[Vector2i.LEFT, "←"], [Vector2i.UP, "↑"], [Vector2i.DOWN, "↓"], [Vector2i.RIGHT, "→"]]:
-		var eb: Button = Button.new()
-		eb.text = "확장 " + d[1]
-		eb.pressed.connect(expand.bind(d[0]))
-		expand_buttons[d[0]] = eb
-		erow.add_child(eb)
-	side.add_child(erow)
 	research_toggle = Button.new()
 	research_toggle.pressed.connect(_toggle_research)
 	side.add_child(research_toggle)
@@ -324,7 +317,7 @@ func _build_ui() -> void:
 
 func _over_ui() -> bool:
 	var mp: Vector2 = get_viewport().get_mouse_position()
-	for c: Control in [panel, top_panel, build_panel, side_panel, upgrade_panel, research_panel, dropdown_panel, trade_panel]:
+	for c: Control in [panel, top_panel, wave_panel, build_panel, side_panel, upgrade_panel, research_panel, dropdown_panel, trade_panel]:
 		if c.visible and c.get_global_rect().has_point(mp):
 			return true
 	return false
@@ -385,33 +378,8 @@ func set_build(id: int) -> void:
 		_rebuild_ghost()
 	open_category = -1 # 건물을 고르거나 설치 모드가 끝나면 목록을 닫는다
 	_update_dropdown()
-	_update_tower_hints()
 	_note = ""
 	_refresh_hud()
-
-
-## 방어탑을 짓는 동안 지을 수 있는 성벽 칸을 하늘색으로 표시한다
-func _update_tower_hints() -> void:
-	if _tower_hints != null:
-		_tower_hints.queue_free()
-		_tower_hints = null
-	if build_id != Balance.TOWER:
-		return
-	_tower_hints = Node3D.new()
-	for c in field.buildings:
-		if field.can_build(Balance.TOWER, c):
-			var m: MeshInstance3D = MeshInstance3D.new()
-			var bm: BoxMesh = BoxMesh.new()
-			bm.size = Vector3(0.9, 0.06, 0.9)
-			m.mesh = bm
-			var mat: StandardMaterial3D = StandardMaterial3D.new()
-			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			mat.albedo_color = Color(0.1, 0.85, 1.0, 0.8)
-			mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			m.material_override = mat
-			m.position = field.cell_to_world(c) + Vector3(0, Field.BLOCK_H + 0.55, 0)
-			_tower_hints.add_child(m)
-	add_child(_tower_hints)
 
 
 ## 건설 메뉴 카테고리를 열고 닫는다 (기획서 7.2)
@@ -445,8 +413,14 @@ func _place_dropdown() -> void:
 
 ## 준비 단계 시작: 조각 선택지를 새로 뽑고, 놓을 수 있는 조각은 1개 (기획서 2장)
 func _begin_prep() -> void:
+	_note = ""
 	pieces_left = 1
 	tiles_required = 1 # 전투 보상 타일: 놓기 전에는 건설·강화·웨이브 시작이 막힌다
+	if GameState.wave > 1 and (GameState.wave - 1) % Balance.GROW_EVERY == 0: # 2라운드마다 4방으로 확장 (기획서 3장)
+		field.expand_all()
+		_set_pitch(_pitch)
+		_note = "필드가 사방으로 넓어졌습니다 (%dx%d)" % [field.bounds.size.x, field.bounds.size.y]
+	explored = false
 	_roll_choices()
 
 
@@ -467,7 +441,7 @@ func _make_room(pieces: Array[Piece]) -> int:
 			break
 		var d: Vector2i = dirs[attempt % 4]
 		if field.can_expand(d):
-			field.expand(d, true)
+			field.expand(d)
 			grown += 1
 	if grown > 0:
 		_set_pitch(_pitch)
@@ -484,18 +458,7 @@ func _roll_choices() -> void:
 		_note = "놓을 자리가 없어 필드를 무료로 넓혔습니다 (%dx%d)" % [field.bounds.size.x, field.bounds.size.y]
 
 
-## 시장에서 조각을 산다: 놓을 수 있는 조각 +1, 선택지 새로 뽑기 (기획서 5장)
-func buy_piece() -> bool:
-	var price: int = field.market_price()
-	if battle != null or placed_count == 0 or price < 0:
-		return false
-	if not GameState.spend(price):
-		return false
-	_grant_piece()
-	return true
-
-
-## 놓을 수 있는 조각을 1개 늘리고 선택지를 새로 뽑는다 (시장 구매·NPC 거래) (기획서 5장, 5.6)
+## 놓을 수 있는 조각을 1개 늘리고 선택지를 새로 뽑는다 (NPC 거래) (기획서 5장, 5.6)
 func _grant_piece() -> void:
 	pieces_left += 1
 	current = null
@@ -597,15 +560,27 @@ func do_trade(id: String) -> bool:
 	return true
 
 
-## 본부에서 골드로 필드를 한 줄 넓힌다 (기획서 3장)
-func expand(dir: Vector2i) -> bool:
-	if battle != null or placed_count == 0 or not field.can_expand(dir):
+## 유적지 원정: 항해술을 연구하고 항구가 있어야 한다. 준비 단계당 1회 (기획서 3장)
+func explore(c: Vector2i) -> bool:
+	if battle != null or not field.ruins.has(c) or explored:
 		return false
-	if not GameState.spend(Balance.expand_cost(field.paid_expansions)):
+	if not GameState.has_tech("sail") or not field.buildings.values().has(Balance.PORT):
+		_note = "유적지 원정에는 항해술 연구와 항구가 필요합니다"
+		_refresh_hud()
 		return false
-	field.expand(dir)
-	_set_pitch(_pitch) # 카메라가 넓어진 필드를 비춘다
-	_note = "필드를 넓혔습니다 (%dx%d)" % [field.bounds.size.x, field.bounds.size.y]
+	if not GameState.spend(Balance.EXPLORE_COST):
+		_note = "원정 비용 %d골드가 모자랍니다" % Balance.EXPLORE_COST
+		_refresh_hud()
+		return false
+	explored = true
+	if rng.randf() < Balance.EXPLORE_RP_CHANCE:
+		GameState.add_research(1)
+		_note = "원정 성공: 연구포인트 +1"
+	else:
+		var g: int = rng.randi_range(Balance.EXPLORE_GOLD_MIN, Balance.EXPLORE_GOLD_MAX)
+		GameState.add(g, 0)
+		_note = "원정 성공: 골드 +%d" % g
+	field.loot_ruin(c)
 	_refresh_hud()
 	return true
 
@@ -635,6 +610,9 @@ func place_current(hover: Vector2i) -> bool:
 		build_panel.visible = true
 		side_panel.visible = true
 		_begin_prep()
+		pieces_left = 0 # 시작 조각 뒤 첫 준비 단계에는 보상 타일이 없다 (기획서 2장)
+		tiles_required = 0
+		panel.visible = false
 	elif was_hq: # 본부 조각은 일반 조각 배치 횟수를 쓰지 않는다 (기획서 5.5)
 		pending_hq = false
 		_note = "본부를 하나 더 세웠습니다 (본부 %d개)" % field.hqs.size()
@@ -653,10 +631,7 @@ func try_build(c: Vector2i) -> bool:
 	if not _build_ok(c):
 		return false
 	GameState.spend(_cost_of(build_id))
-	if build_id == Balance.TOWER:
-		field.build_tower(c) # 성벽이 방어탑으로 바뀐다 (레벨·체력 비율 유지)
-	else:
-		field.build(build_id, c)
+	field.build(build_id, c)
 	if build_id == Balance.TRADING_POST: # 설치한 다음 라운드에 첫 방문 (기획서 5.6)
 		npc_next_wave = GameState.wave + 1
 	set_build(0) # 건물을 하나 지으면 설치 모드가 끝난다
@@ -801,15 +776,18 @@ func _on_battle_finished(victory: bool) -> void:
 	var cleared: int = GameState.wave
 	GameState.add(inc.x, inc.y)
 	GameState.next_wave()
-	var levels: int = GameState.check_level() # 본부 레벨이 오르면 레벨마다 연구포인트 +1 (기획서 5.3)
+	var levels: int = GameState.check_level() # 본부 레벨 (기획서 5.3)
+	var rp_gain: int = GameState.add_research_progress(field.research_income()) # 도서관·연구소 (기획서 5.4)
 	field.repair_all()
 	_tilt(90.0)
 	build_panel.visible = true
 	side_panel.visible = true
 	_begin_prep()
-	_note = "웨이브 %d 승리: 골드 +%d · 식량 +%d" % [cleared, inc.x, inc.y]
+	_note = "웨이브 %d 승리: 골드 +%d · 식량 +%d" % [cleared, inc.x, inc.y] + ("\n" + _note if _note != "" else "")
 	if levels > 0:
-		_note += "\n본부 레벨 %d! 연구포인트 +%d" % [GameState.hq_level, levels]
+		_note += "\n본부 레벨 %d!" % GameState.hq_level
+	if rp_gain > 0:
+		_note += "\n연구포인트 +%d" % rp_gain
 	_maybe_visit_npc() # 3·6·9… 웨이브의 준비 단계에 교역 NPC가 온다 (기획서 5.6)
 	if Balance.HQ_PIECE_WAVES.has(cleared): # 보스 라운드를 이기면 본부 조각을 하나 더 받는다 (기획서 5.5)
 		_grant_hq_piece()
@@ -842,6 +820,7 @@ func _show_defeat() -> void:
 
 
 func _tilt(deg: float) -> void:
+	field.set_flat(deg < 90.0)
 	create_tween().tween_method(_set_pitch, _pitch, deg, 0.8)
 
 
@@ -965,7 +944,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			_rotate()
 	elif battle == null: # 아무것도 들고 있지 않으면 건물을 골라 레벨업 패널을 연다
 		if left:
-			select_building(_hover_cell())
+			var hc: Vector2i = _hover_cell()
+			if field.ruins.has(hc):
+				explore(hc)
+			else:
+				select_building(hc)
 		elif right or key == KEY_ESCAPE:
 			select_building(Vector2i(-1, -1))
 	else: # 전투 중에는 클릭한 땅이 병사 집결지가 된다
@@ -993,7 +976,8 @@ func _refresh_research() -> void:
 
 
 func _refresh_hud() -> void:
-	stats.text = "골드 %d · 식량 %d · 연구포인트 %d · 웨이브 %d   " % [GameState.gold, GameState.food, GameState.research_points, GameState.wave]
+	var inc: Vector2i = field.income(GameState.researched) # 웨이브 정산 때 들어올 생산량 (기획서 7.2)
+	stats.text = "골드 %d (+%d) · 식량 %d (+%d) · 연구포인트 %d (%d/%d, +%d) · 웨이브 %d   " % [GameState.gold, inc.x, GameState.food, inc.y, GameState.research_points, GameState.research_progress, Balance.RESEARCH_THRESHOLD, field.research_income(), GameState.wave]
 	for id in build_buttons:
 		var bb: Button = build_buttons[id]
 		bb.text = "%s %dG · %s" % [Balance.BUILDINGS[id]["name"], _cost_of(id), Balance.effect_text(id, 1)]
@@ -1015,6 +999,7 @@ func _refresh_hud() -> void:
 	research_toggle.text = "연구 (연구포인트 %d)" % GameState.research_points
 	# 이번 웨이브의 적을 미리 알려 준다. 해적의 세기는 땅 칸 수·확장 횟수에 따라 바뀐다 (기획서 6장)
 	wave_info.visible = battle == null
+	wave_panel.visible = top_panel.visible and battle == null
 	var comp: Dictionary = Balance.enemy_composition(GameState.wave)
 	var comp_parts: Array[String] = []
 	for kind in comp:
@@ -1054,9 +1039,6 @@ func _refresh_hud() -> void:
 		_refresh_research()
 	var nxt: int = GameState.next_level_food()
 	town_label.text = "본부 Lv %d · 식량 누적 %d%s" % [GameState.hq_level, GameState.food_total, "/%d" % nxt if nxt > 0 else " (최고)"]
-	var price: int = field.market_price()
-	buy_button.text = "조각 구매 %dG" % price if price >= 0 else "조각 구매 (시장 필요)"
-	buy_button.disabled = price < 0 or GameState.gold < price
 	if selected_cell.x >= 0 and not field.buildings.has(selected_cell):
 		selected_cell = Vector2i(-1, -1)
 	upgrade_panel.visible = selected_cell.x >= 0 and battle == null
@@ -1089,10 +1071,6 @@ func _refresh_hud() -> void:
 		else:
 			upgrade_button.text = "최고 레벨"
 			upgrade_button.disabled = true
-	var cost: int = Balance.expand_cost(field.paid_expansions)
-	expand_label.text = "필드 확장 %dG · 현재 %dx%d" % [cost, field.bounds.size.x, field.bounds.size.y]
-	for d in expand_buttons:
-		expand_buttons[d].disabled = GameState.gold < cost or not field.can_expand(d)
 	var s: String
 	if battle != null:
 		s = battle.summary() + "\n땅을 클릭하면 병사가 그곳으로 이동합니다 · 우클릭으로 이동 취소"

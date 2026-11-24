@@ -259,7 +259,7 @@ func _engage(u: Unit, tpos: Vector3, dt: float) -> bool:
 func _soldier_turn(u: Unit, dt: float) -> void:
 	u.waiting = false
 	# 이동 명령을 받은 병사는 그곳에 도착할 때까지 가까운 적(AGGRO_RANGE 안)만 상대하고 계속 간다. 도착하면 명령이 끝난다 (기획서 6장)
-	if u.order.x >= 0 and islands.get(u.order, -1) == u.island and _dist(u.position, field.cell_to_world(u.order)) <= 1.5:
+	if u.order.x >= 0 and islands.get(u.order, -1) == u.island and _dist(u.position, field.cell_to_world(u.order)) <= 0.6:
 		u.order = Vector2i(-1, -1)
 	var ordered: bool = u.order.x >= 0
 	var t: Unit = _nearest(u.position, pirates, u.island)
@@ -332,22 +332,7 @@ func _port_on_island(u: Unit) -> Vector2i:
 	return best
 
 
-## 적이 가려는 다음 칸이 성벽이고 바로 앞이면 그 성벽 칸, 아니면 (-1, -1) (기획서 6장)
-func _blocking_wall(u: Unit) -> Vector2i:
-	if u.path.is_empty() or not field.is_wall(u.path[0]):
-		return Vector2i(-1, -1)
-	return u.path[0] if _dist(u.position, field.cell_to_world(u.path[0])) <= 1.3 else Vector2i(-1, -1)
-
-
 func _pirate_turn(u: Unit, dt: float) -> void:
-	var wall: Vector2i = _blocking_wall(u)
-	if wall.x >= 0: # 길을 막은 성벽은 부수고 지나간다
-		u.cooldown = maxf(0.0, u.cooldown - dt)
-		if u.cooldown <= 0.0:
-			u.cooldown = Balance.ATTACK_INTERVAL
-			u.lunge(field.cell_to_world(wall))
-			field.damage(wall, u.atk)
-		return
 	var best_d: float = INF
 	var tpos: Vector3 = u.position
 	var tunit: Unit = null
@@ -358,7 +343,16 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 			best_d = d
 			tpos = s.position
 			tunit = s
+	var tower_first: bool = tunit == null # 같은 섬에 아군 병사가 없으면 방어탑부터 공격한다 (기획서 6장)
+	if tower_first:
+		tower_first = false
+		for c in field.targets():
+			if field.buildings.get(c, 0) == Balance.TOWER and islands.get(c, -1) == u.island:
+				tower_first = true
+				break
 	for c in field.targets():
+		if tower_first and field.buildings.get(c, 0) != Balance.TOWER:
+			continue
 		var p: Vector3 = field.cell_to_world(c)
 		var d: float = _dist(u.position, p)
 		if islands.get(c, -1) == u.island and d < best_d:
@@ -485,7 +479,8 @@ func _spawn_ships(dt: float) -> void:
 	_ship_timer = Balance.SHIP_INTERVAL
 	_ships_left -= 1
 	var load: Array[int] = [] # 강한 적이 먼저 탄다
-	for i in Balance.PIRATES_PER_SHIP:
+	var n_load: int = ceili(_queue.size() / float(_ships_left + 1)) # 남은 인원을 남은 배에 고르게 나눠 한 명짜리 배가 없게 한다 (기획서 6장)
+	for i in n_load:
 		if _queue.is_empty():
 			break
 		load.append(_queue.pop_front())

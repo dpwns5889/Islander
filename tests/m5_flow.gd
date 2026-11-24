@@ -9,26 +9,10 @@ func _initialize() -> void:
 	await process_frame
 	var gs: Node = root.get_node("GameState")
 	main.place_current(Vector2i(9, 7))
+	main._begin_prep() # 첫 준비 단계는 보상 타일이 없어 일반 준비 단계로 대신한다
 	main.tiles_required = 0 # 보상 타일 강제 규칙은 m14에서 따로 점검한다
 	gs.gold = 1000
 	gs.researched["trade"] = true # 시장은 교역 연구가 있어야 짓는다
-	# 시장 없이는 조각을 못 산다
-	fails += _check(not main.buy_piece(), "시장이 없으면 구매 불가")
-	main.set_build(Balance.MARKET)
-	for c in main.field.cells:
-		if main.try_build(c):
-			break
-	main.set_build(0)
-	gs.gold = 1000
-	fails += _check(main.buy_piece() and main.pieces_left == 2 and gs.gold == 960, "시장에서 조각 구매: 놓을 조각 2개, 40골드")
-	main.pick(0)
-	fails += _check(main.place_current(Vector2i(14, 3)) and main.pieces_left == 1, "첫 조각 배치")
-	main.pick(0)
-	fails += _check(main.place_current(Vector2i(4, 10)) and main.pieces_left == 0, "둘째 조각 배치")
-	# 확장
-	var before: int = gs.gold
-	fails += _check(main.expand(Vector2i.RIGHT) and gs.gold == before - 70 and main.field.bounds.size.x == 21, "확장 70골드")
-	fails += _check(main.expand(Vector2i.DOWN) and gs.gold == before - 175, "두 번째 확장 105골드")
 	# 전투를 빠르게 돌려 승리하면 정산·본부 레벨·연구포인트
 	gs.food_total = 19 # 정산 식량(평원 칸 수)과 합쳐 20을 넘게 한다
 	main.start_wave()
@@ -38,7 +22,7 @@ func _initialize() -> void:
 		main.battle.tick(0.1)
 	fails += _check(main.battle == null and gs.wave == 2, "웨이브 승리 후 2웨이브")
 	fails += _check(gs.food_total >= 20 and gs.hq_level >= 2, "식량 누적으로 본부 레벨 상승 (누적 %d)" % gs.food_total)
-	fails += _check(main.pieces_left == 1 and gs.research_points == gs.hq_level - 1, "레벨업은 연구포인트만 준다 (놓을 조각 %d개, 연구포인트 %d)" % [main.pieces_left, gs.research_points])
+	fails += _check(main.pieces_left == 1 and gs.research_points == 0, "본부 레벨업은 연구포인트를 주지 않는다 (놓을 조각 %d개, 연구포인트 %d)" % [main.pieces_left, gs.research_points])
 	print("M5 흐름 점검 실패 %d건" % fails)
 	quit(fails)
 
