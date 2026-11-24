@@ -59,9 +59,7 @@ func _initialize() -> void:
 		var pieces0: int = main.pieces_left
 		fails += _check(main.do_trade(id), "거래 성공: " + id)
 		fails += _check(not main.do_trade(id), "같은 거래는 한 번뿐: " + id)
-		if id == "food_gold":
-			fails += _check(gs.gold == g0 + 20 and gs.food == f0 - 10, "식량 10 → 골드 20")
-		elif id == "gold_rp":
+		if id == "gold_rp":
 			fails += _check(gs.gold == g0 - 60 and gs.research_points == rp0 + 1, "골드 60 → 연구포인트 1")
 		elif id == "gold_piece":
 			fails += _check(gs.gold == g0 - 40 and main.pieces_left == pieces0 + 1, "골드 40 → 조각 +1")
@@ -76,7 +74,7 @@ func _initialize() -> void:
 	main.battle._pirates_left = 0
 	main.battle.tick(0.1)
 	fails += _check(gs.wave == 3 and not main.npc_present, "3웨이브: NPC 없음")
-	# 6. 교역소 레벨 2는 거래 4개, 5웨이브에 다시 방문
+	# 6. 교역소 레벨 2도 거래 3개, 5웨이브에 다시 방문
 	main.tiles_required = 0
 	gs.gold = 1000
 	main.select_building(post)
@@ -84,7 +82,7 @@ func _initialize() -> void:
 	_win(main) # 3 → 4
 	fails += _check(gs.wave == 4 and not main.npc_present, "4웨이브: NPC 없음")
 	_win(main) # 4 → 5
-	fails += _check(gs.wave == 5 and main.npc_present and main.trade_offers.size() == 4 and main.npc_next_wave == 8, "5웨이브: NPC 다시 방문, 거래 4개, 다음은 8웨이브")
+	fails += _check(gs.wave == 5 and main.npc_present and main.trade_offers.size() == 3 and main.npc_next_wave == 8, "5웨이브: NPC 다시 방문, 거래 3개, 다음은 8웨이브")
 	# 7. 교역소가 없으면 방문하지 않는다
 	main.field.damage(post, 9999.0)
 	fails += _check(main.field.trading_post() == Vector2i(-1, -1), "교역소 파괴")

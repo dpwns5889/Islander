@@ -549,9 +549,7 @@ func do_trade(id: String) -> bool:
 	var t: Dictionary = _trade_def(id)
 	GameState.spend(t["gold"], t["food"])
 	trade_sold[id] = true
-	if id == "food_gold":
-		GameState.add(20, 0)
-	elif id == "gold_rp":
+	if id == "gold_rp":
 		GameState.add_research(1)
 	elif id == "gold_piece":
 		_grant_piece()
@@ -774,6 +772,7 @@ func _on_battle_finished(victory: bool) -> void:
 	battle = null
 	speed_button.visible = false
 	if not victory:
+		SaveManager.record(GameState.wave) # 졌어도 도달한 웨이브는 기록한다
 		_show_defeat()
 		return
 	var inc: Vector2i = field.income(GameState.researched)
@@ -798,6 +797,9 @@ func _on_battle_finished(victory: bool) -> void:
 	if Balance.HQ_PIECE_WAVES.has(cleared): # 보스 라운드를 이기면 본부 조각을 하나 더 받는다 (기획서 5.5)
 		_grant_hq_piece()
 	_refresh_hud()
+	SaveManager.record(GameState.wave) # 무한 모드까지 포함한 최고 웨이브 (기획서 9.1)
+	if cleared == Balance.WIN_WAVE:
+		_show_victory()
 
 
 func _grant_hq_piece() -> void:
@@ -810,19 +812,36 @@ func _grant_hq_piece() -> void:
 
 
 func _show_defeat() -> void:
+	_result_panel("패배 — 웨이브 %d에서 본부가 무너졌습니다" % GameState.wave, [["다시 시작", get_tree().reload_current_scene], ["처음으로", _to_menu]])
+	status.text = ""
+
+
+## 30웨이브 승리: 결과를 보여 주고 무한 모드로 계속하거나 처음으로 (기획서 9.1)
+func _show_victory() -> void:
+	var pc: PanelContainer = _result_panel("승리! %d웨이브를 지켜 냈습니다\n땅 칸 %d · 본부 %d개 · 최고 웨이브 %d" % [Balance.WIN_WAVE, field.land_count(), field.hqs.size(), SaveManager.best_wave], [["계속하기 (무한 모드)", Callable()], ["처음으로", _to_menu]])
+	(pc.get_child(0).get_child(1) as Button).pressed.connect(pc.queue_free)
+
+
+func _to_menu() -> void:
+	get_tree().change_scene_to_file("res://assets/scenes/menu.tscn")
+
+
+func _result_panel(text: String, buttons: Array) -> PanelContainer:
 	var box: VBoxContainer = VBoxContainer.new()
 	var l: Label = Label.new()
-	l.text = "패배 — 웨이브 %d에서 본부가 무너졌습니다" % GameState.wave
+	l.text = text
 	box.add_child(l)
-	var b: Button = Button.new()
-	b.text = "다시 시작"
-	b.pressed.connect(get_tree().reload_current_scene)
-	box.add_child(b)
+	for bd in buttons:
+		var b: Button = Button.new()
+		b.text = bd[0]
+		if not (bd[1] as Callable).is_null():
+			b.pressed.connect(bd[1])
+		box.add_child(b)
 	var pc: PanelContainer = PanelContainer.new()
 	pc.add_child(box)
 	layer.add_child(pc)
 	pc.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
-	status.text = ""
+	return pc
 
 
 func _tilt(deg: float) -> void:
@@ -1010,6 +1029,8 @@ func _refresh_hud() -> void:
 	for kind in comp:
 		comp_parts.append("%s %d명" % [Balance.UNITS[kind]["name"], comp[kind]])
 	wave_info.text = "웨이브 %d 예고: %s (해적선 %d척) · 체력·공격 ×%.2f" % [GameState.wave, " · ".join(comp_parts), Balance.ship_count(GameState.wave), Balance.enemy_mult(field.land_count(), field.expansions)]
+	if field.sea_blocked():
+		wave_info.text += "\n바닷길이 막혀 해적이 걸어서 바다를 건넙니다"
 	for nk in Balance.new_enemy_kinds(GameState.wave): # 새 종류가 처음 나오는 웨이브 안내
 		var info: Dictionary = Balance.UNITS[nk]
 		wave_info.text += "\n새 적: %s (체력 %d · 공격 %d%s)" % [info["name"], info["hp"], info["atk"], (" · 사거리 %.1f칸" % info["reach"]) if info["reach"] > 2.0 else ""]

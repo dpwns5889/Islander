@@ -3,8 +3,8 @@ h1{border-bottom:3px solid #2a7;padding-bottom:.3rem}h2{margin-top:2.2rem;border
 table{border-collapse:collapse;margin:1rem 0}th,td{border:1px solid #ccc;padding:.4rem .8rem;text-align:left}th{background:#eef6f2}
 pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;padding:0 .25rem}</style></head><body><h1 id="biomedefender">BiomeDefender (가칭) — 기획서</h1>
 <ul>
-<li>최종 수정: 2026-11-24</li>
-<li>게임 버전: 0.26</li>
+<li>최종 수정: 2026-11-25</li>
+<li>게임 버전: 0.28</li>
 <li>엔진: Godot 4.7.2, GDScript, 3D (로우폴리), PC 마우스 전용</li>
 </ul>
 <h2 id="1">1. 개요</h2>
@@ -78,7 +78,7 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <tr>
 <td>산</td>
 <td>없음</td>
-<td>방어탑만</td>
+<td>방어탑·광산</td>
 <td><strong>이동 불가</strong> (아군·적 모두). 보너스는 없다</td>
 </tr>
 <tr>
@@ -218,6 +218,14 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <td>빈 땅에 바로 짓는다. 사거리 안의 <strong>해적을 자동 공격</strong>(1초마다)</td>
 </tr>
 <tr>
+<td>광산</td>
+<td>60골드</td>
+<td>100</td>
+<td>처음부터</td>
+<td><strong>산 칸 전용</strong></td>
+<td>웨이브 정산 시 골드 +20</td>
+</tr>
+<tr>
 <td>본부</td>
 <td>(시작 조각, 10·20웨이브 뒤 추가 조각)</td>
 <td>300</td>
@@ -228,7 +236,7 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 </tbody>
 </table>
 <ul>
-<li>수입: 웨이브 종료 시 집 골드 + 밭 식량 + 평원 칸마다 식량 +1. <strong>본부 영역 안의 것만</strong> 센다(5.3).</li>
+<li>수입: 웨이브 종료 시 집·광산 골드 + 밭 식량 + 평원 칸마다 식량 +1. <strong>본부 영역 안의 것만</strong> 센다(5.3). 여기에 <strong>본부마다 기본 골드 +20</strong>이 더해진다(살아 있는 본부 수만큼, 건물이 없어도 받는다).</li>
 <li><strong>낚시터</strong>는 땅이 아니라 <strong>물 위</strong>에 짓는다(필드 안의 바다 칸, 4방향 중 땅과 닿은 칸). 땅 조각을 그 칸에 놓을 수 없고, 배는 그 칸을 지나지 못한다. 상륙한 해적은 <strong>같은 섬의 육지 쪽</strong>(낚시터와 4방향으로 닿은 땅 칸)에서 낚시터를 공격할 수 있다. 낚시터와 닿은 땅이 없는 섬의 해적은 노리지 못한다.</li>
 <li><strong>낚시터 생산량</strong>: 낚시터 칸에서 물길로 4칸 이내에 이어진 바다 칸 수 n(최대 40)을 센다. 식량 = min(9, 3 + ⌊n/6⌋)이고, 레벨 2는 ×1.5, 레벨 3은 ×2(내림)이다. 물가가 넓을수록 많이 나온다. 섬 안에 갇힌 호수 한가운데에 지으면 이어진 물이 없어 식량 3이다.</li>
 <li><strong>닫히지 않은 물가</strong>: 교역소는 4방향 이웃 중 <strong>바깥 바다(필드 밖으로 이어진 바다)와 이어진 바다</strong> 칸이 있어야 한다. 섬 안에 갇힌 호수와 맞닿은 칸에는 지을 수 없다. 이 조건은 지을 때뿐 아니라 NPC 방문 때도 다시 검사한다(5.6).</li>
@@ -297,8 +305,8 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <td>교역소</td>
 <td>40</td>
 <td>60</td>
-<td>NPC 거래 4개</td>
-<td>NPC 거래 4개(거래 종류가 4가지라 더 늘지 않음)</td>
+<td>NPC 거래 3개</td>
+<td>NPC 거래 3개(거래 종류가 3가지라 더 늘지 않음)</td>
 </tr>
 <tr>
 <td>도서관</td>
@@ -313,6 +321,13 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <td>120</td>
 <td>연구수치 +8</td>
 <td>연구수치 +10</td>
+</tr>
+<tr>
+<td>광산</td>
+<td>60</td>
+<td>90</td>
+<td>골드 +32</td>
+<td>골드 +48</td>
 </tr>
 <tr>
 <td>방어탑</td>
@@ -409,7 +424,7 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <li><strong>방문 시기</strong>: 교역소를 지으면 <strong>다음 라운드의 준비 단계</strong>에 NPC가 처음 와서 교역소 옆에 서 있고, 그다음부터 <strong>3라운드마다</strong> 방문한다(1웨이브에 지으면 2·5·8웨이브). 교역소를 다시 지으면 일정이 새로 시작된다. 방문하는 순간 <strong>효과음</strong>이 난다.</li>
 <li><strong>거래 창</strong>: NPC가 있는 동안 상단에 "교역 NPC 방문!" 버튼이 떠서 거래 창을 연다. 창을 닫아도 버튼은 남아서 웨이브를 시작하기 전까지 몇 번이든 다시 열 수 있다. 보상 타일을 놓기 전에도 거래할 수 있다.</li>
 <li><strong>떠남</strong>: "웨이브 시작"을 누르면(전투 진행) NPC와 버튼이 사라진다.</li>
-<li><strong>거래 목록</strong>: 방문할 때마다 아래 4종에서 무작위로 뽑아 보여 준다. 개수는 교역소 레벨 1에서 3개, 레벨 2·3에서 4개(풀이 4종)이고, 각 거래는 방문당 한 번만 살 수 있다. 가격은 웨이브와 상관없이 고정이다.</li>
+<li><strong>거래 목록</strong>: 방문할 때마다 아래 3종을 보여 준다(풀이 3종이라 레벨과 상관없이 전부). 각 거래는 방문당 한 번만 살 수 있다. 가격은 웨이브와 상관없이 고정이다. <strong>식량은 거래에 쓰지 않는다</strong>(식량은 본부 레벨 전용). 거래 항목은 추후 다시 정리한다.</li>
 </ul>
 <table>
 <thead>
@@ -419,10 +434,6 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 </tr>
 </thead>
 <tbody>
-<tr>
-<td>식량 10 → 골드 20</td>
-<td>식량을 골드로 바꾼다</td>
-</tr>
 <tr>
 <td>골드 60 → 연구포인트 1</td>
 <td>연구포인트를 산다</td>
@@ -493,7 +504,8 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <ul>
 <li>해적선이 바깥 바다 가장자리에서 스폰해 본부나 가까운 건물로 향한다.</li>
 <li>해적선은 노릴 건물이 있는 섬의 해안(<strong>모래·평원 모두 상륙 가능</strong>) 중 가장 가까운 곳으로 바다 길을 따라 간다. 닿으면 태우고 온 적이 상륙한다(한 척에 2~3명). 적의 종류와 능력치는 아래 표와 같다.</li>
-<li>대륙에 막혀 바다 길이 없으면 다른 가장자리에서 출발을 시도하고, 끝내 길이 없으면 상륙 지점 앞 바다에서 나타난다(전투 없이 끝나지 않는다).</li>
+<li>대륙에 막혀 바다 길이 없으면 다른 가장자리에서 출발을 시도한다.</li>
+<li><strong>바닷길이 끝내 막힌 경우</strong>: 해적선은 스폰 위치에서 <strong>가장 가까운 땅 칸</strong>(필드든 바깥 대륙이든, 산 제외)까지 갈 수 있는 곳으로 가서 해적을 내려 준다. 내린 해적은 목표를 향해 걸어가되 <strong>바다 칸도 건넌다(이동속도 ×0.4, 숲 ×0.7보다 느림)</strong>. 땅으로 돌아가는 길이 있으면 길찾기 비용이 높은 바다 대신 땅길을 택한다. 바닷길이 열려 있으면 위의 일반 상륙을 쓰고 바다는 건너지 않는다. 아군 병사는 바다를 건너지 못한다(항구 보트만). 속도는 <code>balance.gd</code> 한 곳에 둔다. 준비 단계 예고에는 "바닷길이 막혀 해적이 걸어서 바다를 건넙니다"를 표시한다.</li>
 <li>해적선은 병사가 공격할 수 없다. 상륙한 뒤에만 교전한다.</li>
 <li>적의 목표는 "가장 가까운 대상(건물·병사)"을 자동 선택한다. 방어탑도 일반 건물처럼 목표가 되고, <strong>같은 섬에 아군 병사가 없으면 적은 방어탑부터 공격한다</strong>.</li>
 </ul>
@@ -652,7 +664,7 @@ docs/          기획서 (.gdignore)
 </ul>
 <h3 id="75">7.5 오토로드</h3>
 <ul>
-<li><code>GameState</code> (판 상태·자원), <code>SaveManager</code> (기록), <code>AudioManager</code> (효과음 재생: <code>assets/audio/sfx/&lt;이름&gt;.wav</code>를 읽어 재생한다. 지금 효과음은 <code>tools/make_sfx.py</code>가 코드로 만든 임시 소리이고, 같은 이름의 파일로 바꾸면 된다).</li>
+<li><code>GameState</code> (판 상태·자원), <code>SaveManager</code> (기록: 최고 웨이브를 <code>user://save.json</code>에 저장), <code>AudioManager</code> (효과음 재생: <code>assets/audio/sfx/&lt;이름&gt;.wav</code>를 읽어 재생한다. 지금 효과음은 <code>tools/make_sfx.py</code>가 코드로 만든 임시 소리이고, 같은 이름의 파일로 바꾸면 된다).</li>
 <li>새 오토로드는 여기에 먼저 적는다.</li>
 </ul>
 <h2 id="8">8. 범위 밖 (첫 버전에서 제외)</h2>
@@ -672,33 +684,29 @@ docs/          기획서 (.gdignore)
 <tbody>
 <tr>
 <td><strong>M6 완성도</strong> (마지막)</td>
-<td>승리·패배 화면, 최고 웨이브 저장 / 밸런스 조정 / 사운드(보스 등장 포함)</td>
-<td>30웨이브까지 처음부터 끝까지 한 판을 할 수 있다</td>
+<td>밸런스 시뮬레이션 (승리·패배 화면, 메인 메뉴, 최고 웨이브 저장, 전투 효과음은 0.28에서 구현)</td>
+<td>메뉴에서 시작해 30웨이브까지 한 판을 끝까지 할 수 있다</td>
 </tr>
 </tbody>
 </table>
-<h3 id="91-m6">9.1 먼저 정할 것 (M6 전에 사용자와 정한다)</h3>
-<p>기획에 아직 정해지지 않았거나 사용자가 보류한 결정이다. 정해지면 이 기획서에 먼저 적고 구현한다.</p>
+<h3 id="91">9.1 정해진 것</h3>
+<p>2026-11-25에 정했고 7번을 뺀 나머지는 0.27·0.28에서 구현했다.</p>
 <ol>
-<li><strong>영역 수치 확인</strong>: 시작 3x3, 레벨당 +1칸, 최고 레벨 20(영역 28칸)과 식량 기준(5~785)이 실제 플레이에서 맞는지, 영역 밖 조각 배치가 의미 있는지 확인한다.</li>
-<li><strong>식량의 남은 용도</strong>: 식량은 본부 레벨(영역 확장)과 NPC 거래(식량 10 → 골드 20)에 쓰인다. 쌓아 둔 보유 식량(누적이 아닌 현재 값)은 쓸모가 거의 없고 본부 파괴 시 "골드·식량 30% 감소"도 사실상 골드만 의미가 있다. 보유 식량에 새 용도를 줄지 정한다.</li>
-<li><strong>바다 섞인 타일이 나오기 전(10라운드 전)에 교역소가 닫혔을 때</strong>: 11웨이브 전에는 바다 칸으로 다시 열 방법이 없다. 철거·이전 방법을 만들지 정한다.</li>
-<li><strong>밸런스</strong>: 병영 병사 무료(건설비 30골드에 매 웨이브 3~5명), 후반 적 구성(방패병·선장), 방어탑의 약점(적의 목표가 되고 부서지면 복구되지 않음)이 실제 플레이에서 적절한지 확인하고 수치(<code>assets/scripts/balance.gd</code>)를 조정한다.</li>
-<li><strong>숲·산의 남은 결정</strong>: 필드 밖 대륙에 숲·산을 넣을지, 산 위 방어탑을 지을 기회가 보상 타일의 산 칸뿐이라 너무 드문지, 숲·산 수치(조각당 확률 30%·최대 2칸, 숲 이동속도 ×0.7)가 맞는지 정한다. 지형 확장은 이어서 한다(건설 조건·바깥 대륙 분포·표시 색).</li>
-<li><strong>유적지 원정 밸런스</strong>: 비용 20골드, 보상 골드 60~100 또는 연구포인트 +1(30%), 준비 단계당 1회가 적절한지, 유적지 밀도(평원 칸의 2%)가 맞는지 확인한다.</li>
-<li><strong>대륙이 바닷길을 막는 경우</strong>: 지금은 길이 막히면 상륙 지점 앞에서 해적선이 나타난다. 이 방식이 괜찮은지, 필드 근처 바다를 항상 이어 두는 쪽이 나은지 정한다.</li>
-<li><strong>도서관·연구소 이름과 수치</strong>: 임시명이다. 연구수치(+3/4/5, +6/8/10, 10마다 연구포인트 1)와 비용(40/80골드)이 연구 비용(1·2·3점, 총 24점)과 맞는지 확인한다.</li>
+<li><strong>식량</strong>: 본부 레벨 전용으로 둔다. NPC 거래의 식량 항목은 삭제했다(거래 목록은 추후 다시 정리). 보유 식량의 새 용도는 만들지 않는다.</li>
+<li><strong>교역소가 닫힌 경우</strong>: 철거·이전 기능은 넣지 않는다. 11웨이브부터 나오는 바다 섞인 타일로 다시 여는 방법뿐이다.</li>
+<li><strong>막힌 바닷길</strong>: 해적이 가장 가까운 땅에 내려 바다를 ×0.4 속도로 건너온다(6장 "적").</li>
+<li><strong>승리 화면</strong>: 30웨이브 클리어 때 결과(웨이브·땅 칸 수·본부 수)와 "계속하기(무한 모드) / 처음으로"를 보여 준다. 최고 웨이브는 무한 모드까지 포함해 저장한다.</li>
+<li><strong>메인 메뉴</strong>: 시작 / 최고 웨이브 표시 / 종료. 설정 화면은 없다.</li>
+<li><strong>사운드</strong>: 전투 효과음(공격·방어탑·상륙·승패)과 보스 등장음만 임시음으로 넣고 배경음은 이번에 하지 않는다.</li>
+<li><strong>숲·산·유적지·영역·도서관/연구소 수치</strong>: 지금 수치를 그대로 두고(필드 밖 대륙에는 숲·산을 넣지 않음, 이름은 도서관·연구소 임시명 유지) 시뮬레이션 표에서 어긋나는 곳만 조정한다.</li>
 </ol>
 <h3 id="92-m6">9.2 M6에서 할 일 (순서 제안)</h3>
 <ul>
-<li><strong>승리·패배 화면</strong>: 30웨이브 승리 화면을 새로 만들고(지금은 31웨이브로 계속 진행됨), 패배 화면에 웨이브·땅 칸 수 같은 결과를 보여 준다.</li>
-<li><strong>최고 웨이브 저장</strong>: <code>SaveManager</code> 오토로드(기획서 7.5, 아직 없음)로 최고 웨이브만 저장하고 시작 화면(없다면 간단한 시작 화면)이나 결과 화면에 보여 준다.</li>
-<li><strong>사운드</strong>: 효과음은 <code>AudioManager</code>에 <code>play(이름)</code>으로 붙이면 된다. 지금 있는 소리는 임시 <code>npc_visit.wav</code> 하나뿐이다(<code>tools/make_sfx.py</code>로 생성). 전투 효과음(공격·방어탑·상륙), 보스(선장) 등장, 배경음 순서로 추가한다.</li>
-<li><strong>밸런스 조정</strong>: 9.1의 4번을 포함해 1~30웨이브를 직접 한 판 돌려 보고 곡선을 맞춘다.</li>
+<li><strong>밸런스 시뮬레이션</strong>: <code>tests/</code>에 1~30웨이브 곡선(적 수·병력·골드 수입)을 표로 뽑는 점검을 추가하고 어긋나는 수치만 <code>balance.gd</code>에서 조정한다. 마지막에 직접 한 판 돌려 느낌을 확인한다.</li>
 </ul>
 <h3 id="93">9.3 알아 둘 것</h3>
 <ul>
-<li>테스트와 화면 확인 방법은 <code>CLAUDE.md</code>의 "실행과 테스트"에 있다. 지금 <code>tests/</code>의 점검 28종이 모두 통과한 상태(0.26)다.</li>
+<li>테스트와 화면 확인 방법은 <code>CLAUDE.md</code>의 "실행과 테스트"에 있다. 지금 <code>tests/</code>의 점검이 모두 통과한 상태(0.28)다.</li>
 <li>사용자가 Godot 에디터를 켜 두는 경우가 많아서 Godot 프로세스를 강제로 종료하지 않는다(에디터가 같이 꺼진다).</li>
 </ul>
 <h2 id="10">10. 변경 이력</h2>
@@ -840,6 +848,16 @@ docs/          기획서 (.gdignore)
 <td>0.26</td>
 <td>2026-11-24</td>
 <td><strong>본부 영역</strong><br>- 본부마다 영역(시작 3x3, 레벨마다 인접한 무작위 1칸 추가), 건설과 생산은 영역 안에서만, 본부 파괴 시 영역 소멸<br>- 영역 경계를 노란 선으로 표시하고 겹친 영역은 하나로 이어 그림<br>- 본부 레벨 최고 20, 식량 기준을 약 1/5로 축소(5~785)<br><strong>전투</strong><br>- 낚시터도 육지 쪽에서 해적에게 공격받음</td>
+</tr>
+<tr>
+<td>0.27</td>
+<td>2026-11-24</td>
+<td><strong>골드 수급</strong><br>- 광산 추가(산 칸 전용, 60골드, 정산 골드 +20/32/48, 체력 100)<br>- 본부마다 웨이브 정산 때 기본 골드 +20<br><strong>전투</strong><br>- 바닷길이 막히면 해적선이 가장 가까운 땅에 내려 해적이 바다를 ×0.4 속도로 걸어서 건넘("상륙 지점 앞에서 나타남" 삭제)<br><strong>교역</strong><br>- NPC 거래에서 식량 10 → 골드 20 삭제(거래 3종)</td>
+</tr>
+<tr>
+<td>0.28</td>
+<td>2026-11-25</td>
+<td><strong>화면·저장</strong><br>- 메인 메뉴(시작·최고 웨이브·종료), 30웨이브 승리 화면(결과, 계속하기 무한 모드 / 처음으로), 패배 화면에 처음으로 버튼<br>- <code>SaveManager</code> 오토로드: 최고 웨이브 저장(무한 모드·패배 포함)<br><strong>사운드</strong><br>- 전투 효과음(공격·방어탑·상륙·승패)과 선장 등장음 추가<br><strong>UI</strong><br>- 바닷길이 막히면 준비 단계 예고에 "바닷길이 막혀 해적이 걸어서 바다를 건넙니다" 표시</td>
 </tr>
 </tbody>
 </table></body></html>

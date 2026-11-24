@@ -32,8 +32,9 @@ func _initialize() -> void:
 	f.build(Balance.HOUSE, Vector2i(5, 5))
 	f.build(Balance.FARM, Vector2i(6, 5))
 	var plains: int = f.cells.values().count(Piece.PLAINS)
-	fails += _check(f.income() == Vector2i(10, 5 + plains), "연구 없음: 골드 10, 식량 %d" % (5 + plains))
-	fails += _check(f.income({"commerce": true}).x == 12, "상업: 집 골드 +20%")
+	var hq_gold: int = Balance.HQ_BASE_GOLD * f.hqs.size() # 본부 기본 골드
+	fails += _check(f.income() == Vector2i(10 + hq_gold, 5 + plains), "연구 없음: 골드 %d, 식량 %d" % [10 + hq_gold, 5 + plains])
+	fails += _check(f.income({"commerce": true}).x == 12 + hq_gold, "상업: 집 골드 +20%")
 	fails += _check(f.income({"tools": true}).y == floori(5 * 1.3 + plains), "농기구: 밭 +30%")
 	fails += _check(f.income({"tools": true, "harvest": true}).y == floori(5 * 1.8 + plains), "농기구+대풍작: 밭 +80%")
 	fails += _check(f.income({"irrigation": true}).y == floori(5 + plains * 1.5), "관개: 평원 칸 1.5")

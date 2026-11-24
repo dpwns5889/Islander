@@ -227,8 +227,12 @@ func is_walkable(c: Vector2i) -> bool:
 
 
 ## 위치(월드 좌표) 땅의 이동속도 배율: 숲은 느리다 (기획서 3장)
-func speed_mult_at(pos: Vector3) -> float:
-	return Balance.FOREST_SPEED if cells.get(world_to_cell(pos), -1) == Piece.FOREST else 1.0
+## crossing: 바다를 걸어 건너는 해적이면 바다 칸에서 느리다 (기획서 6장)
+func speed_mult_at(pos: Vector3, crossing: bool = false) -> float:
+	var c: Vector2i = world_to_cell(pos)
+	if crossing and terrain_at(c) == SEA:
+		return Balance.SEA_CROSS_SPEED
+	return Balance.FOREST_SPEED if cells.get(c, -1) == Piece.FOREST else 1.0
 
 
 ## 필드 밖에 시드 기반 랜덤 지형을 만든다. 필드에서 2칸 안쪽은 항상 바다라서 적이 걸어서 올 수 없다 (기획서 3장)
@@ -404,6 +408,8 @@ func can_build(id: int, c: Vector2i) -> bool:
 	if cells[c] == Piece.FOREST and not Balance.FOREST_BUILDINGS.has(id):
 		return false
 	if cells[c] == Piece.MOUNTAIN and not Balance.MOUNTAIN_BUILDINGS.has(id):
+		return false
+	if data.get("mountain_only", false) and cells[c] != Piece.MOUNTAIN: # 광산은 산 칸 전용 (기획서 5.1)
 		return false
 	if data.get("unique", false) and buildings.values().has(id): # 교역소는 1개만 (기획서 5.6)
 		return false
@@ -624,6 +630,33 @@ func sea_neighbor(c: Vector2i) -> Vector2i:
 	return Vector2i(-999, -999)
 
 
+## 바깥 가장자리 바다에서 필드 땅(산 제외)의 해안까지 바닷길이 하나도 없으면 true — 해적이 바다를 걸어 건넌다 (기획서 6장)
+func sea_blocked() -> bool:
+	var ext: Rect2i = bounds.grow(M)
+	var seen: Dictionary = {}
+	var q: Array[Vector2i] = []
+	for y in range(ext.position.y, ext.end.y):
+		for x in range(ext.position.x, ext.end.x):
+			var c: Vector2i = Vector2i(x, y)
+			if (x == ext.position.x or y == ext.position.y or x == ext.end.x - 1 or y == ext.end.y - 1) and terrain_at(c) == SEA:
+				seen[c] = true
+				q.append(c)
+	var i: int = 0
+	while i < q.size():
+		var c: Vector2i = q[i]
+		i += 1
+		for d in DIRS:
+			var n: Vector2i = c + d
+			if not ext.has_point(n) or seen.has(n):
+				continue
+			if terrain_at(n) == SEA:
+				seen[n] = true
+				q.append(n)
+			elif cells.has(n) and cells[n] != Piece.MOUNTAIN:
+				return false
+	return true
+
+
 ## 같은 섬(4방향으로 이어진 땅)마다 번호를 붙인다. 땅 칸 -> 섬 번호
 func island_map() -> Dictionary:
 	var m: Dictionary = {}
@@ -656,6 +689,24 @@ func nav(sea: bool, enemy: bool = false) -> AStarGrid2D:
 			var c: Vector2i = ext.position + Vector2i(x, y)
 			var walkable: bool = (terrain_at(c) == SEA and not buildings.has(c)) if sea else is_walkable(c)
 			a.set_point_solid(Vector2i(x, y), not walkable)
+	return a
+
+
+## 바다를 건너는 해적용 길찾기 격자: 산 말고는 어디든 가고, 바다 칸은 느린 만큼 비용이 높아 땅길이 있으면 땅길을 쓴다 (기획서 6장)
+func nav_cross() -> AStarGrid2D:
+	var ext: Rect2i = bounds.grow(M)
+	var a: AStarGrid2D = AStarGrid2D.new()
+	a.region = Rect2i(0, 0, ext.size.x, ext.size.y)
+	a.cell_size = Vector2.ONE
+	a.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+	a.update()
+	for y in ext.size.y:
+		for x in ext.size.x:
+			var c: Vector2i = ext.position + Vector2i(x, y)
+			var t: int = terrain_at(c)
+			a.set_point_solid(Vector2i(x, y), t == Piece.MOUNTAIN)
+			if t == SEA:
+				a.set_point_weight_scale(Vector2i(x, y), 1.0 / Balance.SEA_CROSS_SPEED)
 	return a
 
 
@@ -727,6 +778,8 @@ func income(techs: Dictionary = {}) -> Vector2i:
 			continue
 		if buildings[c] == Balance.HOUSE:
 			gold += Balance.house_gold(levels[c], cells[c] == Piece.SAND) * (house_mult + _market_bonus(c))
+		elif buildings[c] == Balance.MINE:
+			gold += Balance.MINE_GOLD_LV[levels[c] - 1]
 		elif buildings[c] == Balance.FARM:
 			food += Balance.FARM_FOOD_LV[levels[c] - 1] * farm_mult
 		elif buildings[c] == Balance.FISHERY:
@@ -737,6 +790,7 @@ func income(techs: Dictionary = {}) -> Vector2i:
 		if cells[c] == Piece.PLAINS and in_territory(c):
 			plains += 1
 	food += plains * per_plain
+	gold += Balance.HQ_BASE_GOLD * hqs.size() # 살아 있는 본부마다 기본 골드 (기획서 5.1)
 	return Vector2i(floori(gold), floori(food))
 
 

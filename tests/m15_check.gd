@@ -14,7 +14,7 @@ func _initialize() -> void:
 	for id in Balance.BUILDINGS:
 		all_ids.append(id)
 	all_ids.sort()
-	fails += _check(listed == all_ids and all_ids.size() == 10, "카테고리가 건물 10종을 한 번씩 담는다")
+	fails += _check(listed == all_ids and all_ids.size() == 11, "카테고리가 건물 11종을 한 번씩 담는다")
 	fails += _check(Balance.BUILDINGS[Balance.FISHERY]["cost"] == 25 and Balance.BUILDINGS[Balance.TRADING_POST]["cost"] == 40, "건설비: 낚시터 25, 교역소 40")
 	fails += _check(Balance.BUILDINGS[Balance.TRADING_POST]["tech"] == "trade" and not Balance.BUILDINGS[Balance.FISHERY].has("tech"), "교역소는 교역 연구 필요, 낚시터는 처음부터")
 	# 낚시터 식량: 3 + ⌊칸/6⌋ (최대 9), 레벨 ×1/×1.5/×2
@@ -57,7 +57,7 @@ func _initialize() -> void:
 	f.upgrade(Vector2i(3, 8))
 	fails += _check(f.fishing_food(Vector2i(3, 8)) == Balance.fishing_food(open_cells, 3), "낚시터 레벨 3: 식량 ×2")
 	# 거래 데이터
-	fails += _check(Balance.TRADES.size() == 4 and Balance.TRADE_OFFERS_LV == [3, 4, 4] and Balance.TRADE_INTERVAL == 3, "거래 4종, 방문 간격 3, 레벨별 3/4/4개")
+	fails += _check(Balance.TRADES.size() == 3 and Balance.TRADE_OFFERS_LV == [3, 3, 3] and Balance.TRADE_INTERVAL == 3, "거래 3종(식량 거래 없음), 방문 간격 3, 레벨별 3개")
 	# 일회성 수비병
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
 	gs.extra_guards = 2

@@ -18,6 +18,7 @@ var crew_kinds: Array[int] = [] ## 해적선이 태운 적 종류(강한 적이 
 var path: Array[Vector2i] = []
 var repath: float = 0.0
 var island: int = -1
+var crossing: bool = false ## 바닷길이 막혀 바다를 걸어 건너는 해적 (기획서 6장)
 var order: Vector2i = Vector2i(-1, -1) ## 플레이어가 클릭해 내린 이동 명령 칸, 없으면 (-1, -1) (기획서 6장)
 ## 병사: 보트를 기다리는 중인지, 어느 항구에서, 어디로 가려는지
 var waiting: bool = false

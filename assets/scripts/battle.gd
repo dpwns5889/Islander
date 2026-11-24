@@ -24,6 +24,7 @@ var _tower_cd: Dictionary = {} ## 방어탑 위치 → 다음 공격까지 남�
 var _fx: Array = [] ## 방어탑 공격 선 표시 {node, t}
 var _queue: Array[int] = [] ## 아직 해적선에 태우지 않은 적 종류(강한 적이 먼저)
 var sea_nav: AStarGrid2D
+var cross_nav: AStarGrid2D ## 바다를 건너는 해적용 길찾기 (필요할 때 만든다) (기획서 6장)
 var islands: Dictionary = {} ## 땅 칸 → 섬 번호
 const NO_CELL: Vector2i = Vector2i(-999, -999)
 var _ships_left: int = 0
@@ -144,6 +145,13 @@ func tick(dt: float) -> void:
 		_finish(true)
 
 
+## 효과음. 검사 스크립트에서는 오토로드가 없을 수 있어 이름으로 찾는다 (기획서 9.1)
+func _sfx(sfx_name: String) -> void:
+	var a: Node = (Engine.get_main_loop() as SceneTree).root.get_node_or_null("AudioManager")
+	if a != null:
+		a.play(sfx_name)
+
+
 func summary() -> String:
 	return "전투 중 · %s · 병사 %d · 해적 %d · 해적선 %d" % [field.hq_status(), soldiers.size(), pirates.size(), ships.size() + _ships_left]
 
@@ -163,6 +171,7 @@ func _finish(victory: bool) -> void:
 	boats.clear()
 	soldiers.clear()
 	pirates.clear()
+	_sfx("win" if victory else "lose")
 	finished.emit(victory)
 
 
@@ -213,6 +222,8 @@ func _nearest(pos: Vector3, arr: Array[Unit], island: int = -2) -> Unit:
 	for u in arr:
 		if island != -2 and u.island != island:
 			continue
+		if island == -2 and u.crossing and u.island < 0: # 바다 위 해적은 아군이 쫓을 수 없다 (기획서 6장)
+			continue
 		var d: float = _dist(pos, u.position)
 		if d < best_d:
 			best_d = d
@@ -222,7 +233,7 @@ func _nearest(pos: Vector3, arr: Array[Unit], island: int = -2) -> Unit:
 
 ## 경로를 따라 이동한다. 경로 끝에 닿으면 true
 func _follow(u: Unit, dt: float) -> bool:
-	var budget: float = u.speed * dt * field.speed_mult_at(u.position) # 숲은 느리다 (기획서 3장)
+	var budget: float = u.speed * dt * field.speed_mult_at(u.position, u.crossing) # 숲·바다 건너기는 느리다 (기획서 3·6장)
 	while budget > 0.0 and not u.path.is_empty():
 		var wp: Vector3 = field.cell_to_world(u.path[0])
 		var d: Vector3 = Vector3(wp.x - u.position.x, 0.0, wp.z - u.position.z)
@@ -244,6 +255,10 @@ func _walk(u: Unit, goal: Vector2i, dt: float) -> void:
 	if u.repath <= 0.0:
 		u.repath = 0.5
 		var nav: AStarGrid2D = enemy_nav if Balance.ENEMY_KINDS.has(u.kind) else land_nav
+		if u.crossing:
+			if cross_nav == null:
+				cross_nav = field.nav_cross()
+			nav = cross_nav
 		u.path = field.path(nav, field.world_to_cell(u.position), goal)
 	_follow(u, dt)
 
@@ -285,6 +300,7 @@ func _soldier_turn(u: Unit, dt: float) -> void:
 			t.hp -= u.atk
 			u.cooldown = Balance.ATTACK_INTERVAL
 			u.lunge(t.position)
+			_sfx("hit") # 전투 효과음 (기획서 9.1)
 		return
 	var goal_island: int = -1
 	var goal_pos: Vector3 = Vector3.ZERO
@@ -333,7 +349,10 @@ func _push_apart(units: Array[Unit], sea: bool) -> void:
 func _nudge(u: Unit, push: Vector3, sea: bool) -> void:
 	var np: Vector3 = u.position + push
 	var c: Vector2i = field.world_to_cell(np)
-	if (field.terrain_at(c) == Field.SEA) if sea else field.is_walkable(c):
+	var ok: bool = (field.terrain_at(c) == Field.SEA) if sea else field.is_walkable(c)
+	if u.crossing and field.terrain_at(c) != Piece.MOUNTAIN: # 바다를 건너는 해적은 바다 칸에서도 밀린다 (기획서 6장)
+		ok = true
+	if ok:
 		u.position = np
 
 
@@ -355,9 +374,11 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 	var tunit: Unit = null
 	var tcell: Vector2i = Vector2i(-1, -1)
 	var tstand: Vector2i = NO_CELL
+	if u.crossing: # 섬 제한 없이 걷되, 지금 서 있는 섬을 기록해 같은 섬의 아군이 맞설 수 있게 한다 (기획서 6장)
+		u.island = islands.get(field.world_to_cell(u.position), -1)
 	for s in soldiers:
 		var d: float = _dist(u.position, s.position)
-		if s.island == u.island and d < best_d:
+		if (u.crossing or s.island == u.island) and d < best_d:
 			best_d = d
 			tpos = s.position
 			tunit = s
@@ -365,7 +386,7 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 	if tower_first:
 		tower_first = false
 		for c in field.targets():
-			if field.buildings.get(c, 0) == Balance.TOWER and islands.get(c, -1) == u.island:
+			if field.buildings.get(c, 0) == Balance.TOWER and (u.crossing or islands.get(c, -1) == u.island):
 				tower_first = true
 				break
 	for c in field.targets():
@@ -381,7 +402,7 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 				tcell = c
 			continue
 		var stand: Vector2i = NO_CELL
-		var reachable: bool = islands.get(c, -1) == u.island
+		var reachable: bool = u.crossing or islands.get(c, -1) == u.island
 		if not reachable and not field.cells.has(c): # 물 위 낚시터는 육지 쪽에서 공격한다 (기획서 6장)
 			stand = _stand_cell(c, u)
 			reachable = stand != NO_CELL
@@ -398,6 +419,7 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 		return
 	u.cooldown = Balance.ATTACK_INTERVAL
 	u.lunge(tpos)
+	_sfx("hit")
 	if tunit != null:
 		tunit.hp -= u.atk
 	elif field.damage(tcell, u.atk): # 본부가 파괴되면 보유 골드·식량이 줄어든다 (기획서 5.5)
@@ -425,6 +447,7 @@ func _towers_turn(dt: float) -> void:
 			t.hp -= Balance.TOWER_ATK_LV[lv - 1]
 			_tower_cd[c] = Balance.TOWER_INTERVAL
 			_shot_fx(from, t.position)
+			_sfx("tower")
 	for i in range(_fx.size() - 1, -1, -1):
 		_fx[i]["t"] -= dt
 		if _fx[i]["t"] <= 0.0:
@@ -526,10 +549,18 @@ func _spawn_ships(dt: float) -> void:
 			break
 		from = _edge_cell()
 		route = field.path(sea_nav, from, tgt["stop"])
-	if route.is_empty():
-		from = tgt["stop"]
+	var crossing: bool = false
+	if route.is_empty(): # 바닷길이 막혔다: 가장 가까운 땅에 내려 걸어서 바다를 건넌다 (기획서 6장)
+		var alt: Dictionary = _blocked_landing(from)
+		if alt.is_empty():
+			from = tgt["stop"]
+		else:
+			tgt = alt
+			route = alt["route"]
+			crossing = true
 	var s: Unit = _add_unit(Balance.U_SHIP, field.cell_to_world(from), 1.0)
 	s.path = route
+	s.crossing = crossing
 	s.landing = field.cell_to_world(tgt["land"])
 	s.island = tgt["island"]
 	s.crew = load.size()
@@ -551,6 +582,26 @@ func _edge_cell() -> Vector2i:
 		if field.terrain_at(c) == Field.SEA:
 			return c
 	return ext.position
+
+
+## 바닷길이 막혔을 때: from에서 바다로 갈 수 있는 가장 가까운 땅(필드·바깥 대륙, 산 제외)의 해안. 없으면 빈 Dictionary (기획서 6장)
+func _blocked_landing(from: Vector2i) -> Dictionary:
+	var ext: Rect2i = field.bounds.grow(Field.M)
+	var cands: Array[Vector2i] = []
+	for y in range(ext.position.y, ext.end.y):
+		for x in range(ext.position.x, ext.end.x):
+			var c: Vector2i = Vector2i(x, y)
+			var t: int = field.terrain_at(c)
+			if t != Field.SEA and t != Piece.MOUNTAIN and field.sea_neighbor(c).x != -999:
+				cands.append(c)
+	var origin: Vector3 = field.cell_to_world(from)
+	cands.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return _dist(origin, field.cell_to_world(a)) < _dist(origin, field.cell_to_world(b)))
+	for c in cands.slice(0, 60):
+		var stop: Vector2i = field.sea_neighbor(c)
+		var route: Array[Vector2i] = field.path(sea_nav, from, stop)
+		if not route.is_empty() or stop == from:
+			return {"stop": stop, "land": c, "island": islands.get(c, -1), "route": route}
+	return {}
 
 
 ## 노릴 대상이 있는 섬의 해안(모래·평원 모두) 중 가장 가까운 곳
@@ -579,4 +630,8 @@ func _ship_turn(s: Unit, dt: float) -> void:
 	for kind in s.crew_kinds: # 모래·평원 어느 해안이든 상륙한다 (기획서 6장)
 		var p: Unit = _add_unit(kind, s.landing + Vector3(rng.randf_range(-0.2, 0.2), 0.0, rng.randf_range(-0.2, 0.2)), _mult)
 		p.island = s.island
+		p.crossing = s.crossing
+	_sfx("landing")
+	if s.crew_kinds.has(Balance.U_CAPTAIN):
+		_sfx("boss") # 선장 등장 (기획서 9.1)
 	s.hp = 0.0

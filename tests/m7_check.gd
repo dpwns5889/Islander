@@ -26,7 +26,8 @@ func _initialize() -> void:
 	f.build(Balance.FARM, Vector2i(6, 5))
 	f.upgrade(Vector2i(6, 5))
 	var plains: int = f.cells.values().count(Piece.PLAINS)
-	fails += _check(f.income() == Vector2i(24 + 15, 8 + plains), "수입: 골드 %d, 식량 %d" % [24 + 15, 8 + plains])
+	var hq_gold: int = Balance.HQ_BASE_GOLD * f.hqs.size() # 본부 기본 골드
+	fails += _check(f.income() == Vector2i(24 + 15 + hq_gold, 8 + plains), "수입: 골드 %d, 식량 %d" % [24 + 15 + hq_gold, 8 + plains])
 	# 부서진 건물은 승리해도 복구되지 않고, 살아남은 건물이 입은 피해는 회복된다
 	f.damage(Vector2i(5, 5), 1000.0)
 	fails += _check(not f.buildings.has(Vector2i(5, 5)), "체력 0이면 파괴")

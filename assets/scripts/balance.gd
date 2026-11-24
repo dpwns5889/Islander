@@ -12,6 +12,7 @@ const TRADING_POST: int = 7 ## 교역소
 const TOWER: int = 9 ## 방어탑
 const LIBRARY: int = 10 ## 도서관 (임시명)
 const LAB: int = 11 ## 연구소 (임시명)
+const MINE: int = 12 ## 광산 (산 칸 전용)
 const MAX_LEVEL: int = 3
 
 ## cost: 건설 골드, hp: 체력(M3부터), sand: 모래 위 건설 가능 여부, sea: 인접 바다 필요 여부
@@ -25,12 +26,13 @@ const BUILDINGS: Dictionary = {
 	TRADING_POST: {"name": "교역소", "cost": 40, "hp": 70, "tech": "trade", "sand": true, "sea": false, "open_sea": true, "unique": true, "color": Color(0.7, 0.35, 0.75)},
 	LIBRARY: {"name": "도서관", "cost": 40, "hp": 60, "sand": true, "sea": false, "color": Color(0.55, 0.35, 0.65)},
 	LAB: {"name": "연구소", "cost": 80, "hp": 70, "sand": false, "sea": false, "color": Color(0.25, 0.7, 0.6)},
+	MINE: {"name": "광산", "cost": 60, "hp": 100, "sand": false, "sea": false, "mountain_only": true, "color": Color(0.5, 0.45, 0.4)},
 	TOWER: {"name": "방어탑", "cost": 40, "hp": 200, "tech": "archery", "sand": true, "sea": false, "color": Color(0.35, 0.4, 0.55)},
 }
 
 ## 건설 메뉴 카테고리 (아래에서 위로 펼쳐지는 드롭다운) (기획서 7.2)
 const CATEGORIES: Array = [
-	{"name": "생산", "ids": [HOUSE, FARM, FISHERY]},
+	{"name": "생산", "ids": [HOUSE, FARM, FISHERY, MINE]},
 	{"name": "군사·해상", "ids": [BARRACKS, PORT, TOWER]},
 	{"name": "상업", "ids": [MARKET, TRADING_POST]},
 	{"name": "과학", "ids": [LIBRARY, LAB]},
@@ -114,10 +116,14 @@ const SPECIAL_MAX: int = 2 ## 보상 타일 한 조각의 숲·산 칸 최대 �
 const SPECIAL_CHANCE: float = 0.3 ## 그 칸이 숲·산이 될 확률(칸마다 따로 굴림)
 const MOUNTAIN_SHARE: float = 0.35 ## 숲·산 중 산일 확률
 const FOREST_SPEED: float = 0.7 ## 숲 위 이동속도 배율 (아군·적 모두) (기획서 3장)
+const SEA_CROSS_SPEED: float = 0.4 ## 바닷길이 막혔을 때 해적이 바다 칸을 걸어 건너는 속도 배율 (기획서 6장)
 ## 숲·산에 지을 수 있는 건물 (평원은 전부, 모래는 건물의 sand 값) (기획서 3장)
 const FOREST_BUILDINGS: Array[int] = [HOUSE, LIBRARY, TOWER]
-const MOUNTAIN_BUILDINGS: Array[int] = [TOWER]
+const MOUNTAIN_BUILDINGS: Array[int] = [TOWER, MINE]
+const MINE_GOLD_LV: Array[int] = [20, 32, 48] ## 광산 정산 골드 (기획서 5.1)
+const HQ_BASE_GOLD: int = 20 ## 살아 있는 본부마다 웨이브 정산 때 받는 기본 골드 (기획서 5.1)
 
+const WIN_WAVE: int = 30 ## 이 웨이브를 이기면 승리 화면 (이후 무한 모드로 계속할 수 있다) (기획서 9.1)
 const START_GOLD: int = 50
 const START_FOOD: int = 20
 
@@ -136,9 +142,8 @@ const FISH_BASE: int = 3
 const FISH_DIV: int = 6
 const FISH_MAX: int = 9
 const TRADE_INTERVAL: int = 3 ## 교역소가 있으면 이 웨이브마다 거래 NPC가 방문한다 (기획서 5.6)
-const TRADE_OFFERS_LV: Array[int] = [3, 4, 4] ## 교역소 레벨별 거래 수 (거래 풀이 4종)
+const TRADE_OFFERS_LV: Array[int] = [3, 3, 3] ## 교역소 레벨별 거래 수 (거래 풀이 3종, 식량 거래 없음) (기획서 5.6)
 const TRADES: Array = [
-	{"id": "food_gold", "name": "식량 10 → 골드 20", "gold": 0, "food": 10},
 	{"id": "gold_rp", "name": "골드 60 → 연구포인트 1", "gold": 60, "food": 0},
 	{"id": "gold_piece", "name": "골드 40 → 놓을 조각 +1", "gold": 40, "food": 0},
 	{"id": "gold_guards", "name": "골드 30 → 다음 전투 수비병 +2", "gold": 30, "food": 0},
@@ -210,6 +215,8 @@ static func effect_text(id: int, level: int) -> String:
 	var i: int = level - 1
 	if id == HOUSE:
 		return "정산 골드 +%d (모래 위 +%d)" % [house_gold(level, false), house_gold(level, true)]
+	if id == MINE:
+		return "산 위에만 · 정산 골드 +%d" % MINE_GOLD_LV[i]
 	if id == FARM:
 		return "정산 식량 +%d" % FARM_FOOD_LV[i]
 	if id == BARRACKS:
