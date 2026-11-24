@@ -10,6 +10,7 @@ var food_total: int = 0 ## 정산으로 번 식량 누적 (본부 레벨 기준)
 var hq_level: int = 1
 var research_points: int = 0 ## 연구수치가 기준을 넘을 때마다 +1 (기획서 5.4)
 var research_progress: int = 0 ## 아직 연구포인트가 못 된 연구수치
+var research_gained: int = 0 ## 연구수치로 얻은 연구포인트 수 (다음 기준을 정한다) (기획서 5.4)
 var researched: Dictionary = {} ## 연구를 마친 항목 id → true (기획서 5.4)
 var extra_guards: int = 0 ## 교역 NPC에게 산, 다음 전투의 추가 수비병 (1회성) (기획서 5.6)
 
@@ -22,6 +23,7 @@ func reset() -> void:
 	hq_level = 1
 	research_points = 0
 	research_progress = 0
+	research_gained = 0
 	researched.clear()
 	extra_guards = 0
 	changed.emit()
@@ -38,8 +40,11 @@ func add(g: int, f: int) -> void:
 ## 연구수치를 쌓고 기준을 넘은 만큼 연구포인트로 바꾼다. 얻은 연구포인트를 돌려 준다 (기획서 5.4)
 func add_research_progress(n: int) -> int:
 	research_progress += n
-	var gained: int = research_progress / Balance.RESEARCH_THRESHOLD
-	research_progress -= gained * Balance.RESEARCH_THRESHOLD
+	var gained: int = 0
+	while research_progress >= Balance.research_threshold(research_gained):
+		research_progress -= Balance.research_threshold(research_gained)
+		research_gained += 1
+		gained += 1
 	research_points += gained
 	changed.emit()
 	return gained

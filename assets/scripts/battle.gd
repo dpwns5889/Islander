@@ -265,10 +265,10 @@ func _walk(u: Unit, goal: Vector2i, dt: float) -> void:
 
 ## 사거리 밖이면 다가가고, 사거리 안이면 공격 준비가 됐는지를 돌려 준다
 ## stand: 목표가 물 위(낚시터)일 때 올라서는 육지 칸. 거기서 목표를 공격한다 (기획서 6장)
-func _engage(u: Unit, tpos: Vector3, dt: float, stand: Vector2i = NO_CELL) -> bool:
+func _engage(u: Unit, tpos: Vector3, dt: float, stand: Vector2i = NO_CELL, edge: float = 0.0) -> bool:
 	u.cooldown = maxf(0.0, u.cooldown - dt)
 	var reach: float = u.reach if stand == NO_CELL else maxf(u.reach, 1.3)
-	if _dist(u.position, tpos) > reach:
+	if _dist(u.position, tpos) - edge > reach: # 건물은 가장자리부터 잰다 (기획서 6장)
 		_walk(u, field.world_to_cell(tpos) if stand == NO_CELL else stand, dt)
 		return false
 	return u.cooldown <= 0.0
@@ -395,7 +395,7 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 		var p: Vector3 = field.cell_to_world(c)
 		var d: float = _dist(u.position, p)
 		if field.cells.get(c, -1) == Piece.MOUNTAIN: # 산 위 방어탑: 걸어서 못 가므로 사거리 안의 원거리 적만 공격한다 (기획서 3장)
-			if u.reach > 2.0 and d <= u.reach and d < best_d:
+			if u.ranged and d - Balance.BUILDING_EDGE <= u.reach and d < best_d:
 				best_d = d
 				tpos = p
 				tunit = null
@@ -415,7 +415,7 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 	if best_d == INF: # 같은 섬에 노릴 대상이 없으면 물러간다
 		u.hp = 0.0
 		return
-	if not _engage(u, tpos, dt, tstand):
+	if not _engage(u, tpos, dt, tstand, Balance.BUILDING_EDGE if tunit == null else 0.0):
 		return
 	u.cooldown = Balance.ATTACK_INTERVAL
 	u.lunge(tpos)
@@ -428,26 +428,37 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 
 ## 방어탑: 사거리 안에서 가장 가까운 적 유닛을 1초마다 하나씩 공격한다 (해적선 제외) (기획서 6장)
 func _towers_turn(dt: float) -> void:
+	_fx_tick(dt)
 	for c in field.buildings:
-		if field.buildings[c] != Balance.TOWER:
-			continue
-		_tower_cd[c] = maxf(0.0, float(_tower_cd.get(c, 0.0)) - dt)
-		if _tower_cd[c] > 0.0:
-			continue
-		var lv: int = field.levels[c]
-		var from: Vector3 = field.cell_to_world(c)
-		var t: Unit = null
-		var best: float = Balance.TOWER_RANGE_LV[lv - 1]
-		for e in pirates:
-			var d: float = _dist(from, e.position)
-			if d <= best:
-				best = d
-				t = e
-		if t != null:
-			t.hp -= Balance.TOWER_ATK_LV[lv - 1]
-			_tower_cd[c] = Balance.TOWER_INTERVAL
-			_shot_fx(from, t.position)
-			_sfx("tower")
+		if field.buildings[c] == Balance.TOWER:
+			var lv: int = field.levels[c]
+			_shoot(c, Balance.TOWER_ATK_LV[lv - 1], Balance.TOWER_RANGE_LV[lv - 1], dt)
+	for c in field.hqs: # 본부도 약하게 쏜다 (기획서 6장)
+		_shoot(c, Balance.HQ_ATK, Balance.HQ_RANGE, dt)
+
+
+## c 칸의 방어탑·본부가 사거리 안 가장 가까운 해적을 쏜다
+func _shoot(c: Vector2i, atk: float, rng_: float, dt: float) -> void:
+	_tower_cd[c] = maxf(0.0, float(_tower_cd.get(c, 0.0)) - dt)
+	if _tower_cd[c] > 0.0:
+		return
+	var from: Vector3 = field.cell_to_world(c)
+	var t: Unit = null
+	var best: float = rng_
+	for e in pirates:
+		var d: float = _dist(from, e.position)
+		if d <= best:
+			best = d
+			t = e
+	if t != null:
+		t.hp -= atk
+		_tower_cd[c] = Balance.TOWER_INTERVAL
+		_shot_fx(from, t.position)
+		_sfx("tower")
+
+
+## 방어탑·본부 공격 선 표시를 정리한다
+func _fx_tick(dt: float) -> void:
 	for i in range(_fx.size() - 1, -1, -1):
 		_fx[i]["t"] -= dt
 		if _fx[i]["t"] <= 0.0:

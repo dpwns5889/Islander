@@ -49,7 +49,7 @@ func _initialize() -> void:
 	var avg30: float = hp_sum.call(30) / Balance.pirate_count(30)
 	fails += _check(avg30 > avg4 * 2.5, "한 명당 평균 체력도 크게 늘어난다 (%.0f → %.0f)" % [avg4, avg30])
 	# 3. 능력치
-	var stats: Dictionary = {Balance.U_CROSSBOW: [18.0, 3.0, 1.1, 3.5], Balance.U_AXE: [50.0, 4.0, 1.2, 0.9], Balance.U_SHIELD: [100.0, 2.5, 0.9, 0.9], Balance.U_CAPTAIN: [350.0, 6.0, 1.1, 0.9]}
+	var stats: Dictionary = {Balance.U_CROSSBOW: [18.0, 3.0, 1.1, 1.8], Balance.U_AXE: [50.0, 4.0, 1.2, 0.7], Balance.U_SHIELD: [100.0, 2.5, 0.9, 0.7], Balance.U_CAPTAIN: [350.0, 6.0, 1.1, 0.7]}
 	var stats_ok: bool = true
 	for k in stats:
 		var u: Dictionary = Balance.UNITS[k]
@@ -84,11 +84,11 @@ func _initialize() -> void:
 	cb.setup(_island(5, 5), load("res://assets/scripts/game_state.gd").new(), 1)
 	cb._ships_left = 1
 	cb._ship_timer = 9999.0
-	var xbow: Unit = cb._add_unit(Balance.U_CROSSBOW, cb.soldiers[0].position + Vector3(3.0, 0.0, 0.0), 1.0)
+	var xbow: Unit = cb._add_unit(Balance.U_CROSSBOW, cb.soldiers[0].position + Vector3(1.5, 0.0, 0.0), 1.0)
 	xbow.island = cb.soldiers[0].island
 	xbow.cooldown = 0.0
 	var pos0: Vector3 = xbow.position
-	fails += _check(cb._engage(xbow, cb.soldiers[0].position, 0.1) and xbow.position == pos0, "석궁수는 3칸 거리에서 움직이지 않고 쏜다")
+	fails += _check(cb._engage(xbow, cb.soldiers[0].position, 0.1) and xbow.position == pos0, "석궁수는 1.5칸 거리에서 움직이지 않고 쏜다")
 	# 5. 일반 건물은 목표
 	var f: Field = _island(9, 5)
 	f.build(Balance.HOUSE, Vector2i(7, 6))

@@ -33,7 +33,7 @@ func _initialize() -> void:
 	# 적 예고: 종류별 인원과 새 적 안내
 	gs.wave = 5
 	main._refresh_hud()
-	fails += _check("석궁수 1명 · 해적 3명" in main.wave_info.text and "새 적: 석궁수 (체력 18 · 공격 3 · 사거리 3.5칸)" in main.wave_info.text, "5웨이브 예고: " + main.wave_info.text)
+	fails += _check("석궁수 1명 · 해적 3명" in main.wave_info.text and "새 적: 석궁수 (체력 18 · 공격 3 · 사거리 1.8칸)" in main.wave_info.text, "5웨이브 예고: " + main.wave_info.text)
 	gs.wave = 6
 	main._refresh_hud()
 	fails += _check("새 적" not in main.wave_info.text, "6웨이브에는 새 적 안내가 없다")

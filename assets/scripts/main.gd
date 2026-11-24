@@ -1001,7 +1001,7 @@ func _refresh_research() -> void:
 
 func _refresh_hud() -> void:
 	var inc: Vector2i = field.income(GameState.researched) # 웨이브 정산 때 들어올 생산량 (기획서 7.2)
-	stats.text = "골드 %d (+%d) · 식량 %d (+%d) · 연구포인트 %d (%d/%d, +%d) · 웨이브 %d   " % [GameState.gold, inc.x, GameState.food, inc.y, GameState.research_points, GameState.research_progress, Balance.RESEARCH_THRESHOLD, field.research_income(), GameState.wave]
+	stats.text = "골드 %d (+%d) · 식량 %d (+%d) · 연구포인트 %d (%d/%d, +%d) · 웨이브 %d   " % [GameState.gold, inc.x, GameState.food, inc.y, GameState.research_points, GameState.research_progress, Balance.research_threshold(GameState.research_gained), field.research_income(), GameState.wave]
 	for id in build_buttons:
 		var bb: Button = build_buttons[id]
 		bb.text = "%s %dG · %s" % [Balance.BUILDINGS[id]["name"], _cost_of(id), Balance.effect_text(id, 1)]
@@ -1033,7 +1033,7 @@ func _refresh_hud() -> void:
 		wave_info.text += "\n바닷길이 막혀 해적이 걸어서 바다를 건넙니다"
 	for nk in Balance.new_enemy_kinds(GameState.wave): # 새 종류가 처음 나오는 웨이브 안내
 		var info: Dictionary = Balance.UNITS[nk]
-		wave_info.text += "\n새 적: %s (체력 %d · 공격 %d%s)" % [info["name"], info["hp"], info["atk"], (" · 사거리 %.1f칸" % info["reach"]) if info["reach"] > 2.0 else ""]
+		wave_info.text += "\n새 적: %s (체력 %d · 공격 %d%s)" % [info["name"], info["hp"], info["atk"], (" · 사거리 %.1f칸" % info["reach"]) if info.get("ranged", false) else ""]
 	if pending_hq:
 		wave_info.text += "\n본부 조각을 먼저 놓으세요 (아래 '본부 조각' 카드)"
 	if tiles_required > 0:
@@ -1086,7 +1086,7 @@ func _refresh_hud() -> void:
 				ub.text = info["name"]
 				ub.button_pressed = k == cur_unit
 				ub.disabled = not _unit_unlocked(k)
-				ub.tooltip_text = "체력 %d · 공격 %d · 속도 %.1f%s" % [info["hp"], info["atk"], info["speed"], (" · 사거리 %d칸" % int(info["reach"])) if info["reach"] > 2.0 else ""]
+				ub.tooltip_text = "체력 %d · 공격 %d · 속도 %.1f%s" % [info["hp"], info["atk"], info["speed"], (" · 사거리 %.1f칸" % info["reach"]) if info.get("ranged", false) else ""]
 				if not _unit_unlocked(k):
 					ub.tooltip_text = "필요 연구: " + Balance.TECHS[Balance.UNIT_TECH[k]]["name"]
 		if field.can_upgrade(selected_cell):

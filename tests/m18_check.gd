@@ -53,7 +53,7 @@ func _initialize() -> void:
 	for _i in 30:
 		b._pirate_turn(melee, 0.1)
 	fails += _check(f.hp[Vector2i(6, 5)] == tower_hp, "근접 적은 산 위 방어탑을 공격하지 못한다")
-	var xbow: Unit = b._add_unit(Balance.U_CROSSBOW, tpos + Vector3(2.5, 0.0, 0.0), 1.0)
+	var xbow: Unit = b._add_unit(Balance.U_CROSSBOW, tpos + Vector3(2.0, 0.0, 0.0), 1.0)
 	xbow.island = island_id
 	xbow.speed = 0.0
 	xbow.cooldown = 0.0

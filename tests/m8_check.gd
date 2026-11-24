@@ -20,11 +20,11 @@ func _initialize() -> void:
 	fails += _check(gs.check_level() == 11 and gs.hq_level == 20 and gs.research_points == 0, "최고 레벨 20")
 	fails += _check(gs.next_level_food() == -1, "최고 레벨에서는 다음 기준 없음")
 	fails += _check(gs.check_level() == 0 and gs.research_points == 0, "최고 레벨 이후에는 더 오르지 않는다")
-	# 연구수치: 기준(10)마다 연구포인트 +1, 남는 수치는 이월
+	# 연구수치: 기준(5, 6, 7 …)마다 연구포인트 +1, 남는 수치는 이월
 	gs.reset()
-	fails += _check(gs.add_research_progress(7) == 0 and gs.research_progress == 7, "연구수치 7: 연구포인트 없음")
-	fails += _check(gs.add_research_progress(6) == 1 and gs.research_progress == 3 and gs.research_points == 1, "누적 13: 연구포인트 1, 3 이월")
-	fails += _check(gs.add_research_progress(27) == 3 and gs.research_progress == 0 and gs.research_points == 4, "누적 30: 연구포인트 +3")
+	fails += _check(gs.add_research_progress(4) == 0 and gs.research_progress == 4, "연구수치 4: 연구포인트 없음")
+	fails += _check(gs.add_research_progress(3) == 1 and gs.research_progress == 2 and gs.research_points == 1, "누적 7: 첫 포인트(기준 5), 2 이월")
+	fails += _check(gs.add_research_progress(20) == 3 and gs.research_progress == 1 and gs.research_points == 4 and Balance.research_threshold(gs.research_gained) == 9, "기준 6·7·8을 차례로 넘어 +3, 다음 기준 9")
 	var rf: Field = Field.new()
 	var rp: Piece = Piece.new()
 	for i in 4:
@@ -33,9 +33,9 @@ func _initialize() -> void:
 	rf.place(rp, Vector2i(2, 2))
 	rf.build(Balance.LIBRARY, Vector2i(2, 2))
 	rf.build(Balance.LAB, Vector2i(3, 2))
-	fails += _check(rf.research_income() == 9, "도서관 Lv1(3) + 연구소 Lv1(6) = 9")
+	fails += _check(rf.research_income() == 9 + rf.hqs.size(), "본부 수 + 도서관 Lv1(3) + 연구소 Lv1(6)")
 	rf.upgrade(Vector2i(3, 2))
-	fails += _check(rf.research_income() == 11, "연구소 Lv2(8) → 11")
+	fails += _check(rf.research_income() == 11 + rf.hqs.size(), "연구소 Lv2(8) → 11 + 본부 수")
 	# 시장: 4방향으로 붙은 집의 정산 골드 +25%
 	rf.build(Balance.HOUSE, Vector2i(4, 2))
 	var g0: int = rf.income().x

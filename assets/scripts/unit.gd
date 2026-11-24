@@ -7,6 +7,7 @@ var hp: float
 var atk: float
 var speed: float
 var reach: float ## 공격 사거리
+var ranged: bool = false ## 원거리 유닛인지 (기획서 6장)
 var cooldown: float = 0.0
 var base_y: float
 ## 해적선 전용: 멈출 바다 위치, 상륙할 땅 위치
@@ -47,6 +48,7 @@ func setup(k: int, mult: float) -> void:
 	atk = atk0 * mult
 	speed = d["speed"]
 	reach = d["reach"]
+	ranged = d.get("ranged", false)
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
 	mat.albedo_color = d["color"]
 	var mi: MeshInstance3D = MeshInstance3D.new()

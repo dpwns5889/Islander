@@ -19,7 +19,7 @@ const MAX_LEVEL: int = 3
 const BUILDINGS: Dictionary = {
 	HOUSE: {"name": "집", "cost": 20, "hp": 50, "sand": true, "sea": false, "color": Color(0.6, 0.4, 0.2)},
 	PORT: {"name": "항구", "cost": 50, "hp": 80, "tech": "sail", "sand": true, "sea": true, "color": Color(0.15, 0.25, 0.6)},
-	BARRACKS: {"name": "병영", "cost": 30, "hp": 100, "sand": false, "sea": false, "color": Color(0.45, 0.45, 0.5)},
+	BARRACKS: {"name": "병영", "cost": 30, "hp": 100, "sand": false, "sea": false, "any_territory": true, "color": Color(0.45, 0.45, 0.5)},
 	MARKET: {"name": "시장", "cost": 50, "hp": 70, "tech": "trade", "sand": false, "sea": false, "color": Color(0.85, 0.65, 0.1)},
 	FARM: {"name": "밭", "cost": 25, "hp": 50, "sand": false, "sea": false, "color": Color(0.35, 0.55, 0.2)},
 	FISHERY: {"name": "낚시터", "cost": 25, "hp": 50, "sand": true, "sea": false, "on_water": true, "color": Color(0.2, 0.65, 0.75)},
@@ -51,16 +51,16 @@ const U_CAPTAIN: int = 9 ## 선장 (보스 라운드의 적)
 const ENEMY_KINDS: Array[int] = [U_PIRATE, U_CROSSBOW, U_AXE, U_SHIELD, U_CAPTAIN]
 const SOLDIER_KINDS: Array[int] = [U_SOLDIER, U_ARCHER, U_CAVALRY] ## 병영에서 고를 수 있는 병종
 const UNITS: Dictionary = {
-	U_SOLDIER: {"name": "검병", "hp": 30.0, "atk": 5.0, "speed": 1.5, "reach": 0.9, "color": Color(0.2, 0.4, 1.0)},
-	U_PIRATE: {"name": "해적", "hp": 25.0, "atk": 2.0, "speed": 1.2, "reach": 0.9, "color": Color(0.15, 0.05, 0.1)},
-	U_SHIP: {"name": "해적선", "hp": 1.0, "atk": 0.0, "speed": 2.0, "reach": 0.9, "color": Color(0.45, 0.3, 0.15)},
-	U_BOAT: {"name": "보트", "hp": 1.0, "atk": 0.0, "speed": 2.5, "reach": 0.9, "color": Color(0.85, 0.75, 0.55)},
-	U_ARCHER: {"name": "궁수", "hp": 20.0, "atk": 3.0, "speed": 1.5, "reach": 4.0, "color": Color(0.2, 0.75, 0.3)},
-	U_CAVALRY: {"name": "기병", "hp": 40.0, "atk": 6.0, "speed": 2.5, "reach": 0.9, "color": Color(0.95, 0.55, 0.1)},
-	U_CROSSBOW: {"name": "석궁수", "hp": 18.0, "atk": 3.0, "speed": 1.1, "reach": 3.5, "color": Color(0.55, 0.15, 0.3)},
-	U_AXE: {"name": "도끼병", "hp": 50.0, "atk": 4.0, "speed": 1.2, "reach": 0.9, "color": Color(0.45, 0.1, 0.1)},
-	U_SHIELD: {"name": "방패병", "hp": 100.0, "atk": 2.5, "speed": 0.9, "reach": 0.9, "color": Color(0.3, 0.3, 0.35)},
-	U_CAPTAIN: {"name": "선장", "hp": 350.0, "atk": 6.0, "speed": 1.1, "reach": 0.9, "color": Color(0.7, 0.05, 0.05)},
+	U_SOLDIER: {"name": "검병", "hp": 30.0, "atk": 5.0, "speed": 1.5, "reach": 0.7, "color": Color(0.2, 0.4, 1.0)},
+	U_PIRATE: {"name": "해적", "hp": 25.0, "atk": 2.0, "speed": 1.2, "reach": 0.7, "color": Color(0.15, 0.05, 0.1)},
+	U_SHIP: {"name": "해적선", "hp": 1.0, "atk": 0.0, "speed": 2.0, "reach": 0.7, "color": Color(0.45, 0.3, 0.15)},
+	U_BOAT: {"name": "보트", "hp": 1.0, "atk": 0.0, "speed": 2.5, "reach": 0.7, "color": Color(0.85, 0.75, 0.55)},
+	U_ARCHER: {"name": "궁수", "hp": 20.0, "atk": 3.0, "speed": 1.5, "reach": 2.0, "ranged": true, "color": Color(0.2, 0.75, 0.3)},
+	U_CAVALRY: {"name": "기병", "hp": 40.0, "atk": 6.0, "speed": 2.5, "reach": 0.7, "color": Color(0.95, 0.55, 0.1)},
+	U_CROSSBOW: {"name": "석궁수", "hp": 18.0, "atk": 3.0, "speed": 1.1, "reach": 1.8, "ranged": true, "color": Color(0.55, 0.15, 0.3)},
+	U_AXE: {"name": "도끼병", "hp": 50.0, "atk": 4.0, "speed": 1.2, "reach": 0.7, "color": Color(0.45, 0.1, 0.1)},
+	U_SHIELD: {"name": "방패병", "hp": 100.0, "atk": 2.5, "speed": 0.9, "reach": 0.7, "color": Color(0.3, 0.3, 0.35)},
+	U_CAPTAIN: {"name": "선장", "hp": 350.0, "atk": 6.0, "speed": 1.1, "reach": 0.7, "color": Color(0.7, 0.05, 0.05)},
 }
 const UNIT_SCALE: Dictionary = {U_AXE: 1.1, U_SHIELD: 1.25, U_CAPTAIN: 1.6} ## 강한 적은 더 크게 그린다
 const ENEMY_FIRST_WAVE: Dictionary = {U_CROSSBOW: 5, U_AXE: 8, U_SHIELD: 12, U_CAPTAIN: 10} ## 새 적이 처음 나오는 웨이브 (기획서 6장)
@@ -77,15 +77,18 @@ const ENEMY_BANDS: Array = [
 ]
 const CAPTAINS: Dictionary = {10: 1, 20: 2, 30: 2} ## 보스 라운드의 선장 수
 const TOWER_ATK_LV: Array[float] = [4.0, 6.0, 8.0]
-const TOWER_RANGE_LV: Array[float] = [4.0, 4.5, 5.0]
+const TOWER_RANGE_LV: Array[float] = [3.0, 3.5, 4.0]
 const TOWER_INTERVAL: float = 1.0
+const HQ_ATK: float = 3.0 ## 본부의 약한 자동 공격 (레벨과 무관) (기획서 6장)
+const HQ_RANGE: float = 2.5
 const HQ_HP: float = 300.0
 const HQ_PIECE_WAVES: Array[int] = [10, 20] ## 이 웨이브(보스)를 이기면 본부 조각을 하나 더 놓아야 한다 (기획서 5.5)
 const HQ_LOSS_RATE: float = 0.3 ## 본부가 파괴될 때마다 줄어드는 골드·식량 비율
+const BUILDING_EDGE: float = 0.5 ## 건물 칸 중심에서 가장자리까지 (건물 공격 거리는 가장자리부터 잰다) (기획서 6장)
 const UNIT_GAP: float = 0.3 ## 유닛끼리 이 거리보다 가까우면 서로 밀어낸다
 const LUNGE_TIME: float = 0.22 ## 공격할 때 앞으로 약진했다 돌아오는 시간(초)
 const LUNGE_DIST: float = 0.35 ## 약진하는 거리(칸)
-const AGGRO_RANGE: float = 3.0 ## 집결지가 있을 때 병사가 이 거리 안의 적만 상대한다
+const AGGRO_RANGE: float = 2.5 ## 집결지가 있을 때 병사가 이 거리 안의 적만 상대한다
 const BATTLE_SPEEDS: Array[int] = [1, 2, 4] ## 전투 배속
 const ATTACK_INTERVAL: float = 1.0
 const PIRATES_PER_SHIP: int = 3
@@ -136,7 +139,6 @@ const BARRACKS_L3_HP: float = 1.3
 const PORT_CAPACITY_LV: Array[int] = [4, 6, 8]
 const BOAT_SPEED_LV: Array[float] = [1.0, 1.0, 1.3]
 const FISHERY_MULT_LV: Array[float] = [1.0, 1.5, 2.0]
-const FISH_RADIUS: int = 4 ## 낚시터에서 이 거리(물길) 안의 바다 칸을 센다
 const FISH_CAP: int = 40
 const FISH_BASE: int = 3
 const FISH_DIV: int = 6
@@ -152,7 +154,9 @@ const FOOD_PER_PLAINS: int = 1
 const MARKET_HOUSE_BONUS_LV: Array[float] = [0.25, 0.4, 0.6] ## 시장과 4방향으로 붙은 집의 정산 골드 보너스 (기획서 5.1)
 const LIBRARY_RESEARCH_LV: Array[int] = [3, 4, 5] ## 웨이브 정산 때 얻는 연구수치 (기획서 5.4)
 const LAB_RESEARCH_LV: Array[int] = [6, 8, 10]
-const RESEARCH_THRESHOLD: int = 10 ## 연구수치가 이만큼 쌓일 때마다 연구포인트 +1
+const RESEARCH_FIRST: int = 5 ## 첫 연구포인트에 필요한 연구수치 (기획서 5.4)
+const RESEARCH_STEP: int = 1 ## 포인트를 얻을 때마다 다음 기준이 이만큼 늘어난다
+const HQ_RESEARCH: int = 1 ## 살아 있는 본부마다 정산 때 받는 연구수치
 
 
 ## 연구 (테크트리): 4갈래 x 3단계, 비용은 단계와 같다. 같은 갈래의 앞 단계가 선행 조건 (기획서 5.4)
@@ -177,6 +181,11 @@ const TECHS: Dictionary = {
 	"cavalry": {"name": "기마술", "desc": "기병 해금"},
 	"drill": {"name": "단련", "desc": "모든 병사 체력·공격 +20%"},
 }
+
+
+## 연구수치로 이미 포인트를 gained개 얻었을 때 다음 포인트에 필요한 연구수치 (기획서 5.4)
+static func research_threshold(gained: int) -> int:
+	return RESEARCH_FIRST + gained * RESEARCH_STEP
 
 
 static func tech_cost(id: String) -> int:
@@ -226,9 +235,9 @@ static func effect_text(id: int, level: int) -> String:
 	if id == MARKET:
 		return "붙어 있는 집의 정산 골드 +%d%%" % roundi(MARKET_HOUSE_BONUS_LV[i] * 100.0)
 	if id == LIBRARY:
-		return "정산 연구수치 +%d (%d점마다 연구포인트 1)" % [LIBRARY_RESEARCH_LV[i], RESEARCH_THRESHOLD]
+		return "정산 연구수치 +%d (첫 %d점부터 연구포인트 1)" % [LIBRARY_RESEARCH_LV[i], RESEARCH_FIRST]
 	if id == LAB:
-		return "정산 연구수치 +%d (%d점마다 연구포인트 1)" % [LAB_RESEARCH_LV[i], RESEARCH_THRESHOLD]
+		return "정산 연구수치 +%d (첫 %d점부터 연구포인트 1)" % [LAB_RESEARCH_LV[i], RESEARCH_FIRST]
 	if id == FISHERY:
 		return "물 위에 설치 · 정산 식량 +%d~%d (이어진 물가가 넓을수록)" % [fishing_food(0, level), fishing_food(FISH_CAP, level)]
 	if id == TRADING_POST:

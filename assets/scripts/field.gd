@@ -397,7 +397,7 @@ func _next_to_sea(c: Vector2i) -> bool:
 ## 땅이고 비어 있으며, 지형·인접 바다 조건을 만족해야 한다 (기획서 3장, 5장)
 func can_build(id: int, c: Vector2i) -> bool:
 	var data: Dictionary = Balance.BUILDINGS[id]
-	if not in_territory(c): # 건설은 본부 영역 안에서만 (기획서 5.3)
+	if not in_territory(c) and not data.get("any_territory", false): # 건설은 본부 영역 안에서만, 병영은 예외 (기획서 5.3)
 		return false
 	if data.get("on_water", false): # 낚시터: 필드 안의 물 위, 땅과 닿은 칸 (기획서 5.1)
 		return bounds.has_point(c) and not cells.has(c) and not buildings.has(c) and _next_to_land(c)
@@ -477,23 +477,23 @@ func _next_to_open_sea(c: Vector2i) -> bool:
 	return false
 
 
-## 낚시터에서 물길로 FISH_RADIUS칸 안에 이어진 바다 칸 수 (최대 FISH_CAP) (기획서 5.1)
+## 낚시터와 물길로 이어진 바다 칸 수 (최대 FISH_CAP까지만 센다) (기획서 5.1)
 func fishing_cells(c: Vector2i) -> int:
 	var seen: Dictionary = {}
-	var frontier: Array[Vector2i] = []
+	var q: Array[Vector2i] = []
 	for d in DIRS:
 		if terrain_at(c + d) == SEA:
 			seen[c + d] = true
-			frontier.append(c + d)
-	for _step in Balance.FISH_RADIUS - 1:
-		var next: Array[Vector2i] = []
-		for f in frontier:
-			for d in DIRS:
-				var n: Vector2i = f + d
-				if terrain_at(n) == SEA and not seen.has(n):
-					seen[n] = true
-					next.append(n)
-		frontier = next
+			q.append(c + d)
+	var i: int = 0
+	while i < q.size() and seen.size() < Balance.FISH_CAP:
+		var cur: Vector2i = q[i]
+		i += 1
+		for d in DIRS:
+			var n: Vector2i = cur + d
+			if terrain_at(n) == SEA and not seen.has(n):
+				seen[n] = true
+				q.append(n)
 	return mini(seen.size(), Balance.FISH_CAP)
 
 
@@ -754,9 +754,9 @@ func _market_bonus(c: Vector2i) -> float:
 	return best
 
 
-## 웨이브 정산 때 얻는 연구수치: 도서관·연구소 레벨 합 (기획서 5.4)
+## 웨이브 정산 때 얻는 연구수치: 본부 수 + 도서관·연구소 레벨 합 (기획서 5.4)
 func research_income() -> int:
-	var n: int = 0
+	var n: int = Balance.HQ_RESEARCH * hqs.size() # 본부마다 +1
 	for c in buildings:
 		if not in_territory(c):
 			continue

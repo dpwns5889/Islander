@@ -51,15 +51,15 @@ func _initialize() -> void:
 	for s in b.soldiers:
 		if s.kind == Balance.U_ARCHER:
 			archers += 1
-			fails += _check(s.reach == 4.0 and s.hp == 20.0 and s.atk == 3.0, "궁수 능력치")
+			fails += _check(s.reach == 2.0 and s.hp == 20.0 and s.atk == 3.0, "궁수 능력치")
 	fails += _check(archers == Balance.BARRACKS_SOLDIERS_LV[0], "병영이 궁수를 %d명 만든다 (%d)" % [Balance.BARRACKS_SOLDIERS_LV[0], archers])
 	fails += _check(gsb.gold == 1000 and gsb.food == 1000, "병사 생산은 골드·식량을 쓰지 않는다")
-	# 궁수는 사거리 4칸에서 쏜다 (다가가지 않는다)
+	# 궁수는 사거리 2칸에서 쏜다 (다가가지 않는다)
 	var archer: Unit = b.soldiers[b.soldiers.size() - 1]
-	var pirate: Unit = b._add_unit(Balance.U_PIRATE, archer.position + Vector3(3.5, 0.0, 0.0), 1.0)
+	var pirate: Unit = b._add_unit(Balance.U_PIRATE, archer.position + Vector3(1.8, 0.0, 0.0), 1.0)
 	archer.cooldown = 0.0
 	var before: Vector3 = archer.position
-	fails += _check(b._engage(archer, pirate.position, 0.1) and archer.position == before, "궁수는 3.5칸 거리에서 움직이지 않고 공격 준비")
+	fails += _check(b._engage(archer, pirate.position, 0.1) and archer.position == before, "궁수는 1.8칸 거리에서 움직이지 않고 공격 준비")
 	var sword: Unit = b.soldiers[0]
 	sword.cooldown = 0.0
 	fails += _check(not b._engage(sword, pirate.position, 0.1), "검병은 3.5칸에서는 공격하지 못하고 다가간다")
