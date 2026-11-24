@@ -7,7 +7,7 @@ const H: int = 15
 const MAX_W: int = 40
 const MAX_H: int = 30
 const SEA: int = 0
-const BLOCK_H: float = 0.4
+const BLOCK_H: float = 0.08 ## 땅 두께. 입체감 없이 평평한 땅 (기획서 3장)
 const HQ_COLOR: Color = Color(0.85, 0.15, 0.15)
 const M: int = 8 ## 필드 밖 자동 지형의 폭 (기획서 3장)
 const DIRS: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
@@ -46,6 +46,10 @@ var _mats: Dictionary = {}
 static func color_of(t: int) -> Color:
 	if t == Piece.SEA:
 		return Color(0.42, 0.68, 0.98)
+	if t == Piece.FOREST:
+		return Color(0.15, 0.45, 0.2)
+	if t == Piece.MOUNTAIN:
+		return Color(0.5, 0.5, 0.55)
 	return Color(0.45, 0.75, 0.35) if t == Piece.PLAINS else Color(0.93, 0.85, 0.55)
 
 
@@ -118,13 +122,6 @@ func _mat(c: Color, unshaded: bool) -> StandardMaterial3D:
 	return _mats[key]
 
 
-## 전투 단계에는 땅·바다 바닥을 음영 없이 칠해 입체감을 없앤다 (기획서 2장)
-func set_flat(flat: bool) -> void:
-	for k in _mats:
-		if (k as String).ends_with("false"):
-			(_mats[k] as StandardMaterial3D).shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED if flat else BaseMaterial3D.SHADING_MODE_PER_PIXEL
-
-
 ## 월드 좌표는 처음 15x15 필드의 중심이 원점이다. 확장해도 기존 칸의 위치는 변하지 않는다
 func cell_to_world(c: Vector2i) -> Vector3:
 	return Vector3(c.x + 0.5 - W / 2.0, 0.0, c.y + 0.5 - H / 2.0)
@@ -152,6 +149,16 @@ func terrain_at(c: Vector2i) -> int:
 
 func is_land(c: Vector2i) -> bool:
 	return cells.has(c)
+
+
+## 걸을 수 있는 땅: 산은 땅이지만 지나갈 수 없다 (기획서 3장)
+func is_walkable(c: Vector2i) -> bool:
+	return cells.has(c) and cells[c] != Piece.MOUNTAIN
+
+
+## 위치(월드 좌표) 땅의 이동속도 배율: 숲은 느리다 (기획서 3장)
+func speed_mult_at(pos: Vector3) -> float:
+	return Balance.FOREST_SPEED if cells.get(world_to_cell(pos), -1) == Piece.FOREST else 1.0
 
 
 ## 필드 밖에 시드 기반 랜덤 지형을 만든다. 필드에서 2칸 안쪽은 항상 바다라서 적이 걸어서 올 수 없다 (기획서 3장)
@@ -321,6 +328,10 @@ func can_build(id: int, c: Vector2i) -> bool:
 	if not cells.has(c) or hqs.has(c) or buildings.has(c):
 		return false
 	if cells[c] == Piece.SAND and not data["sand"]:
+		return false
+	if cells[c] == Piece.FOREST and not Balance.FOREST_BUILDINGS.has(id):
+		return false
+	if cells[c] == Piece.MOUNTAIN and not Balance.MOUNTAIN_BUILDINGS.has(id):
 		return false
 	if data.get("unique", false) and buildings.values().has(id): # 교역소는 1개만 (기획서 5.6)
 		return false
@@ -544,14 +555,14 @@ func island_map() -> Dictionary:
 	var m: Dictionary = {}
 	var id: int = 0
 	for s in cells:
-		if m.has(s):
+		if m.has(s) or not is_walkable(s):
 			continue
 		var stack: Array[Vector2i] = [s]
 		m[s] = id
 		while not stack.is_empty():
 			var c: Vector2i = stack.pop_back()
 			for d in DIRS:
-				if cells.has(c + d) and not m.has(c + d):
+				if is_walkable(c + d) and not m.has(c + d):
 					m[c + d] = id
 					stack.append(c + d)
 		id += 1
@@ -569,7 +580,7 @@ func nav(sea: bool, enemy: bool = false) -> AStarGrid2D:
 	for y in ext.size.y:
 		for x in ext.size.x:
 			var c: Vector2i = ext.position + Vector2i(x, y)
-			var walkable: bool = (terrain_at(c) == SEA and not buildings.has(c)) if sea else is_land(c)
+			var walkable: bool = (terrain_at(c) == SEA and not buildings.has(c)) if sea else is_walkable(c)
 			a.set_point_solid(Vector2i(x, y), not walkable)
 	return a
 

@@ -109,6 +109,14 @@ const RUIN_CHANCE: float = 0.02 ## 대륙 안쪽 평원 칸이 유적지일 확�
 const CONTINENT_FREQ: float = 0.05 ## 필드 밖 지형 노이즈 주파수(낮을수록 큰 대륙)
 const CONTINENT_LEVEL: float = -0.1 ## 이 값보다 큰 노이즈가 땅
 
+const SPECIAL_MAX: int = 2 ## 보상 타일 한 조각의 숲·산 칸 최대 수 (기획서 4장)
+const SPECIAL_CHANCE: float = 0.3 ## 그 칸이 숲·산이 될 확률(칸마다 따로 굴림)
+const MOUNTAIN_SHARE: float = 0.35 ## 숲·산 중 산일 확률
+const FOREST_SPEED: float = 0.7 ## 숲 위 이동속도 배율 (아군·적 모두) (기획서 3장)
+## 숲·산에 지을 수 있는 건물 (평원은 전부, 모래는 건물의 sand 값) (기획서 3장)
+const FOREST_BUILDINGS: Array[int] = [HOUSE, LIBRARY, TOWER]
+const MOUNTAIN_BUILDINGS: Array[int] = [TOWER]
+
 const START_GOLD: int = 50
 const START_FOOD: int = 20
 

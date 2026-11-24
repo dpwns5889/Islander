@@ -221,7 +221,7 @@ func _nearest(pos: Vector3, arr: Array[Unit], island: int = -2) -> Unit:
 
 ## 경로를 따라 이동한다. 경로 끝에 닿으면 true
 func _follow(u: Unit, dt: float) -> bool:
-	var budget: float = u.speed * dt
+	var budget: float = u.speed * dt * field.speed_mult_at(u.position) # 숲은 느리다 (기획서 3장)
 	while budget > 0.0 and not u.path.is_empty():
 		var wp: Vector3 = field.cell_to_world(u.path[0])
 		var d: Vector3 = Vector3(wp.x - u.position.x, 0.0, wp.z - u.position.z)
@@ -316,7 +316,7 @@ func _push_apart(units: Array[Unit], sea: bool) -> void:
 func _nudge(u: Unit, push: Vector3, sea: bool) -> void:
 	var np: Vector3 = u.position + push
 	var c: Vector2i = field.world_to_cell(np)
-	if (field.terrain_at(c) == Field.SEA) if sea else field.is_land(c):
+	if (field.terrain_at(c) == Field.SEA) if sea else field.is_walkable(c):
 		u.position = np
 
 
@@ -355,6 +355,13 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 			continue
 		var p: Vector3 = field.cell_to_world(c)
 		var d: float = _dist(u.position, p)
+		if field.cells.get(c, -1) == Piece.MOUNTAIN: # 산 위 방어탑: 걸어서 못 가므로 사거리 안의 원거리 적만 공격한다 (기획서 3장)
+			if u.reach > 2.0 and d <= u.reach and d < best_d:
+				best_d = d
+				tpos = p
+				tunit = null
+				tcell = c
+			continue
 		if islands.get(c, -1) == u.island and d < best_d:
 			best_d = d
 			tpos = p
@@ -489,8 +496,14 @@ func _spawn_ships(dt: float) -> void:
 	if tgt.is_empty():
 		return
 	var route: Array[Vector2i] = field.path(sea_nav, from, tgt["stop"])
-	if route.is_empty(): # 바다로 갈 길이 없으면 해적선은 오지 못한다
-		return
+	# 대륙에 막혀 길이 없으면 다른 가장자리를 시도하고, 끝내 없으면 상륙 지점 바로 앞 바다에서 출발한다 (전투 없이 끝나는 것을 막는다)
+	for _try in 40:
+		if not route.is_empty():
+			break
+		from = _edge_cell()
+		route = field.path(sea_nav, from, tgt["stop"])
+	if route.is_empty():
+		from = tgt["stop"]
 	var s: Unit = _add_unit(Balance.U_SHIP, field.cell_to_world(from), 1.0)
 	s.path = route
 	s.landing = field.cell_to_world(tgt["land"])

@@ -137,6 +137,22 @@ func _initialize() -> void:
 	var ship_hp: float = ship.hp
 	sb._towers_turn(0.0)
 	fails += _check(ship.hp == ship_hp, "방어탑은 해적선을 공격하지 않는다")
+	# 11. 바다 길이 완전히 막혀도 해적선은 상륙 지점 앞에서 나와 전투가 벌어진다 (전투 없이 끝나지 않는다)
+	var bf: Field = _island(5, 5)
+	var bb: Battle = Battle.new()
+	bb.setup(bf, load("res://assets/scripts/game_state.gd").new(), 3)
+	var blocked: AStarGrid2D = bf.nav(true)
+	for y in blocked.region.size.y:
+		for x in blocked.region.size.x:
+			blocked.set_point_solid(Vector2i(x, y), true)
+	bb.sea_nav = blocked
+	var seen: bool = false
+	for _i in 300:
+		bb.tick(0.1)
+		seen = seen or not bb.ships.is_empty() or not bb.pirates.is_empty()
+		if bb.done:
+			break
+	fails += _check(seen, "길이 막혀도 해적이 나타난다")
 	print("적·방어탑 점검 실패 %d건" % fails)
 	quit(fails)
 

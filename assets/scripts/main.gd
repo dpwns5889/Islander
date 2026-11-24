@@ -736,7 +736,7 @@ func cycle_speed() -> void:
 
 ## 전투 중 클릭한 땅으로 병사들이 이동한다 (깃발 없이 한 번의 명령) (기획서 6장)
 func command_move(c: Vector2i) -> bool:
-	if battle == null or not field.is_land(c):
+	if battle == null or not field.is_walkable(c):
 		return false
 	battle.command_move(c)
 	_ping(c)
@@ -820,7 +820,6 @@ func _show_defeat() -> void:
 
 
 func _tilt(deg: float) -> void:
-	field.set_flat(deg < 90.0)
 	create_tween().tween_method(_set_pitch, _pitch, deg, 0.8)
 
 

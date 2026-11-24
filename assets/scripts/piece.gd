@@ -5,6 +5,8 @@ extends RefCounted
 const SEA: int = 0 ## 바다 칸: 놓으면 그 칸이 물 타일로 차지된다 (기획서 4장)
 const PLAINS: int = 1
 const SAND: int = 2
+const FOREST: int = 3 ## 숲: 이동 느림, 식량 0 (기획서 3장)
+const MOUNTAIN: int = 4 ## 산: 이동 불가, 방어탑만 (기획서 3장)
 
 const SEVEN: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1), Vector2i(0, 2)]
 ## 4~7칸 모양 18종 (기획서 4장)
@@ -42,6 +44,12 @@ static func random_piece(rng: RandomNumberGenerator, with_sea: bool = false) -> 
 	var sand: float = SAND_CHANCE[rng.randi() % SAND_CHANCE.size()]
 	for _c in p.cells:
 		p.terrain.append(SAND if rng.randf() < sand else PLAINS)
+	var specials: int = 0 # 숲·산은 조각당 최대 SPECIAL_MAX칸. 시작·본부 조각에는 없다 (기획서 4장)
+	for _i in Balance.SPECIAL_MAX:
+		if rng.randf() < Balance.SPECIAL_CHANCE:
+			specials += 1
+	for _k in specials:
+		p.terrain[rng.randi() % p.cells.size()] = MOUNTAIN if rng.randf() < Balance.MOUNTAIN_SHARE else FOREST
 	if with_sea and rng.randf() < Balance.SEA_TILE_CHANCE:
 		# 4~5칸은 바다 1칸, 6~7칸은 1~2칸. 땅은 항상 3칸 이상 남는다
 		var k: int = 1 if p.cells.size() <= 5 else 1 + rng.randi() % 2
