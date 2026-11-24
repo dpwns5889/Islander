@@ -98,7 +98,8 @@ const SEA_TILE_CHANCE: float = 0.4 ## 그때 한 카드가 바다 섞인 타일�
 const PREP_CAM_SIZE: float = 18.0 ## 준비 단계 카메라 크기(작을수록 확대)
 const COMBAT_CAM_SIZE: float = 13.5 ## 전투 카메라는 준비 단계보다 더 확대한다 (기획서 7.2)
 
-const HQ_LEVEL_FOOD: Array[int] = [20, 50, 100, 180, 300, 450, 650, 900, 1200] ## 본부 레벨 2~10이 되는 식량 누적량 (기획서 5.3)
+const HQ_LEVEL_FOOD: Array[int] = [5, 12, 22, 35, 50, 70, 95, 125, 160, 200, 245, 295, 350, 410, 475, 545, 620, 700, 785] ## 본부 레벨 2~20이 되는 식량 누적량 (기획서 5.3)
+const TERRITORY_START_RADIUS: int = 1 ## 본부 영역의 시작 크기: 본부 칸 주변 이 거리까지 (3x3) (기획서 5.3)
 const GROW_EVERY: int = 2 ## 이 라운드마다 필드가 4방으로 한 줄씩 넓어진다 (기획서 3장)
 
 const EXPLORE_COST: int = 20 ## 유적지 원정 골드 (기획서 3장)

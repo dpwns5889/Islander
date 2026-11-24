@@ -40,12 +40,12 @@ func _initialize() -> void:
 	fails += _check(Balance.enemy_mult(100, 3) > Balance.enemy_mult(100, 0) and Balance.enemy_mult(200, 0) > Balance.enemy_mult(100, 0), "넓힐수록 적이 강해진다")
 	# 본부 레벨
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
-	gs.add(0, 19)
-	fails += _check(gs.check_level() == 0 and gs.hq_level == 1, "식량 19: 레벨 1")
+	gs.add(0, 4)
+	fails += _check(gs.check_level() == 0 and gs.hq_level == 1, "식량 4: 레벨 1")
 	gs.add(0, 1)
-	fails += _check(gs.check_level() == 1 and gs.hq_level == 2, "식량 20: 레벨 2")
-	gs.add(0, 100)
-	fails += _check(gs.check_level() == 2 and gs.hq_level == 4 and gs.next_level_food() == 180, "식량 120: 레벨 4, 다음은 180")
+	fails += _check(gs.check_level() == 1 and gs.hq_level == 2, "식량 5: 레벨 2")
+	gs.add(0, 115)
+	fails += _check(gs.check_level() == 6 and gs.hq_level == 8 and gs.next_level_food() == 125, "식량 120: 레벨 8, 다음은 125")
 	gs.spend(0, 50)
 	fails += _check(gs.food_total == 120, "식량을 써도 누적은 줄지 않는다")
 	# 확장한 필드에서도 전투가 끝까지 돈다

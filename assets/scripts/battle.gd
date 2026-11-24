@@ -25,6 +25,7 @@ var _fx: Array = [] ## 방어탑 공격 선 표시 {node, t}
 var _queue: Array[int] = [] ## 아직 해적선에 태우지 않은 적 종류(강한 적이 먼저)
 var sea_nav: AStarGrid2D
 var islands: Dictionary = {} ## 땅 칸 → 섬 번호
+const NO_CELL: Vector2i = Vector2i(-999, -999)
 var _ships_left: int = 0
 ## 아직 해적선에 태우지 않은 적 수 (테스트에서 0으로 줄여 웨이브를 끝낼 수 있다)
 var _pirates_left: int:
@@ -248,12 +249,28 @@ func _walk(u: Unit, goal: Vector2i, dt: float) -> void:
 
 
 ## 사거리 밖이면 다가가고, 사거리 안이면 공격 준비가 됐는지를 돌려 준다
-func _engage(u: Unit, tpos: Vector3, dt: float) -> bool:
+## stand: 목표가 물 위(낚시터)일 때 올라서는 육지 칸. 거기서 목표를 공격한다 (기획서 6장)
+func _engage(u: Unit, tpos: Vector3, dt: float, stand: Vector2i = NO_CELL) -> bool:
 	u.cooldown = maxf(0.0, u.cooldown - dt)
-	if _dist(u.position, tpos) > u.reach:
-		_walk(u, field.world_to_cell(tpos), dt)
+	var reach: float = u.reach if stand == NO_CELL else maxf(u.reach, 1.3)
+	if _dist(u.position, tpos) > reach:
+		_walk(u, field.world_to_cell(tpos) if stand == NO_CELL else stand, dt)
 		return false
 	return u.cooldown <= 0.0
+
+
+## 물 위 목표(낚시터)에 닿을 수 있는 같은 섬의 육지 칸 중 u에서 가장 가까운 칸, 없으면 NO_CELL
+func _stand_cell(c: Vector2i, u: Unit) -> Vector2i:
+	var best: Vector2i = NO_CELL
+	var best_d: float = INF
+	for d in Field.DIRS:
+		var n: Vector2i = c + d
+		if islands.get(n, -1) == u.island:
+			var dd: float = _dist(u.position, field.cell_to_world(n))
+			if dd < best_d:
+				best_d = dd
+				best = n
+	return best
 
 
 func _soldier_turn(u: Unit, dt: float) -> void:
@@ -337,6 +354,7 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 	var tpos: Vector3 = u.position
 	var tunit: Unit = null
 	var tcell: Vector2i = Vector2i(-1, -1)
+	var tstand: Vector2i = NO_CELL
 	for s in soldiers:
 		var d: float = _dist(u.position, s.position)
 		if s.island == u.island and d < best_d:
@@ -362,15 +380,21 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 				tunit = null
 				tcell = c
 			continue
-		if islands.get(c, -1) == u.island and d < best_d:
+		var stand: Vector2i = NO_CELL
+		var reachable: bool = islands.get(c, -1) == u.island
+		if not reachable and not field.cells.has(c): # 물 위 낚시터는 육지 쪽에서 공격한다 (기획서 6장)
+			stand = _stand_cell(c, u)
+			reachable = stand != NO_CELL
+		if reachable and d < best_d:
 			best_d = d
 			tpos = p
 			tunit = null
 			tcell = c
+			tstand = stand
 	if best_d == INF: # 같은 섬에 노릴 대상이 없으면 물러간다
 		u.hp = 0.0
 		return
-	if not _engage(u, tpos, dt):
+	if not _engage(u, tpos, dt, tstand):
 		return
 	u.cooldown = Balance.ATTACK_INTERVAL
 	u.lunge(tpos)

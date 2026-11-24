@@ -20,6 +20,11 @@ var ruins: Dictionary = {} ## 아직 털지 않은 유적지 위치 → true (�
 var looted: Dictionary = {} ## 이미 턴 유적지
 var water: Dictionary = {} ## 바다 칸이 섞인 타일로 차지된 물 타일 위치 (땅은 아니지만 조각을 놓을 수 없다) (기획서 4장)
 var hqs: Dictionary = {} ## 살아 있는 본부 위치 → 체력 (여러 개일 수 있다) (기획서 5.5)
+var territory_of: Dictionary = {} ## 본부 위치 → 그 본부 영역 칸 집합 (기획서 5.3)
+var territory: Dictionary = {} ## 모든 본부 영역의 합집합 (겹치면 하나로 이어진다)
+var territory_enabled: bool = false ## true면 건설·생산이 본부 영역 안으로 제한된다. 게임(main.gd)이 켠다 (기획서 5.3)
+var _terr_rng: RandomNumberGenerator = RandomNumberGenerator.new()
+var _terr_nodes: Array[Node] = []
 var hq_lost: int = 0 ## 영구히 잃은 본부 수
 ## 첫 번째 본부 위치 (없으면 (-1, -1))
 var hq: Vector2i:
@@ -145,6 +150,71 @@ func terrain_at(c: Vector2i) -> int:
 	if bounds.has_point(c):
 		return cells.get(c, SEA)
 	return _outer.get(c, SEA)
+
+
+## 본부 영역 안인지. 건설과 생산은 영역 안에서만 된다 (기획서 5.3)
+func in_territory(c: Vector2i) -> bool:
+	return not territory_enabled or territory.has(c)
+
+
+## 새 본부의 시작 영역: 본부 칸 주변 3x3 (필드 안만) (기획서 5.3)
+func claim_start(hq_cell: Vector2i) -> void:
+	var set: Dictionary = {}
+	var r: int = Balance.TERRITORY_START_RADIUS
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			var c: Vector2i = hq_cell + Vector2i(dx, dy)
+			if bounds.has_point(c):
+				set[c] = true
+	territory_of[hq_cell] = set
+	_rebuild_territory()
+
+
+## 영역에 4방향으로 붙은 필드 안의 칸 중 무작위로 n칸을 더한다 (기획서 5.3)
+func grow_territory(hq_cell: Vector2i, n: int) -> void:
+	if not territory_of.has(hq_cell):
+		return
+	var set: Dictionary = territory_of[hq_cell]
+	for _i in n:
+		var cand: Array[Vector2i] = []
+		for c in set:
+			for d in DIRS:
+				var q: Vector2i = c + d
+				if bounds.has_point(q) and not set.has(q) and not cand.has(q):
+					cand.append(q)
+		if cand.is_empty():
+			break
+		set[cand[_terr_rng.randi() % cand.size()]] = true
+	_rebuild_territory()
+
+
+func grow_all_territories(n: int) -> void:
+	for h in territory_of:
+		grow_territory(h, n)
+
+
+## 합집합을 다시 만들고, 바깥 경계선만 그린다: 영역이 겹치면 경계가 이어진다 (문명5 방식) (기획서 5.3)
+func _rebuild_territory() -> void:
+	territory.clear()
+	for h in territory_of:
+		for c in territory_of[h]:
+			territory[c] = true
+	for n in _terr_nodes:
+		n.queue_free()
+	_terr_nodes.clear()
+	var t: float = 0.1
+	for c in territory:
+		for d in DIRS:
+			if territory.has(c + d):
+				continue
+			var bm: BoxMesh = BoxMesh.new()
+			bm.size = Vector3(1.0 + t if d.y != 0 else t, 0.04, 1.0 + t if d.x != 0 else t)
+			var e: MeshInstance3D = MeshInstance3D.new()
+			e.mesh = bm
+			e.material_override = _mat(Color(0.98, 0.8, 0.2), true)
+			e.position = cell_to_world(c) + Vector3(d.x * 0.5, BLOCK_H + 0.03, d.y * 0.5)
+			add_child(e)
+			_terr_nodes.append(e)
 
 
 func is_land(c: Vector2i) -> bool:
@@ -323,6 +393,8 @@ func _next_to_sea(c: Vector2i) -> bool:
 ## 땅이고 비어 있으며, 지형·인접 바다 조건을 만족해야 한다 (기획서 3장, 5장)
 func can_build(id: int, c: Vector2i) -> bool:
 	var data: Dictionary = Balance.BUILDINGS[id]
+	if not in_territory(c): # 건설은 본부 영역 안에서만 (기획서 5.3)
+		return false
 	if data.get("on_water", false): # 낚시터: 필드 안의 물 위, 땅과 닿은 칸 (기획서 5.1)
 		return bounds.has_point(c) and not cells.has(c) and not buildings.has(c) and _next_to_land(c)
 	if not cells.has(c) or hqs.has(c) or buildings.has(c):
@@ -508,6 +580,8 @@ func damage(c: Vector2i, amount: float) -> bool:
 		if hqs[c] <= 0.0:
 			hqs.erase(c)
 			hq_lost += 1
+			territory_of.erase(c) # 본부가 무너지면 그 영역도 사라진다 (기획서 5.3)
+			_rebuild_territory()
 			for n: Node in _nodes[c]:
 				n.queue_free()
 			_nodes.erase(c)
@@ -633,6 +707,8 @@ func _market_bonus(c: Vector2i) -> float:
 func research_income() -> int:
 	var n: int = 0
 	for c in buildings:
+		if not in_territory(c):
+			continue
 		if buildings[c] == Balance.LIBRARY:
 			n += Balance.LIBRARY_RESEARCH_LV[levels[c] - 1]
 		elif buildings[c] == Balance.LAB:
@@ -647,6 +723,8 @@ func income(techs: Dictionary = {}) -> Vector2i:
 	var house_mult: float = 1.2 if techs.has("commerce") else 1.0
 	var farm_mult: float = 1.0 + (0.3 if techs.has("tools") else 0.0) + (0.5 if techs.has("harvest") else 0.0)
 	for c in buildings:
+		if not in_territory(c): # 영역 밖 건물은 생산하지 않는다 (기획서 5.3)
+			continue
 		if buildings[c] == Balance.HOUSE:
 			gold += Balance.house_gold(levels[c], cells[c] == Piece.SAND) * (house_mult + _market_bonus(c))
 		elif buildings[c] == Balance.FARM:
@@ -654,7 +732,11 @@ func income(techs: Dictionary = {}) -> Vector2i:
 		elif buildings[c] == Balance.FISHERY:
 			food += fishing_food(c)
 	var per_plain: float = Balance.FOOD_PER_PLAINS * (1.5 if techs.has("irrigation") else 1.0)
-	food += cells.values().count(Piece.PLAINS) * per_plain
+	var plains: int = 0
+	for c in cells:
+		if cells[c] == Piece.PLAINS and in_territory(c):
+			plains += 1
+	food += plains * per_plain
 	return Vector2i(floori(gold), floori(food))
 
 
@@ -686,6 +768,7 @@ func place(p: Piece, origin: Vector2i) -> void:
 		_land_nodes[cell] = mi
 		if i == p.hq_index:
 			hqs[cell] = Balance.HQ_HP
+			claim_start(cell)
 			var marker: MeshInstance3D = MeshInstance3D.new()
 			var bm: BoxMesh = BoxMesh.new()
 			bm.size = Vector3(0.5, 0.6, 0.5)

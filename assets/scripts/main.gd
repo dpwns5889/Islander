@@ -103,6 +103,7 @@ func _build_world() -> void:
 	add_child(camera)
 	camera.current = true
 	field = Field.new()
+	field.territory_enabled = true
 	add_child(field)
 	ghost = Node3D.new()
 	add_child(ghost)
@@ -596,7 +597,10 @@ func place_current(hover: Vector2i) -> bool:
 	var origin: Vector2i = current.origin_for(hover)
 	if not field.can_place(current, origin):
 		return false
+	var piece_hq: bool = current.hq_index >= 0
 	field.place(current, origin)
+	if piece_hq and GameState.hq_level > 1: # 새 본부는 현재 레벨만큼 영역을 받는다 (기획서 5.3)
+		field.grow_territory(origin + current.cells[current.hq_index], GameState.hq_level - 1)
 	var was_start: bool = placed_count == 0
 	placed_count += 1
 	var was_hq: bool = placing_hq
@@ -777,6 +781,8 @@ func _on_battle_finished(victory: bool) -> void:
 	GameState.add(inc.x, inc.y)
 	GameState.next_wave()
 	var levels: int = GameState.check_level() # 본부 레벨 (기획서 5.3)
+	if levels > 0:
+		field.grow_all_territories(levels) # 레벨마다 영역 +1칸 (기획서 5.3)
 	var rp_gain: int = GameState.add_research_progress(field.research_income()) # 도서관·연구소 (기획서 5.4)
 	field.repair_all()
 	_tilt(90.0)
@@ -1037,7 +1043,7 @@ func _refresh_hud() -> void:
 	if research_panel.visible:
 		_refresh_research()
 	var nxt: int = GameState.next_level_food()
-	town_label.text = "본부 Lv %d · 식량 누적 %d%s" % [GameState.hq_level, GameState.food_total, "/%d" % nxt if nxt > 0 else " (최고)"]
+	town_label.text = "본부 Lv %d · 영역 %d칸 · 식량 누적 %d%s" % [GameState.hq_level, field.territory.size(), GameState.food_total, "/%d" % nxt if nxt > 0 else " (최고)"]
 	if selected_cell.x >= 0 and not field.buildings.has(selected_cell):
 		selected_cell = Vector2i(-1, -1)
 	upgrade_panel.visible = selected_cell.x >= 0 and battle == null

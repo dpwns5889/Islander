@@ -16,7 +16,7 @@ func _initialize() -> void:
 	main._toggle_category(1)
 	var wall: Vector2i = Vector2i(-1, -1) # 방어탑을 지을 땅 칸
 	for c in main.field.cells:
-		if not main.field.hqs.has(c) and not main.field.buildings.has(c):
+		if main.field.in_territory(c) and not main.field.hqs.has(c) and not main.field.buildings.has(c):
 			wall = c
 			break
 	# 방어탑은 연구(궁술) 전에는 못 짓는다
