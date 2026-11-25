@@ -14,17 +14,18 @@ func _initialize() -> void:
 	for id in Balance.BUILDINGS:
 		all_ids.append(id)
 	all_ids.sort()
-	fails += _check(listed == all_ids and all_ids.size() == 13, "카테고리가 건물 13종을 한 번씩 담는다")
+	fails += _check(listed == all_ids and all_ids.size() == 18, "카테고리가 건물 18종(진화 5종 포함)을 한 번씩 담는다")
 	fails += _check(Balance.BUILDINGS[Balance.FISHERY]["cost"] == 25 and Balance.BUILDINGS[Balance.TRADING_POST]["cost"] == 40, "건설비: 낚시터 25, 교역소 40")
-	fails += _check(Balance.BUILDINGS[Balance.TRADING_POST]["tech"] == "trade" and not Balance.BUILDINGS[Balance.FISHERY].has("tech"), "교역소는 교역 연구 필요, 낚시터는 처음부터")
+	fails += _check(Balance.BUILDINGS[Balance.TRADING_POST]["tech"] == "commerce" and Balance.BUILDINGS[Balance.FISHERY]["tech"] == "fishing", "교역소는 상업, 낚시터는 낚시 연구 필요")
 	# 낚시터 식량: 3 + ⌊칸/6⌋ (최대 9), 레벨 ×1/×1.5/×2
 	fails += _check(Balance.fishing_food(0, 1) == 3 and Balance.fishing_food(6, 1) == 4 and Balance.fishing_food(40, 1) == 9 and Balance.fishing_food(99, 1) == 9, "낚시터 식량 3~9")
 	fails += _check(Balance.fishing_food(40, 2) == 13 and Balance.fishing_food(40, 3) == 18 and Balance.fishing_food(0, 2) == 4, "낚시터 레벨 배율")
 	# 호수가 있는 섬: 5x5에서 가운데(6,6)만 빈 바다
 	var f: Field = _lake_island()
 	fails += _check(not f.is_open_sea(Vector2i(6, 6)) and f.is_open_sea(Vector2i(3, 6)), "호수는 닫힌 물가, 바깥은 열린 물가")
-	fails += _check(not f.can_build(Balance.TRADING_POST, Vector2i(6, 5)), "교역소는 호수 옆에는 못 짓는다")
-	fails += _check(f.can_build(Balance.TRADING_POST, Vector2i(4, 6)), "교역소는 바깥 바다 옆에 지을 수 있다")
+	fails += _check(not f.can_build(Balance.TRADING_POST, Vector2i(6, 6)), "교역소는 호수 물 위에는 못 짓는다")
+	fails += _check(not f.can_build(Balance.TRADING_POST, Vector2i(5, 5)), "교역소는 땅 위에 못 짓는다")
+	fails += _check(f.can_build(Balance.TRADING_POST, Vector2i(3, 6)), "교역소는 바깥 바다 물 위에 지을 수 있다")
 	# 낚시터는 물 위에: 땅 칸 불가, 땅과 닿은 물 칸 가능, 떨어진 물·필드 밖 불가
 	fails += _check(not f.can_build(Balance.FISHERY, Vector2i(5, 5)), "낚시터는 땅 위에 못 짓는다")
 	fails += _check(f.can_build(Balance.FISHERY, Vector2i(6, 6)), "낚시터는 호수 물 위에 지을 수 있다")
@@ -47,8 +48,8 @@ func _initialize() -> void:
 	fails += _check(not f.path(nav, Vector2i(3, 9), Vector2i(3, 7)).is_empty() or true, "수상 건물을 돌아서 가는 길 계산이 깨지지 않는다")
 	fails += _check(nav.is_point_solid(Vector2i(3, 8) + Vector2i(Field.M, Field.M)), "배는 낚시터 칸을 지나지 못한다")
 	# 교역소는 필드에 1개만
-	f.build(Balance.TRADING_POST, Vector2i(4, 6))
-	fails += _check(f.trading_post() == Vector2i(4, 6) and not f.can_build(Balance.TRADING_POST, Vector2i(4, 7)), "교역소는 1개만")
+	f.build(Balance.TRADING_POST, Vector2i(3, 6))
+	fails += _check(f.trading_post() == Vector2i(3, 6) and not f.can_build(Balance.TRADING_POST, Vector2i(3, 7)), "교역소는 1개만")
 	# 낚시터 수입: 평원 칸 식량 + 두 낚시터
 	var plains: int = f.cells.values().count(Piece.PLAINS)
 	var want: int = plains + f.fishing_food(Vector2i(6, 6)) + f.fishing_food(Vector2i(3, 8))

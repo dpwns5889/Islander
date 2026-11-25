@@ -6,7 +6,7 @@ const GHOST_Y: float = 0.45
 
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var field: Field
-var camera: Camera3D
+var pixel: PixelView
 var ghost: Node3D
 var cursor: MeshInstance3D ## 건물 건설 위치 표시
 var current: Piece = null ## 배치 중인 조각
@@ -37,6 +37,11 @@ var upgrade_effect: Label
 var upgrade_button: Button
 var research_panel: PanelContainer
 var research_buttons: Dictionary = {} ## 연구 id → 버튼
+var selected_tech: String = "" ## 연구 창에서 고른 연구 (오른쪽 상세 창에 표시) (기획서 5.4)
+var tech_detail: RichTextLabel
+var tech_do_button: Button
+const TECH_W: float = 140.0 ## 트리 버튼 너비
+const TECH_PITCH: float = 170.0 ## 열 간격
 var tech_lines: Control ## 연구 선행 연결선을 그리는 판
 var research_toggle: Button
 var stats: Label
@@ -65,6 +70,7 @@ var battle_speed_index: int = 0
 var layer: CanvasLayer
 var battle: Battle = null
 var _pitch: float = 90.0
+var _zoom: float = 1.0 ## 준비 단계 휠 줌 배율(작을수록 확대)
 var _note: String = ""
 var _gmats: Dictionary = {}
 
@@ -95,13 +101,8 @@ func _build_world() -> void:
 	sun.rotation_degrees = Vector3(-70, -30, 0)
 	add_child(sun)
 	# 준비 단계는 완전 탑다운 (기획서 2장)
-	camera = Camera3D.new()
-	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = 18.0
-	camera.position = Vector3(0, 20, 0)
-	camera.rotation_degrees = Vector3(-90, 0, 0)
-	add_child(camera)
-	camera.current = true
+	pixel = PixelView.new() # 3D를 낮은 해상도로 그려 도트처럼 보이게 한다 (기획서 7.2)
+	add_child(pixel)
 	field = Field.new()
 	field.territory_enabled = true
 	add_child(field)
@@ -259,22 +260,36 @@ func _build_ui() -> void:
 	# 가운데: 연구 패널 (4열 14개, 문명5식)
 	var rbox: VBoxContainer = VBoxContainer.new()
 	var rtitle: Label = Label.new()
-	rtitle.text = "연구 — 연구포인트로 즉시 연구합니다 (취소 없음)"
+	rtitle.text = "연구 — 연구를 고르면 오른쪽에 자세한 내용이 나옵니다 (연구 후 취소 없음)"
 	rbox.add_child(rtitle)
 	# 문명5식 연구 화면: 열은 왼쪽에서 오른쪽, 선행 연구에서 후속 연구로 선을 긋는다 (기획서 5.4)
 	var tree: Control = Control.new()
-	tree.custom_minimum_size = Vector2(Balance.TECH_COLS * 270 - 50, Balance.TECH_ROWS * 74)
+	tree.custom_minimum_size = Vector2(Balance.TECH_COLS * TECH_PITCH - (TECH_PITCH - TECH_W), Balance.TECH_ROWS * 74)
 	for tid in Balance.TECHS:
 		var tb: Button = Button.new()
-		tb.size = Vector2(220, 62)
+		tb.size = Vector2(TECH_W, 62)
 		tb.position = _tech_pos(tid)
-		tb.pressed.connect(research.bind(tid))
+		tb.pressed.connect(select_tech.bind(tid))
 		research_buttons[tid] = tb
 		tree.add_child(tb)
 	tech_lines = tree
 	tree.draw.connect(_draw_tech_lines)
-	var grid: Control = tree
-	rbox.add_child(grid)
+	# 오른쪽: 고른 연구의 자세한 내용과 연구 버튼
+	var detail: VBoxContainer = VBoxContainer.new()
+	detail.custom_minimum_size = Vector2(300, 0)
+	tech_detail = RichTextLabel.new()
+	tech_detail.bbcode_enabled = true
+	tech_detail.fit_content = false
+	tech_detail.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	detail.add_child(tech_detail)
+	tech_do_button = Button.new()
+	tech_do_button.pressed.connect(func() -> void: research(selected_tech))
+	detail.add_child(tech_do_button)
+	var body: HBoxContainer = HBoxContainer.new()
+	body.add_theme_constant_override("separation", 20)
+	body.add_child(tree)
+	body.add_child(detail)
+	rbox.add_child(body)
 	var rclose: Button = Button.new()
 	rclose.text = "닫기"
 	rclose.pressed.connect(_toggle_research)
@@ -506,9 +521,7 @@ func spawn_npc(post: Vector2i) -> void:
 	cm.radius = 0.14
 	cm.height = 0.5
 	npc_node.mesh = cm
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = Color(0.85, 0.5, 0.95)
-	npc_node.material_override = mat
+	npc_node.material_override = Toon.material(Color(0.85, 0.5, 0.95))
 	npc_node.position = field.cell_to_world(post) + Vector3(0.4, Field.BLOCK_H + 0.25, 0.35)
 	add_child(npc_node)
 	AudioManager.play("npc_visit") # 방문 효과음
@@ -557,12 +570,12 @@ func do_trade(id: String) -> bool:
 	return true
 
 
-## 유적지 원정: 항해술을 연구하고 항구가 있어야 한다. 준비 단계당 1회 (기획서 3장)
+## 유적지 원정: 항구가 있어야 한다. 준비 단계당 1회 (기획서 3장)
 func explore(c: Vector2i) -> bool:
 	if battle != null or not field.ruins.has(c) or explored:
 		return false
-	if not GameState.has_tech("sail") or not field.buildings.values().has(Balance.PORT):
-		_note = "유적지 원정에는 항해술 연구와 항구가 필요합니다"
+	if not field.buildings.values().has(Balance.PORT):
+		_note = "유적지 원정에는 항구가 필요합니다"
 		_refresh_hud()
 		return false
 	if not GameState.spend(Balance.EXPLORE_COST):
@@ -649,6 +662,12 @@ func _toggle_research() -> void:
 	_refresh_hud()
 
 
+## 연구 창에서 연구를 고른다. 연구는 오른쪽 상세 창의 버튼으로 한다 (기획서 5.4)
+func select_tech(id: String) -> void:
+	selected_tech = id
+	_refresh_hud()
+
+
 ## 연구포인트로 연구한다 (기획서 5.4)
 func research(id: String) -> bool:
 	if battle != null or not GameState.research(id):
@@ -660,7 +679,7 @@ func research(id: String) -> bool:
 
 func _unlocked(id: int) -> bool:
 	var tech: String = Balance.BUILDINGS[id].get("tech", "")
-	return tech == "" or GameState.has_tech(tech)
+	return (tech == "" or GameState.has_tech(tech)) and Balance.menu_visible(id, GameState.researched)
 
 
 ## 병영·사격장 레벨 3 강화는 철기 제작이 필요하다 (기획서 5.2)
@@ -668,10 +687,24 @@ func _upgrade_locked(c: Vector2i) -> bool:
 	return Balance.MILITARY.has(field.buildings[c]) and field.levels[c] + 1 == Balance.MAX_LEVEL and not GameState.has_tech(Balance.LV3_TECH)
 
 
+## 레벨 3 기본 건물이 진화할 수 있는지: 진화 건물이 있고 해금 연구를 마쳤는지 (기획서 5.2.1)
+func _can_evolve(c: Vector2i) -> bool:
+	var to: int = Balance.evolve_to(field.buildings[c])
+	return to > 0 and field.levels[c] >= Balance.MAX_LEVEL and GameState.has_tech(Balance.BUILDINGS[to].get("tech", ""))
+
+
 func upgrade_selected() -> bool:
+	if selected_cell.x >= 0 and not _blocked() and _can_evolve(selected_cell):
+		var to: int = Balance.evolve_to(field.buildings[selected_cell])
+		if not GameState.spend(GameState.upgrade_discounted(Balance.evolve_cost(to))):
+			return false
+		field.evolve(selected_cell, to)
+		_note = ""
+		_refresh_hud()
+		return true
 	if selected_cell.x < 0 or _blocked() or not field.can_upgrade(selected_cell) or _upgrade_locked(selected_cell):
 		return false
-	var cost: int = GameState.discounted(Balance.upgrade_cost(field.buildings[selected_cell], field.levels[selected_cell] + 1))
+	var cost: int = GameState.upgrade_discounted(Balance.upgrade_cost(field.buildings[selected_cell], field.levels[selected_cell] + 1))
 	if not GameState.spend(cost):
 		return false
 	field.upgrade(selected_cell)
@@ -681,7 +714,7 @@ func upgrade_selected() -> bool:
 
 
 func _cost_of(id: int) -> int:
-	return GameState.discounted(Balance.BUILDINGS[id]["cost"])
+	return int(Balance.BUILDINGS[id]["cost"])
 
 
 func _build_ok(c: Vector2i) -> bool:
@@ -705,6 +738,7 @@ func start_wave() -> void:
 	side_panel.visible = false
 	wave_button.disabled = true
 	_tilt(Balance.COMBAT_PITCH)
+	field.buildings_lost.clear()
 	battle = Battle.new()
 	add_child(battle)
 	battle.setup(field, GameState, GameState.wave)
@@ -774,6 +808,11 @@ func _on_battle_finished(victory: bool) -> void:
 	side_panel.visible = true
 	_begin_prep()
 	_note = "웨이브 %d 승리: 골드 +%d · 식량 +%d" % [cleared, inc.x, inc.y] + ("\n" + _note if _note != "" else "")
+	if not field.buildings_lost.is_empty():
+		var parts: Array[String] = []
+		for k in field.buildings_lost:
+			parts.append("%s %d" % [Balance.BUILDINGS[k]["name"], field.buildings_lost[k]])
+		_note += "\n무너진 건물: " + ", ".join(parts)
 	for h in ups:
 		_note += "\n본부 %s 레벨 %d!" % [_hq_name(h), field.hq_level[h]]
 	if rp_gain > 0:
@@ -836,11 +875,17 @@ func _tilt(deg: float) -> void:
 func _set_pitch(deg: float) -> void:
 	_pitch = deg
 	var r: float = deg_to_rad(deg)
-	camera.rotation_degrees = Vector3(-deg, 0, 0)
 	var center: Vector3 = field.center_world()
-	camera.position = center + Vector3(0, 20.0 * sin(r), 20.0 * cos(r))
+	var cam_pos: Vector3 = center + Vector3(0, 20.0 * sin(r), 20.0 * cos(r))
 	var scale: float = maxf(field.bounds.size.x / float(Field.W), field.bounds.size.y / float(Field.H)) # 넓어진 필드에 맞춰 줌아웃
-	camera.size = lerpf(Balance.PREP_CAM_SIZE, Balance.COMBAT_CAM_SIZE, (90.0 - deg) / (90.0 - Balance.COMBAT_PITCH)) * scale # 전투 때는 더 확대한다
+	var t: float = (90.0 - deg) / (90.0 - Balance.COMBAT_PITCH)
+	pixel.aim(cam_pos, deg, lerpf(Balance.PREP_CAM_SIZE, Balance.COMBAT_CAM_SIZE, t) * scale * lerpf(_zoom, 1.0, t)) # 전투 때는 더 확대한다, 휠 줌은 준비 단계만 (기획서 2장)
+
+
+## 준비 단계 휠 확대/축소 (기획서 2장)
+func _wheel_zoom(f: float) -> void:
+	_zoom = clampf(_zoom * f, Balance.ZOOM_MIN, Balance.ZOOM_MAX)
+	_set_pitch(_pitch)
 
 
 func _rebuild_ghost() -> void:
@@ -884,7 +929,8 @@ func _cursor_mat(ok: bool) -> StandardMaterial3D:
 
 func _hover_cell() -> Vector2i:
 	var mp: Vector2 = get_viewport().get_mouse_position()
-	var hit: Variant = Plane(Vector3.UP, Field.BLOCK_H).intersects_ray(camera.project_ray_origin(mp), camera.project_ray_normal(mp))
+	var ray: Array[Vector3] = pixel.ray(mp)
+	var hit: Variant = Plane(Vector3.UP, Field.BLOCK_H).intersects_ray(ray[0], ray[1])
 	if hit == null:
 		return Vector2i(-100, -100)
 	return field.world_to_cell(hit as Vector3)
@@ -914,7 +960,7 @@ func _process(_delta: float) -> void:
 	else:
 		var c: Vector2i = _hover_cell()
 		cursor.visible = true
-		cursor.position = field.cell_to_world(c) + Vector3(0, (0.05 if build_id == Balance.FISHERY else Field.BLOCK_H + 0.05), 0)
+		cursor.position = field.cell_to_world(c) + Vector3(0, (0.05 if Balance.BUILDINGS.get(build_id, {}).get("on_water", false) else Field.BLOCK_H + 0.05), 0)
 		cursor.material_override = _cursor_mat(_build_ok(c))
 
 
@@ -933,10 +979,23 @@ func _update_warn(origin: Vector2i, ok: bool) -> void:
 		_refresh_hud()
 
 
+## 건물 패널이 열린 채로 다른 UI를 누르면 건물 선택을 푼다 (기획서 5.2)
+func _input(event: InputEvent) -> void:
+	if selected_cell.x < 0 or not (event is InputEventMouseButton and event.pressed):
+		return
+	var h: Control = get_viewport().gui_get_hovered_control()
+	if h != null and h != upgrade_panel and not upgrade_panel.is_ancestor_of(h):
+		selected_cell = Vector2i(-1, -1)
+		_refresh_hud()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	var left: bool = event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT
 	var right: bool = event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT
 	var key: int = (event as InputEventKey).keycode if event is InputEventKey and event.pressed else 0
+	if battle == null and event is InputEventMouseButton and event.pressed and (event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN):
+		_wheel_zoom(Balance.ZOOM_STEP if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / Balance.ZOOM_STEP)
+		return
 	if open_category >= 0 and (left or right or key == KEY_ESCAPE): # 목록 바깥을 누르면 닫는다
 		open_category = -1
 		_update_dropdown()
@@ -983,7 +1042,7 @@ func _hq_name(h: Vector2i) -> String:
 
 
 func _tech_pos(id: String) -> Vector2:
-	return Vector2(int(Balance.TECHS[id]["col"]) * 270, int(Balance.TECHS[id]["row"]) * 74)
+	return Vector2(int(Balance.TECHS[id]["col"]) * TECH_PITCH, int(Balance.TECHS[id]["row"]) * 74)
 
 
 ## 선행 연구의 오른쪽에서 후속 연구의 왼쪽으로 선을 긋는다. 선행을 마친 선은 밝게 (기획서 5.4)
@@ -991,41 +1050,50 @@ func _draw_tech_lines() -> void:
 	for id in Balance.TECHS:
 		for pre: String in Balance.tech_prereqs(id):
 			var col: Color = Color(0.5, 0.9, 0.5) if GameState.has_tech(pre) else Color(0.45, 0.45, 0.5)
-			tech_lines.draw_line(_tech_pos(pre) + Vector2(220, 31), _tech_pos(id) + Vector2(0, 31), col, 2.0)
+			tech_lines.draw_line(_tech_pos(pre) + Vector2(TECH_W, 31), _tech_pos(id) + Vector2(0, 31), col, 2.0)
 
 
 func _refresh_research() -> void:
 	tech_lines.queue_redraw()
 	for id in research_buttons:
 		var b: Button = research_buttons[id]
-		var info: Dictionary = Balance.TECHS[id]
 		var done: bool = GameState.has_tech(id)
-		b.text = "%s%s\n%s · %d점" % ["✓ " if done else "", info["name"], info["desc"], Balance.tech_cost(id)]
-		b.disabled = done or not GameState.can_research(id)
-		b.modulate = Color(0.55, 1.0, 0.55) if done else Color.WHITE
-		var missing: Array[String] = []
-		for pre: String in Balance.tech_prereqs(id):
-			if not GameState.has_tech(pre):
-				missing.append(Balance.TECHS[pre]["name"])
-		if done:
-			b.tooltip_text = ""
-		elif not missing.is_empty():
-			b.tooltip_text = "먼저 %s 연구가 필요합니다" % ", ".join(missing)
-		else:
-			b.tooltip_text = "연구포인트 %d점 필요 (보유 %d점)" % [Balance.tech_cost(id), GameState.research_points]
+		b.text = "%s%s\n%d점" % ["✓ " if done else "", Balance.TECHS[id]["name"], Balance.tech_cost(id)] # 효과는 상세 창에서만 (기획서 5.4)
+		b.modulate = Color(0.55, 1.0, 0.55) if done else (Color(1.0, 0.9, 0.4) if id == selected_tech else (Color.WHITE if GameState.can_research(id) else Color(0.7, 0.7, 0.7)))
+	if selected_tech == "":
+		tech_detail.text = "왼쪽에서 연구를 고르세요."
+		tech_do_button.visible = false
+		return
+	var t: Dictionary = Balance.TECHS[selected_tech]
+	var pres: Array[String] = []
+	for pre: String in Balance.tech_prereqs(selected_tech):
+		pres.append("[color=%s]%s[/color]" % ["#66e066" if GameState.has_tech(pre) else "#ff5555", Balance.TECHS[pre]["name"]])
+	var cost: int = Balance.tech_cost(selected_tech)
+	var pre_line: String = "" if pres.is_empty() else "\n선행: " + ", ".join(pres) # 선행이 없으면 줄 자체를 숨김
+	tech_detail.text = "%s\n\n효과: %s\n비용: 연구포인트 %d점 (보유 %d점)%s" % [str(t["name"]).replace("[", "[lb]"), str(t["desc"]).replace("[", "[lb]"), cost, GameState.research_points, pre_line]
+	tech_do_button.visible = true
+	var can: bool = GameState.can_research(selected_tech)
+	if GameState.has_tech(selected_tech):
+		tech_do_button.text = "연구 완료"
+	elif not can:
+		tech_do_button.text = "연구할 수 없음 (선행 연구나 포인트 부족)"
+	else:
+		tech_do_button.text = "연구하기 (%d점)" % cost
+	tech_do_button.disabled = GameState.has_tech(selected_tech) or not can
 
 
 func _refresh_hud() -> void:
 	var inc: Vector2i = field.income(GameState.researched) # 웨이브 정산 때 들어올 생산량 (기획서 7.2)
-	stats.text = "골드 %d (+%d) · 식량 %d (+%d) · 연구포인트 %d (%d/%d, +%d) · 웨이브 %d   " % [GameState.gold, inc.x, GameState.food, inc.y, GameState.research_points, GameState.research_progress, Balance.research_threshold(GameState.research_gained), field.research_income(GameState.researched), GameState.wave]
+	stats.text = "골드 %d (+%d) · 연구포인트 %d (%d/%d, +%d) · 웨이브 %d   " % [GameState.gold, inc.x, GameState.research_points, GameState.research_progress, Balance.research_threshold(GameState.research_gained), field.research_income(GameState.researched), GameState.wave]
 	for id in build_buttons:
 		var bb: Button = build_buttons[id]
 		bb.text = "%s %dG · %s" % [Balance.BUILDINGS[id]["name"], _cost_of(id), Balance.effect_text(id, 1, GameState.researched)]
 		var need: String = Balance.BUILDINGS[id].get("tech", "")
-		bb.tooltip_text = "" if _unlocked(id) else "필요 연구: " + Balance.TECHS[need]["name"]
+		bb.tooltip_text = "" if _unlocked(id) or need == "" or GameState.has_tech(need) else "필요 연구: " + Balance.TECHS[need]["name"]
 		if _blocked():
 			bb.tooltip_text = "전투 보상 타일을 먼저 놓으세요"
 		bb.disabled = _blocked() or not _unlocked(id) or GameState.gold < _cost_of(id)
+		bb.visible = Balance.menu_visible(id, GameState.researched) # 해금 뒤에는 기본 건물이 목록에서 사라진다 (기획서 5.2.1)
 	for cbtn in category_buttons:
 		cbtn.disabled = _blocked() or battle != null
 	if _blocked() and open_category >= 0:
@@ -1040,11 +1108,11 @@ func _refresh_hud() -> void:
 	# 이번 웨이브의 적을 미리 알려 준다. 해적의 세기는 땅 칸 수·확장 횟수에 따라 바뀐다 (기획서 6장)
 	wave_info.visible = battle == null
 	wave_panel.visible = top_panel.visible and battle == null
-	var comp: Dictionary = Balance.enemy_composition(GameState.wave)
+	var comp: Dictionary = Balance.enemy_composition(GameState.wave, GameState.run_seed)
 	var comp_parts: Array[String] = []
 	for kind in comp:
 		comp_parts.append("%s %d명" % [Balance.UNITS[kind]["name"], comp[kind]])
-	wave_info.text = "웨이브 %d 예고: %s (해적선 %d척) · 체력·공격 ×%.2f" % [GameState.wave, " · ".join(comp_parts), Balance.ship_count(GameState.wave), Balance.enemy_mult(field.land_count(), field.expansions)]
+	wave_info.text = "웨이브 %d 예고: %s (전투력 %d · 해적선 %d척) · 체력·공격 ×%.2f" % [GameState.wave, " · ".join(comp_parts), Balance.wave_power(GameState.wave, GameState.run_seed), Balance.ship_count(GameState.wave, GameState.run_seed), Balance.enemy_mult(field.land_count(), field.expansions)]
 	if field.sea_blocked():
 		wave_info.text += "\n바닷길이 막혀 해적이 걸어서 바다를 건넙니다"
 	for nk in Balance.new_enemy_kinds(GameState.wave): # 새 종류가 처음 나오는 웨이브 안내
@@ -1082,8 +1150,9 @@ func _refresh_hud() -> void:
 	var lines: Array[String] = []
 	for h in _sorted_hqs():
 		var nxt: int = field.next_level_food(h)
-		lines.append("본부 %s Lv %d · 영역 %d칸 · 식량 %d%s" % [_hq_name(h), field.hq_level[h], field.territory_of[h].size(), field.hq_food[h], "/%d" % nxt if nxt > 0 else " (최고)"])
+		lines.append("본부 %s Lv %d · 영역 %d칸 · 식량 %d/%d" % [_hq_name(h), field.hq_level[h], field.territory_of[h].size(), field.hq_food[h], nxt])
 	town_label.text = "\n".join(lines)
+	field.refresh_hq_bars(battle == null) # 본부 옆 레벨업 바 (기획서 5.3)
 	if selected_cell.x >= 0 and not field.buildings.has(selected_cell):
 		selected_cell = Vector2i(-1, -1)
 	upgrade_panel.visible = selected_cell.x >= 0 and battle == null
@@ -1094,15 +1163,23 @@ func _refresh_hud() -> void:
 		upgrade_effect.text = Balance.effect_text(bid, lv, GameState.researched)
 		if bid == Balance.TRADING_POST and not field.is_post_open(selected_cell):
 			upgrade_effect.text += "\n⚠ 물가가 막혀 NPC가 오지 못합니다"
-		if bid == Balance.FISHERY: # 이 낚시터의 실제 생산량
+		if bid == Balance.FISHERY or bid == Balance.FISH_VILLAGE: # 이 낚시터의 실제 생산량
 			upgrade_effect.text = "정산 식량 +%d (이어진 물가 %d칸)" % [field.fishing_food(selected_cell), field.fishing_cells(selected_cell)]
 		if field.can_upgrade(selected_cell):
-			var cost: int = GameState.discounted(Balance.upgrade_cost(bid, lv + 1))
+			var cost: int = GameState.upgrade_discounted(Balance.upgrade_cost(bid, lv + 1))
 			upgrade_button.text = "레벨 %d로 강화 %dG" % [lv + 1, cost]
 			upgrade_button.tooltip_text = "다음 레벨: " + Balance.effect_text(bid, lv + 1, GameState.researched)
 			upgrade_button.disabled = _blocked() or GameState.gold < cost or _upgrade_locked(selected_cell)
 			if _upgrade_locked(selected_cell):
 				upgrade_button.tooltip_text = "필요 연구: " + Balance.TECHS[Balance.LV3_TECH]["name"]
+		elif Balance.evolve_to(bid) > 0: # 레벨 3 기본 건물: 진화 (기획서 5.2.1)
+			var to: int = Balance.evolve_to(bid)
+			var ecost: int = GameState.upgrade_discounted(Balance.evolve_cost(to))
+			upgrade_button.text = "진화: %s %dG" % [Balance.BUILDINGS[to]["name"], ecost]
+			upgrade_button.tooltip_text = "진화 후 레벨 1: " + Balance.effect_text(to, 1, GameState.researched)
+			upgrade_button.disabled = _blocked() or GameState.gold < ecost or not _can_evolve(selected_cell)
+			if not _can_evolve(selected_cell):
+				upgrade_button.tooltip_text = "필요 연구: " + Balance.TECHS[Balance.BUILDINGS[to]["tech"]]["name"]
 		else:
 			upgrade_button.text = "최고 레벨"
 			upgrade_button.disabled = true

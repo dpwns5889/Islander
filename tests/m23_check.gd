@@ -29,11 +29,11 @@ func _initialize() -> void:
 	fails += _check(absf(near.hp - (hn - Balance.HQ_ATK)) < 0.001, "1초가 지나기 전에는 다시 쏘지 않는다")
 	b._towers_turn(0.6)
 	fails += _check(absf(near.hp - (hn - 2.0 * Balance.HQ_ATK)) < 0.001, "1초 뒤에 다시 쏜다")
-	# 병영은 본부 영역 밖에도 지을 수 있고 다른 건물은 못 짓는다 (기획서 5.3)
+	# 병영도 본부 영역 밖에는 못 짓는다 (기획서 5.3)
 	f.territory_enabled = true
 	f.territory.clear()
 	var far_c: Vector2i = Vector2i(11, 6)
-	fails += _check(f.can_build(Balance.BARRACKS, far_c) and not f.can_build(Balance.HOUSE, far_c), "영역 밖: 병영만 가능")
+	fails += _check(not f.can_build(Balance.BARRACKS, far_c) and not f.can_build(Balance.HOUSE, far_c), "영역 밖: 병영도 못 짓는다")
 	# 낚시터 식량은 거리 제한 없이 이어진 바다 전체를 센다 (기획서 5.1)
 	var lf: Field = Field.new()
 	var lp: Piece = Piece.new()

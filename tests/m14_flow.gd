@@ -12,7 +12,6 @@ func _initialize() -> void:
 	var first_ok: bool = main.tiles_required == 0 and main.pieces_left == 0 and not main.panel.visible
 	main._begin_prep() # 첫 준비 단계는 보상이 없으므로 이후 준비 단계로 대신한다
 	gs.gold = 500
-	gs.researched["sail"] = true
 	fails += _check(first_ok, "첫 준비 단계에는 보상 타일이 없다")
 	var g0: int = gs.gold
 	var ruin: Vector2i = Vector2i(99, 99) # 유적지 원정: 항구가 있어야 하고 준비 단계당 1회
@@ -33,7 +32,7 @@ func _initialize() -> void:
 	fails += _check("전투 보상" in main.wave_info.text, "안내 문구: " + main.wave_info.text)
 	# 막히는 것은 건설·강화·웨이브 시작이다. 연구·시장 구매는 가능하다
 	gs.research_points = 1
-	fails += _check(main.research("sail") or gs.has_tech("sail"), "연구는 가능하다")
+	fails += _check(main.research("toolmaking") or gs.has_tech("toolmaking"), "연구는 가능하다")
 	# 2. 타일을 놓으면 풀린다. 건물을 하나 지으면 설치 모드가 끝난다
 	main.pick(0)
 	var placed: bool = false

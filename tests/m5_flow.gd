@@ -12,7 +12,7 @@ func _initialize() -> void:
 	main._begin_prep() # 첫 준비 단계는 보상 타일이 없어 일반 준비 단계로 대신한다
 	main.tiles_required = 0 # 보상 타일 강제 규칙은 m14에서 따로 점검한다
 	gs.gold = 1000
-	gs.researched["trade"] = true # 시장은 교역 연구가 있어야 짓는다
+	gs.researched["math"] = true # 시장은 교역 연구가 있어야 짓는다
 	# 전투를 빠르게 돌려 승리하면 정산·본부 레벨·연구포인트
 	var hq0: Vector2i = main.field.hqs.keys()[0]
 	main.field.hq_food[hq0] = 19 # 정산 식량(평원 칸 수)과 합쳐 기준(5)을 넘게 한다

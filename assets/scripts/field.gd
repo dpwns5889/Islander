@@ -26,7 +26,11 @@ var territory_enabled: bool = false ## true면 건설·생산이 본부 영역 �
 var _terr_rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _terr_nodes: Array[Node] = []
 var hq_lost: int = 0 ## 영구히 잃은 본부 수
+var buildings_lost: Dictionary = {} ## 이번 전투에서 무너진 건물 종류 → 개수(본부 제외). 전투를 시작할 때 비운다 (기획서 5.2)
 var hq_level: Dictionary = {} ## 본부 위치 → 그 본부의 레벨 (본부마다 따로) (기획서 5.3)
+const BAR_W: float = 1.9 ## 본부 레벨업 바 크기 (기획서 5.3)
+const BAR_H: float = 0.42
+var _hq_bars: Dictionary = {} ## 본부 위치 → 레벨업까지 식량 바 [배경, 채움, 글자] (기획서 5.3)
 var hq_food: Dictionary = {} ## 본부 위치 → 그 본부 영역에서 번 식량 누적
 ## 첫 번째 본부 위치 (없으면 (-1, -1))
 var hq: Vector2i:
@@ -117,15 +121,17 @@ func _add_plane(rect: Rect2i, y: float, c: Color) -> void:
 	_frame_nodes.append(mi)
 
 
-func _mat(c: Color, unshaded: bool) -> StandardMaterial3D:
+func _mat(c: Color, unshaded: bool) -> Material:
 	var key: String = "%s%s" % [c, unshaded]
 	if not _mats.has(key):
-		var m: StandardMaterial3D = StandardMaterial3D.new()
-		m.albedo_color = c
 		if unshaded:
+			var m: StandardMaterial3D = StandardMaterial3D.new()
+			m.albedo_color = c
 			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_mats[key] = m
+			_mats[key] = m
+		else:
+			_mats[key] = Toon.material(c) # 3단계 빛 (기획서 7.2)
 	return _mats[key]
 
 
@@ -186,7 +192,7 @@ func claim_start(hq_cell: Vector2i) -> void:
 		territory_of[h].erase(hq_cell)
 	territory_of[hq_cell] = set
 	hq_level[hq_cell] = lvl
-	hq_food[hq_cell] = Balance.HQ_LEVEL_FOOD[lvl - 2] if lvl > 1 else 0
+	hq_food[hq_cell] = Balance.hq_level_food(lvl - 1) if lvl > 1 else 0
 	grow_territory(hq_cell, lvl - 1)
 	_rebuild_territory()
 
@@ -256,7 +262,7 @@ func settle_levels(techs: Dictionary) -> Dictionary:
 	for h in hqs:
 		hq_food[h] = int(hq_food.get(h, 0)) + income(techs, h).y
 		var up: int = 0
-		while hq_level[h] - 1 < Balance.HQ_LEVEL_FOOD.size() and hq_food[h] >= Balance.HQ_LEVEL_FOOD[hq_level[h] - 1]:
+		while hq_food[h] >= Balance.hq_level_food(hq_level[h]):
 			hq_level[h] += 1
 			up += 1
 		if up > 0:
@@ -265,10 +271,66 @@ func settle_levels(techs: Dictionary) -> Dictionary:
 	return ups
 
 
-## 본부의 다음 레벨까지 필요한 식량 누적, 최고 레벨이면 -1
+## 본부의 다음 레벨까지 필요한 식량 누적 (최고 레벨은 없다)
 func next_level_food(h: Vector2i) -> int:
 	var lv: int = hq_level.get(h, 1)
-	return Balance.HQ_LEVEL_FOOD[lv - 1] if lv - 1 < Balance.HQ_LEVEL_FOOD.size() else -1
+	return Balance.hq_level_food(lv)
+
+
+## 본부 옆에 레벨업까지 남은 식량 바를 둔다: 현재 레벨 기준에서 다음 기준까지의 진행도와 "남은 식량" (기획서 5.3)
+func refresh_hq_bars(show: bool = true) -> void:
+	for c in _hq_bars.keys():
+		if not hqs.has(c):
+			for n: Node in _hq_bars[c]:
+				n.queue_free()
+			_hq_bars.erase(c)
+	for c in hqs:
+		if not hq_level.has(c):
+			continue
+		if not _hq_bars.has(c):
+			var label: Label3D = Label3D.new()
+			label.font_size = 64
+			label.pixel_size = 0.0066
+			label.outline_size = 14
+			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED # 카메라가 기울어도 바는 항상 화면을 향한다
+			label.no_depth_test = true
+			label.render_priority = 14
+			label.layers = PixelView.LABEL_LAYER # 글자는 원래 해상도 화면에 그린다 (기획서 7.2)
+			add_child(label)
+			_hq_bars[c] = [_bar_quad(Color(0.05, 0.05, 0.07), BAR_W + 0.08, BAR_H + 0.08, 10), _bar_quad(Color(0.28, 0.28, 0.32), BAR_W, BAR_H, 11), _bar_quad(Color(0.35, 0.9, 0.35), BAR_W, BAR_H, 12), label]
+		var lv: int = hq_level[c]
+		var nxt: int = next_level_food(c)
+		var prev: int = Balance.hq_level_food(lv - 1) if lv > 1 else 0
+		var ratio: float = clampf(float(int(hq_food.get(c, 0)) - prev) / float(nxt - prev), 0.0, 1.0)
+		var text: String = "Lv%d · 남은 %d" % [lv, nxt - int(hq_food.get(c, 0))]
+		var base: Vector3 = cell_to_world(c) + Vector3(0.0, BLOCK_H + 0.9, -1.1) # 본부 위쪽 (기획서 5.3)
+		var bars: Array = _hq_bars[c]
+		(bars[0] as MeshInstance3D).position = base
+		(bars[1] as MeshInstance3D).position = base
+		(bars[2] as MeshInstance3D).scale = Vector3(maxf(ratio, 0.001), 1.0, 1.0)
+		(bars[2] as MeshInstance3D).position = base + Vector3(-BAR_W * 0.5 * (1.0 - ratio), 0.0, 0.0)
+		(bars[3] as Label3D).text = text
+		(bars[3] as Label3D).position = base
+		for n: Node3D in bars:
+			n.visible = show # 전투 중에는 숨긴다 (기획서 5.3)
+
+
+## 카메라를 향하는 평면 사각형 (본부 바용)
+func _bar_quad(color: Color, w: float, h: float, priority: int) -> MeshInstance3D:
+	var mi: MeshInstance3D = MeshInstance3D.new()
+	var qm: QuadMesh = QuadMesh.new()
+	qm.size = Vector2(w, h)
+	mi.mesh = qm
+	var m: StandardMaterial3D = StandardMaterial3D.new()
+	m.albedo_color = color
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+	m.billboard_keep_scale = true
+	m.no_depth_test = true
+	m.render_priority = priority
+	mi.material_override = m
+	add_child(mi)
+	return mi
 
 
 ## 합집합을 다시 만들고, 바깥 경계선만 그린다: 영역이 겹치면 경계가 이어진다 (문명5 방식) (기획서 5.3)
@@ -474,10 +536,14 @@ func _next_to_sea(c: Vector2i) -> bool:
 ## 땅이고 비어 있으며, 지형·인접 바다 조건을 만족해야 한다 (기획서 3장, 5장)
 func can_build(id: int, c: Vector2i) -> bool:
 	var data: Dictionary = Balance.BUILDINGS[id]
-	if not in_territory(c) and not data.get("any_territory", false): # 건설은 본부 영역 안에서만, 병영은 예외 (기획서 5.3)
+	if not in_territory(c): # 건설은 본부 영역 안에서만 (기획서 5.3)
 		return false
-	if data.get("on_water", false): # 낚시터: 필드 안의 물 위, 땅과 닿은 칸 (기획서 5.1)
-		return bounds.has_point(c) and not cells.has(c) and not buildings.has(c) and _next_to_land(c)
+	if data.get("on_water", false): # 낚시터·교역소: 필드 안의 물 위, 땅과 닿은 칸 (교역소는 열린 바다, 1개만) (기획서 5.1, 5.6)
+		if not (bounds.has_point(c) and not cells.has(c) and not buildings.has(c) and _next_to_land(c)):
+			return false
+		if data.get("unique", false) and buildings.values().has(id):
+			return false
+		return not data.get("open_sea", false) or is_open_sea(c)
 	if not cells.has(c) or hqs.has(c) or buildings.has(c):
 		return false
 	if cells[c] == Piece.SAND and not data["sand"]:
@@ -521,7 +587,12 @@ func is_open_sea(c: Vector2i) -> bool:
 
 ## 교역소처럼 열린 바다와 맞닿아야 하는 건물이 지금도 맞닿아 있는지 (기획서 5.6)
 func is_post_open(c: Vector2i) -> bool:
-	return _next_to_open_sea(c)
+	return _post_open(c)
+
+
+## 물 위 교역소는 자기 칸이, 땅 위라면 이웃 바다가 열린 바다인지
+func _post_open(c: Vector2i) -> bool:
+	return is_open_sea(c) if not cells.has(c) else _next_to_open_sea(c)
 
 
 ## 조각 p를 origin에 놓으면 교역소(c)가 열린 바다와 끊기는지 미리 계산한다. 끊기면 false (기획서 5.6)
@@ -538,7 +609,7 @@ func post_open_after(c: Vector2i, p: Piece, origin: Vector2i) -> bool:
 			cells[cell] = p.terrain[i]
 			added.append(cell)
 	_ver += 1
-	var open: bool = _next_to_open_sea(c)
+	var open: bool = _post_open(c)
 	for cell in added:
 		cells.erase(cell)
 	for cell in carved:
@@ -575,7 +646,7 @@ func fishing_cells(c: Vector2i) -> int:
 
 
 func fishing_food(c: Vector2i) -> int:
-	return Balance.fishing_food(fishing_cells(c), levels.get(c, 1))
+	return Balance.fishing_food(fishing_cells(c), levels.get(c, 1), buildings.get(c, Balance.FISHERY))
 
 
 ## 교역소 위치, 없으면 (-1, -1)
@@ -602,6 +673,14 @@ func upgrade(c: Vector2i) -> void:
 	_tint(c)
 
 
+## 레벨 3 건물을 진화 건물 to로 바꾼다: 새 건물 레벨 1에서 시작한다 (기획서 5.2.1)
+func evolve(c: Vector2i, to: int) -> void:
+	for n: Node in _nodes[c]:
+		n.queue_free()
+	_nodes.erase(c)
+	build(to, c, 1)
+
+
 func _label_text(c: Vector2i) -> String:
 	var name: String = Balance.BUILDINGS[buildings[c]]["name"]
 	return name.left(1) + (str(levels[c]) if levels[c] > 1 else "")
@@ -613,20 +692,29 @@ func build(id: int, c: Vector2i, level: int = 1) -> void:
 	var data: Dictionary = Balance.BUILDINGS[id]
 	hp[c] = max_hp(c)
 	var mi: MeshInstance3D = MeshInstance3D.new()
-	var bm: BoxMesh = BoxMesh.new()
-	bm.size = Vector3(0.6, 0.5, 0.6)
-	mi.mesh = bm
-	mi.material_override = StandardMaterial3D.new()
 	var base_y: float = BLOCK_H if cells.has(c) else 0.0 # 물 위 건물은 바다 면에 놓인다
-	mi.position = cell_to_world(c) + Vector3(0, base_y + 0.25, 0)
+	var body_h: float = 0.5 # 본체 높이(글자를 이 위에 둔다)
+	if data.has("model"): # 블렌더 모델: 원점이 바닥 가운데 (기획서 7.2)
+		var md: Dictionary = Toon.model(data["model"])
+		mi.mesh = md["mesh"]
+		mi.material_override = Toon.material(Color.WHITE, md["tex"])
+		mi.position = cell_to_world(c) + Vector3(0, base_y, 0)
+		body_h = data["model_height"]
+	else:
+		var bm: BoxMesh = BoxMesh.new()
+		bm.size = Vector3(0.72, 0.62, 0.72) if Balance.is_evolved(id) else Vector3(0.6, 0.5, 0.6) # 진화 건물은 더 크게 (기획서 5.2.1)
+		mi.mesh = bm
+		mi.material_override = Toon.material(Color.WHITE)
+		mi.position = cell_to_world(c) + Vector3(0, base_y + 0.25, 0)
 	add_child(mi)
 	var label: Label3D = Label3D.new()
 	label.text = _label_text(c)
 	label.font_size = 96
 	label.pixel_size = 0.006
 	label.outline_size = 16
+	label.layers = PixelView.LABEL_LAYER
 	label.rotation_degrees = Vector3(-90, 0, 0)
-	label.position = cell_to_world(c) + Vector3(0, base_y + 0.52, 0)
+	label.position = cell_to_world(c) + Vector3(0, base_y + body_h + 0.02, 0)
 	add_child(label)
 	_nodes[c] = [mi, label]
 	_tint(c)
@@ -640,10 +728,10 @@ func _tint(c: Vector2i) -> void:
 		ratio = hqs[c] / Balance.HQ_HP
 	else:
 		var data: Dictionary = Balance.BUILDINGS[buildings[c]]
-		base = data["color"]
+		base = Color.WHITE if data.has("model") else data["color"] # 모델은 팔레트 색에 곱한다
 		ratio = hp[c] / max_hp(c)
 	var mi: MeshInstance3D = _nodes[c][0]
-	(mi.material_override as StandardMaterial3D).albedo_color = base.lerp(Color.BLACK, (1.0 - ratio) * 0.7)
+	Toon.set_color(mi.material_override, base.lerp(Color.BLACK, (1.0 - ratio) * 0.7))
 
 
 ## 적이 노리는 칸: 건물과 살아 있는 본부
@@ -678,6 +766,7 @@ func damage(c: Vector2i, amount: float) -> bool:
 			for n: Node in _nodes[c]:
 				n.queue_free()
 			_nodes.erase(c)
+			buildings_lost[buildings[c]] = int(buildings_lost.get(buildings[c], 0)) + 1
 			buildings.erase(c)
 			hp.erase(c)
 			levels.erase(c)
@@ -852,26 +941,34 @@ func research_income(techs: Dictionary = {}) -> int:
 func income(techs: Dictionary = {}, owner: Vector2i = Vector2i(-999, -999)) -> Vector2i:
 	var gold: float = 0.0
 	var food: float = 0.0
-	var house_mult: float = 1.2 if techs.has("commerce") else 1.0
-	var farm_mult: float = 1.0 + (0.3 if techs.has("tools") else 0.0) + (0.5 if techs.has("harvest") else 0.0)
+	var house_mult: float = 1.2 if techs.has("math") else 1.0
+	var farm_mult: float = 1.0 + (0.3 if techs.has("tools") else 0.0) + (0.5 if techs.has("windmill") else 0.0)
 	for c in buildings:
 		if not _counts(c, owner): # 영역 밖 건물은 생산하지 않는다 (기획서 5.3)
 			continue
-		if buildings[c] == Balance.HOUSE:
-			gold += Balance.house_gold(levels[c], cells[c] == Piece.SAND) * (house_mult + _market_bonus(c))
+		if buildings[c] == Balance.HOUSE or buildings[c] == Balance.MANSION:
+			gold += Balance.house_gold(levels[c], cells[c] == Piece.SAND, buildings[c]) * (house_mult + _market_bonus(c))
 		elif buildings[c] == Balance.MINE:
 			gold += Balance.MINE_GOLD_LV[levels[c] - 1]
+		elif buildings[c] == Balance.SMELTER:
+			gold += Balance.SMELTER_GOLD_LV[levels[c] - 1]
 		elif buildings[c] == Balance.FARM:
 			food += Balance.FARM_FOOD_LV[levels[c] - 1] * farm_mult
-		elif buildings[c] == Balance.FISHERY:
+		elif buildings[c] == Balance.FARMSTEAD:
+			food += Balance.FARMSTEAD_FOOD_LV[levels[c] - 1] * farm_mult
+		elif buildings[c] == Balance.FISHERY or buildings[c] == Balance.FISH_VILLAGE:
 			food += fishing_food(c)
-	var per_plain: float = Balance.FOOD_PER_PLAINS * (1.5 if techs.has("irrigation") else 1.0)
+	var per_plain: float = Balance.FOOD_PER_PLAINS * (1.5 if techs.has("waterwheel") else 1.0)
 	var plains: int = 0
 	for c in cells:
 		if cells[c] == Piece.PLAINS and _counts(c, owner):
 			plains += 1
 	food += plains * per_plain
 	gold += Balance.HQ_BASE_GOLD * (hqs.size() if owner.x == -999 else 1) # 살아 있는 본부마다 기본 골드 (기획서 5.1)
+	if techs.has("toolmaking"):
+		food += Balance.TOOLMAKING_FOOD
+	if techs.has("currency"):
+		gold *= Balance.CURRENCY_GOLD_MULT
 	return Vector2i(floori(gold), floori(food))
 
 
@@ -915,7 +1012,7 @@ func place(p: Piece, origin: Vector2i) -> void:
 			var bm: BoxMesh = BoxMesh.new()
 			bm.size = Vector3(0.5, 0.6, 0.5)
 			marker.mesh = bm
-			marker.material_override = StandardMaterial3D.new()
+			marker.material_override = Toon.material(Color.WHITE)
 			marker.position = cell_to_world(cell) + Vector3(0, BLOCK_H + 0.3, 0)
 			add_child(marker)
 			_nodes[cell] = [marker]

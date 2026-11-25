@@ -54,7 +54,8 @@ func _initialize() -> void:
 		main.tiles_required = 0
 		var gs1: Node = root.get_node("GameState")
 		gs1.gold = 300
-		gs1.researched["trade"] = true
+		gs1.researched["math"] = true
+		gs1.researched["commerce"] = true
 		if args[2] == "npc":
 			main.set_build(Balance.TRADING_POST)
 			for c in main.field.cells:
@@ -101,7 +102,7 @@ func _initialize() -> void:
 	var isl: Dictionary = f.island_map()
 	var hq_island: int = isl[f.hq]
 	root.get_node("GameState").gold = 1000
-	for t in ["sail", "trade", "archery"]:
+	for t in ["math", "archery"]:
 		root.get_node("GameState").researched[t] = true
 	root.get_node("GameState").research_points = 3
 	main.set_build(Balance.PORT)
@@ -130,6 +131,7 @@ func _initialize() -> void:
 		if args.size() > 3 and args[3] == "research":
 			root.get_node("GameState").research_points = 2
 			main._toggle_research()
+			main.select_tech("astronomy")
 	else:
 		main.start_wave()
 		for c in isl:

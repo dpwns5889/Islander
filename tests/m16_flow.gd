@@ -11,14 +11,16 @@ func _initialize() -> void:
 	main.place_current(Vector2i(9, 7))
 	main.tiles_required = 0
 	gs.gold = 1000
-	gs.researched["trade"] = true
+	gs.researched["math"] = true
+	gs.researched["commerce"] = true
 	# 교역소를 열린 바다 옆에 짓는다
 	main.set_build(Balance.TRADING_POST)
 	var post: Vector2i = Vector2i(-1, -1)
-	for c in main.field.cells:
-		if main.try_build(c):
-			post = c
-			break
+	var bb: Rect2i = main.field.bounds # 교역소는 물 위에 짓는다
+	for y in range(bb.position.y, bb.end.y):
+		for x in range(bb.position.x, bb.end.x):
+			if post.x < 0 and main.try_build(Vector2i(x, y)):
+				post = Vector2i(x, y)
 	fails += _check(post.x >= 0 and main.npc_next_wave == 2, "교역소 설치, 2웨이브에 방문 예정")
 	# 미리보기 경고: 교역소의 열린 이웃 바다를 전부 막는 타일은 경고
 	var open_neighbors: Array[Vector2i] = []

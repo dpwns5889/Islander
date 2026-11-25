@@ -30,6 +30,11 @@ const SHAPES: Array = [
 	[Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3), Vector2i(0, 4), Vector2i(1, 4)], # L6
 	SEVEN,
 ]
+## 바다 타일용 3칸 모양: 일자, ㄱ자
+const SEA_SHAPES_3: Array = [
+	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)],
+	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)],
+]
 ## 평원 위주 / 모래 위주 / 반반 (모래가 될 확률)
 const SAND_CHANCE: Array[float] = [0.15, 0.85, 0.5]
 
@@ -39,6 +44,8 @@ var hq_index: int = -1 ## 본부가 올라가는 칸 번호, 없으면 -1
 
 
 static func random_piece(rng: RandomNumberGenerator, with_sea: bool = false) -> Piece:
+	if with_sea and rng.randf() < Balance.SEA_TILE_CHANCE:
+		return sea_piece(rng)
 	var p: Piece = Piece.new()
 	p.cells.assign(SHAPES[rng.randi() % SHAPES.size()])
 	var sand: float = SAND_CHANCE[rng.randi() % SAND_CHANCE.size()]
@@ -50,19 +57,17 @@ static func random_piece(rng: RandomNumberGenerator, with_sea: bool = false) -> 
 			specials += 1
 	for _k in specials:
 		p.terrain[rng.randi() % p.cells.size()] = MOUNTAIN if rng.randf() < Balance.MOUNTAIN_SHARE else FOREST
-	if with_sea and rng.randf() < Balance.SEA_TILE_CHANCE:
-		# 4~5칸은 바다 1칸, 6~7칸은 1~2칸. 땅은 항상 3칸 이상 남는다
-		var k: int = 1 if p.cells.size() <= 5 else 1 + rng.randi() % 2
-		var idx: Array[int] = []
-		for i in p.cells.size():
-			idx.append(i)
-		for i in range(idx.size() - 1, 0, -1):
-			var j: int = rng.randi() % (i + 1)
-			var tmp: int = idx[i]
-			idx[i] = idx[j]
-			idx[j] = tmp
-		for i in k:
-			p.terrain[idx[i]] = SEA
+	return p
+
+
+## 온전히 바다 칸만 있는 3~5칸 조각 (기획서 4장)
+static func sea_piece(rng: RandomNumberGenerator) -> Piece:
+	var n: int = 3 + rng.randi() % 3
+	var shapes: Array = SEA_SHAPES_3 if n == 3 else SHAPES.filter(func(s: Array) -> bool: return s.size() == n)
+	var p: Piece = Piece.new()
+	p.cells.assign(shapes[rng.randi() % shapes.size()])
+	for _c in p.cells:
+		p.terrain.append(SEA)
 	return p
 
 

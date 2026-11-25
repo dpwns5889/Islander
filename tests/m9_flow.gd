@@ -11,21 +11,16 @@ func _initialize() -> void:
 	main.place_current(Vector2i(9, 7))
 	main.tiles_required = 0 # 보상 타일 강제 규칙은 m14에서 따로 점검한다
 	gs.gold = 1000
-	# 항구는 연구 전에는 못 짓는다
+	# 항구는 연구 없이 처음부터 짓는다
 	main.set_build(Balance.PORT)
 	var built: bool = false
-	for c in main.field.cells:
-		built = built or main.try_build(c)
-	fails += _check(not built and not main.field.buildings.values().has(Balance.PORT), "항해술 없이는 항구 건설 불가")
-	gs.research_points = 40
-	fails += _check(not main.research("ship") and not main.research("sail"), "선행 연구 없이 조선술·항해술 불가")
-	fails += _check(main.research("mining") and main.research("sail") and gs.research_points == 37, "채광 → 항해술 연구")
-	main.set_build(Balance.PORT)
 	for c in main.field.cells:
 		if main.try_build(c):
 			built = true
 			break
-	fails += _check(built and main.field.buildings.values().has(Balance.PORT), "연구 뒤에는 항구를 지을 수 있다")
+	fails += _check(built and main.field.buildings.values().has(Balance.PORT), "항구는 연구 없이 지을 수 있다")
+	gs.research_points = 40
+	fails += _check(not main.research("mining") and main.research("toolmaking") and main.research("mining") and gs.research_points == 38, "도구 → 채광 연구")
 	# 철기 제작 전에는 병영 레벨 3 강화를 못 한다
 	main.set_build(Balance.BARRACKS)
 	var barracks: Vector2i = Vector2i(-1, -1)
@@ -37,14 +32,16 @@ func _initialize() -> void:
 	gs.gold = 1000
 	fails += _check(main.select_building(barracks) and main.upgrade_selected(), "병영 레벨 2 강화")
 	fails += _check(not main.upgrade_selected(), "철기 제작 전에는 레벨 3 강화 불가")
-	fails += _check(main.research("tools") and main.research("ironwork") and main.upgrade_selected() and main.field.levels[barracks] == 3, "철기 제작 뒤에는 레벨 3 강화")
-	# 금융: 건설 비용 할인
-	fails += _check(main.research("trade") and main.research("commerce") and main.research("finance"), "농기구·교역·상업·금융 연구")
-	main.set_build(Balance.HOUSE)
-	fails += _check(main._cost_of(Balance.HOUSE) == 17, "금융: 집 20 → 17골드")
+	fails += _check(main.research("ironwork") and main.upgrade_selected() and main.field.levels[barracks] == 3, "철기 제작 뒤에는 레벨 3 강화")
+	# 공학: 레벨업 비용 할인, 건설비는 그대로
+	fails += _check(main.research("tools") and main.research("waterwheel") and main.research("engineering"), "농기구·물레방아·공학 연구")
+	fails += _check(main._cost_of(Balance.HOUSE) == 20 and gs.upgrade_discounted(20) == 16, "공학: 건설 20, 레벨업 20 → 16골드")
+	fails += _check(main.research("math") and main.research("currency") and main.research("commerce"), "수학·화폐·상업 연구")
 	main.set_build(0)
 	main._toggle_research()
 	fails += _check(main.research_panel.visible, "연구 패널이 열린다")
+	main.select_tech("tools")
+	fails += _check(main.selected_tech == "tools" and Balance.TECHS["tools"]["desc"] in main.tech_detail.text and Balance.TECHS["tools"]["desc"] not in main.research_buttons["tools"].text, "연구를 고르면 상세 창에 효과, 트리 버튼에는 효과 없음")
 	main._toggle_research()
 	fails += _check(not main.research_panel.visible, "연구 패널이 닫힌다")
 	# 전투를 돌리면 연구 효과(단련, 상업)가 적용된 채로 끝난다

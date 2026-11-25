@@ -12,7 +12,7 @@ func _initialize() -> void:
 	main.tiles_required = 0
 	gs.gold = 1000
 	# 군사·해상 카테고리에 방어탑이 있다
-	fails += _check(main.dropdown_lists[1].get_child_count() == 4 and main.build_buttons.has(Balance.TOWER) and main.build_buttons.has(Balance.SHOOTING_RANGE), "군사·해상 목록: 병영·사격장·항구·방어탑")
+	fails += _check(main.dropdown_lists[1].get_child_count() == 5 and main.build_buttons.has(Balance.TOWER) and main.build_buttons.has(Balance.SHOOTING_RANGE), "군사·해상 목록: 병영·사격장·항구·방어탑·요새")
 	main._toggle_category(1)
 	var wall: Vector2i = Vector2i(-1, -1) # 방어탑을 지을 땅 칸
 	for c in main.field.cells:
@@ -23,7 +23,7 @@ func _initialize() -> void:
 	main.set_build(Balance.TOWER)
 	fails += _check(not main._build_ok(wall) and main.build_buttons[Balance.TOWER].disabled, "궁술 전에는 방어탑 잠김")
 	gs.research_points = 5
-	fails += _check(main.research("archery"), "궁술 연구")
+	fails += _check(main.research("toolmaking") and main.research("archery"), "궁술 연구")
 	main._refresh_hud()
 	fails += _check(not main.build_buttons[Balance.TOWER].disabled, "궁술 뒤에는 방어탑 해금")
 	main.set_build(Balance.TOWER)
@@ -33,7 +33,7 @@ func _initialize() -> void:
 	# 적 예고: 종류별 인원과 새 적 안내
 	gs.wave = 5
 	main._refresh_hud()
-	fails += _check("석궁수 1명 · 해적 3명" in main.wave_info.text and "새 적: 석궁수 (체력 18 · 공격 3 · 사거리 1.8칸)" in main.wave_info.text, "5웨이브 예고: " + main.wave_info.text)
+	fails += _check("전투력 4" in main.wave_info.text and "석궁수" in main.wave_info.text and "새 적: 석궁수 (체력 18 · 공격 3 · 사거리 1.8칸)" in main.wave_info.text, "5웨이브 예고: " + main.wave_info.text)
 	gs.wave = 6
 	main._refresh_hud()
 	fails += _check("새 적" not in main.wave_info.text, "6웨이브에는 새 적 안내가 없다")
@@ -42,7 +42,7 @@ func _initialize() -> void:
 	fails += _check("선장 1명" in main.wave_info.text and "새 적: 선장" in main.wave_info.text, "10웨이브 예고(보스): " + main.wave_info.text)
 	gs.wave = 12
 	main._refresh_hud()
-	fails += _check("방패병 1명 · 도끼병 3명 · 석궁수 2명 · 해적 5명" in main.wave_info.text and "새 적: 방패병" in main.wave_info.text, "12웨이브 예고: " + main.wave_info.text)
+	fails += _check("방패병" in main.wave_info.text and "전투력 %d" % Balance.wave_budget(12) in main.wave_info.text and "새 적: 방패병" in main.wave_info.text, "12웨이브 예고: " + main.wave_info.text)
 	# 전투에서 방어탑이 적을 공격하고 웨이브가 끝까지 돈다 (방어탑 포함)
 	gs.wave = 3
 	main.start_wave()

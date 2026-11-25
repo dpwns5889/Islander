@@ -4,63 +4,71 @@ extends SceneTree
 
 func _initialize() -> void:
 	var fails: int = 0
-	# 1. 적 수 곡선: 기준점, 단조 증가, 곡선(아래로 볼록)
-	var want: Array[int] = [2, 2, 2, 3, 4, 5, 6, 7, 8, 9]
-	for i in want.size():
-		fails += _check(Balance.pirate_count(i + 1) == want[i], "웨이브 %d: %d명 (%d)" % [i + 1, want[i], Balance.pirate_count(i + 1)])
-	fails += _check(Balance.pirate_count(15) == 15 and Balance.pirate_count(20) == 22 and Balance.pirate_count(25) == 29 and Balance.pirate_count(30) == 36, "15/20/25/30웨이브: 15/22/29/36명")
+	# 1. 예산 곡선: 기준점, 단조 증가(보스 라운드의 선장은 따로)
 	var mono: bool = true
 	for n in range(1, 41):
-		mono = mono and Balance.pirate_count(n + 1) >= Balance.pirate_count(n)
-	fails += _check(mono, "웨이브가 오를수록 줄지 않는다")
-	fails += _check(Balance.pirate_count(30) - Balance.pirate_count(20) > Balance.pirate_count(10) - Balance.pirate_count(1), "뒤로 갈수록 가파르다(곡선)")
+		mono = mono and Balance.wave_budget(n + 1) >= Balance.wave_budget(n)
+	fails += _check(mono, "웨이브가 오를수록 총 전투력이 줄지 않는다")
+	fails += _check(Balance.wave_budget(1) == 2 and Balance.wave_budget(10) == 12 and Balance.wave_budget(30) == 110, "예산 기준점 2/12/110")
+	fails += _check(Balance.wave_budget(30) - Balance.wave_budget(20) > Balance.wave_budget(10) - Balance.wave_budget(1), "뒤로 갈수록 가파르다(곡선)")
+	var same: bool = true
+	for n in range(1, 41):
+		same = same and Balance.enemy_composition(n, 7) == Balance.enemy_composition(n, 7) and Balance.wave_power(n, 7) == Balance.wave_budget(n) + Balance.CAPTAINS.get(n, 0) * 8
+	fails += _check(same, "같은 시드·웨이브는 같은 구성, 총 전투력 = 예산(+선장)")
+	var differs: bool = false
+	for sd in range(1, 30):
+		differs = differs or Balance.enemy_composition(15, sd) != Balance.enemy_composition(15, 0)
+	fails += _check(differs, "시드가 다르면 구성이 달라진다")
 	# 2. 구성: 합계, 선장은 보스 라운드만, 새 종류는 정해진 웨이브부터
 	var comp_ok: bool = true
 	for n in range(1, 41):
-		var comp: Dictionary = Balance.enemy_composition(n)
+		var comp: Dictionary = Balance.enemy_composition(n, 3)
 		var total: int = 0
 		for k in comp:
 			total += comp[k]
 			if Balance.ENEMY_FIRST_WAVE.has(k) and n < Balance.ENEMY_FIRST_WAVE[k]:
 				comp_ok = false
-		comp_ok = comp_ok and total == Balance.pirate_count(n)
+		comp_ok = comp_ok and total == Balance.pirate_count(n, 3)
 	fails += _check(comp_ok, "모든 웨이브: 구성 합계 = 적 수, 새 종류는 첫 등장 웨이브부터")
 	var caps: Array[int] = []
 	for n in range(1, 41):
-		caps.append(Balance.enemy_composition(n).get(Balance.U_CAPTAIN, 0))
+		caps.append(Balance.enemy_composition(n, 3).get(Balance.U_CAPTAIN, 0))
 	fails += _check(caps[9] == 1 and caps[19] == 2 and caps[29] == 2, "선장: 10웨이브 1, 20웨이브 2, 30웨이브 2")
 	var other_caps: int = 0
 	for n in range(1, 41):
 		if n != 10 and n != 20 and n != 30:
 			other_caps += caps[n - 1]
 	fails += _check(other_caps == 0, "보스 라운드가 아니면 선장이 없다")
-	fails += _check(Balance.enemy_composition(5) == {Balance.U_CROSSBOW: 1, Balance.U_PIRATE: 3}, "5웨이브: 석궁수 1 + 해적 3")
-	fails += _check(Balance.enemy_composition(12) == {Balance.U_SHIELD: 1, Balance.U_AXE: 3, Balance.U_CROSSBOW: 2, Balance.U_PIRATE: 5}, "12웨이브: 방패병 1 · 도끼병 3 · 석궁수 2 · 해적 5")
+	var c5: Dictionary = Balance.enemy_composition(5, 3)
+	fails += _check(c5.get(Balance.U_CROSSBOW, 0) >= 1 and not c5.has(Balance.U_AXE), "5웨이브: 신규 석궁수가 1명 이상, 도끼병은 아직 없음")
+	var c12: Dictionary = Balance.enemy_composition(12, 3)
+	fails += _check(c12.get(Balance.U_SHIELD, 0) >= 1 and c12.get(Balance.U_AXE, 0) >= 1, "12웨이브: 방패병·도끼병 포함")
 	fails += _check(Balance.new_enemy_kinds(5) == [Balance.U_CROSSBOW] and Balance.new_enemy_kinds(8) == [Balance.U_AXE] and Balance.new_enemy_kinds(10) == [Balance.U_CAPTAIN] and Balance.new_enemy_kinds(12) == [Balance.U_SHIELD] and Balance.new_enemy_kinds(6).is_empty(), "새 적 등장 웨이브")
 	# 갈수록 강하다: 적 전체 체력 합
 	var hp_sum: Callable = func(n: int) -> float:
 		var t: float = 0.0
-		var cmp: Dictionary = Balance.enemy_composition(n)
+		var cmp: Dictionary = Balance.enemy_composition(n, 3)
 		for k in cmp:
 			t += float(Balance.UNITS[k]["hp"]) * cmp[k]
 		return t
 	fails += _check(hp_sum.call(4) < hp_sum.call(10) and hp_sum.call(10) < hp_sum.call(20) and hp_sum.call(20) < hp_sum.call(30), "적 전체 체력이 웨이브마다 늘어난다")
-	var avg4: float = hp_sum.call(4) / Balance.pirate_count(4)
-	var avg30: float = hp_sum.call(30) / Balance.pirate_count(30)
-	fails += _check(avg30 > avg4 * 2.5, "한 명당 평균 체력도 크게 늘어난다 (%.0f → %.0f)" % [avg4, avg30])
+	var avg4: float = hp_sum.call(4) / Balance.pirate_count(4, 3)
+	var avg30: float = hp_sum.call(30) / Balance.pirate_count(30, 3)
+	fails += _check(avg30 > avg4 * 1.5, "한 명당 평균 체력도 크게 늘어난다 (%.0f → %.0f)" % [avg4, avg30])
 	# 3. 능력치
-	var stats: Dictionary = {Balance.U_CROSSBOW: [18.0, 3.0, 1.1, 1.8], Balance.U_AXE: [50.0, 4.0, 1.2, 0.7], Balance.U_SHIELD: [100.0, 2.5, 0.9, 0.7], Balance.U_CAPTAIN: [350.0, 6.0, 1.1, 0.7]}
+	var stats: Dictionary = {Balance.U_CROSSBOW: [18.0, 3.0, 1.1, 1.8], Balance.U_AXE: [40.0, 4.0, 1.2, 0.7], Balance.U_SHIELD: [100.0, 2.0, 0.9, 0.7], Balance.U_CAPTAIN: [80.0, 5.0, 1.1, 0.7]}
 	var stats_ok: bool = true
 	for k in stats:
 		var u: Dictionary = Balance.UNITS[k]
 		stats_ok = stats_ok and u["hp"] == stats[k][0] and u["atk"] == stats[k][1] and u["speed"] == stats[k][2] and u["reach"] == stats[k][3]
 	fails += _check(stats_ok, "적 능력치 표")
 	# 4. 배: 강한 적이 먼저 타고, 합치면 구성과 같다
-	var q: Array[int] = Balance.enemy_queue(12)
+	var q: Array[int] = Balance.enemy_queue(12, 0)
 	fails += _check(q[0] == Balance.U_SHIELD and q[q.size() - 1] == Balance.U_PIRATE, "대기열: 강한 적이 먼저")
-	fails += _check(Balance.enemy_queue(10)[0] == Balance.U_CAPTAIN, "보스 라운드는 선장이 먼저")
+	fails += _check(Balance.enemy_queue(10, 0)[0] == Balance.U_CAPTAIN, "보스 라운드는 선장이 먼저")
 	var island: Field = _island(5, 5)
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
+	gs.run_seed = 0
 	var b: Battle = Battle.new()
 	b.setup(island, gs, 12)
 	b.rng.seed = 3
@@ -78,7 +86,7 @@ func _initialize() -> void:
 	var counted: Dictionary = {}
 	for key in kinds:
 		counted[kinds[key]] = int(counted.get(kinds[key], 0)) + 1
-	fails += _check(counted == Balance.enemy_composition(12) and first_ship_first == Balance.U_SHIELD, "12웨이브 배에 실린 적 = 구성, 첫 배 맨 앞은 방패병 (%s)" % str(counted))
+	fails += _check(counted == Balance.enemy_composition(12, 0) and first_ship_first == Balance.U_SHIELD, "12웨이브 배에 실린 적 = 구성, 첫 배 맨 앞은 방패병 (%s)" % str(counted))
 	# 석궁수는 3.5칸 거리에서 쏜다
 	var cb: Battle = Battle.new()
 	cb.setup(_island(5, 5), load("res://assets/scripts/game_state.gd").new(), 1)

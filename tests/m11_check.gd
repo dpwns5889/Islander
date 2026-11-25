@@ -4,13 +4,11 @@ extends SceneTree
 
 func _initialize() -> void:
 	var fails: int = 0
-	# 해적 수: 최소 2명(한 명짜리 배 없음), 1·2웨이브 2, 3웨이브 2, 4웨이브 3, 이후 n-1
-	var want: Array[int] = [2, 2, 2, 3, 4, 5, 6, 7, 8, 9]
-	for i in want.size():
-		fails += _check(Balance.pirate_count(i + 1) == want[i], "웨이브 %d: 해적 %d명 (%d)" % [i + 1, want[i], Balance.pirate_count(i + 1)])
-	fails += _check(Balance.pirate_count(30) == 36 and Balance.pirate_count(20) == 22, "30웨이브 36명, 20웨이브 22명")
-	# 해적선은 한 척에 최대 3명
-	fails += _check(Balance.ship_count(1) == 1 and Balance.ship_count(4) == 1 and Balance.ship_count(5) == 2 and Balance.ship_count(10) == 3, "해적선 수: 1/1/2/3")
+	# 총 전투력(예산): 구성의 점수 합이 예산(보스 라운드는 + 선장)과 같고, 최소 2명
+	for w in [1, 4, 5, 9, 12, 20, 30]:
+		var expect: int = Balance.wave_budget(w) + Balance.CAPTAINS.get(w, 0) * Balance.ENEMY_POWER[Balance.U_CAPTAIN]
+		fails += _check(Balance.wave_power(w) == expect and Balance.pirate_count(w) >= 2, "웨이브 %d: 전투력 %d (예산 %d)" % [w, Balance.wave_power(w), expect])
+	fails += _check(Balance.ship_count(1) == 1 and Balance.ship_count(4) == 1, "해적선 수: 1·4웨이브 1척")
 	# 실제 전투에서 태운 해적 합계가 웨이브 해적 수와 같다 (5웨이브는 2명 + 2명)
 	for wave in [1, 3, 4, 5, 8, 11]:
 		var crews: Array[int] = _crews(wave)
@@ -35,6 +33,7 @@ func _crews(wave: int) -> Array[int]:
 	p.hq_index = 12
 	f.place(p, Vector2i(4, 4))
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
+	gs.run_seed = 0
 	var b: Battle = Battle.new()
 	b.setup(f, gs, wave)
 	b.rng.seed = 2

@@ -20,6 +20,8 @@ var path: Array[Vector2i] = []
 var repath: float = 0.0
 var island: int = -1
 var crossing: bool = false ## 바닷길이 막혀 바다를 걸어 건너는 해적 (기획서 6장)
+var home: Vector2i = Vector2i(-1, -1) ## 병사가 지키는 집 칸: 태어난 건물, 이동 명령으로 도착한 칸 (기획서 6장)
+var leash: float = 4.0 ## 집에서 수비하는 반경(칸)
 var order: Vector2i = Vector2i(-1, -1) ## 플레이어가 클릭해 내린 이동 명령 칸, 없으면 (-1, -1) (기획서 6장)
 ## 병사: 보트를 기다리는 중인지, 어느 항구에서, 어디로 가려는지
 var waiting: bool = false
@@ -49,8 +51,7 @@ func setup(k: int, mult: float) -> void:
 	speed = d["speed"]
 	reach = d["reach"]
 	ranged = d.get("ranged", false)
-	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = d["color"]
+	var mat: ShaderMaterial = Toon.material(d["color"])
 	var mi: MeshInstance3D = MeshInstance3D.new()
 	if k == Balance.U_SHIP or k == Balance.U_BOAT:
 		var bm: BoxMesh = BoxMesh.new()

@@ -48,8 +48,8 @@ func setup(f: Field, g: Node, w: int) -> void:
 	enemy_nav = f.nav(false, true)
 	sea_nav = f.nav(true)
 	islands = f.island_map()
-	_ships_left = Balance.ship_count(w)
-	_queue = Balance.enemy_queue(w)
+	_ships_left = Balance.ship_count(w, g.run_seed)
+	_queue = Balance.enemy_queue(w, g.run_seed)
 	_mult = Balance.enemy_mult(f.land_count(), f.expansions)
 	rng.randomize()
 	for hq_cell in f.hqs: # 본부마다 수비병 (기획서 5.5)
@@ -66,13 +66,10 @@ func setup(f: Field, g: Node, w: int) -> void:
 			var home: Vector2i = f.sea_neighbor(c)
 			if home.x == -999:
 				continue
-			# 조선술: 항구당 보트 +1척, 속도 +30%(레벨 3 보너스와 더한다)
-			var speed_mult: float = Balance.BOAT_SPEED_LV[f.levels[c] - 1] + (0.3 if g.has_tech("ship") else 0.0)
-			for i in 2 if g.has_tech("ship") else 1:
-				var b: Unit = _add_unit(Balance.U_BOAT, f.cell_to_world(home), 1.0)
-				b.home_port = c
-				b.home_sea = home
-				b.speed *= speed_mult
+			var b: Unit = _add_unit(Balance.U_BOAT, f.cell_to_world(home), 1.0)
+			b.home_port = c
+			b.home_sea = home
+			b.speed *= Balance.BOAT_SPEED_LV[f.levels[c] - 1]
 
 
 ## 병영·사격장이 이번 웨이브에 낼 병력(건물 위치·병종·건물 레벨). 준비 단계 미리보기와 전투 시작이 같은 계산을 쓴다 (기획서 6장)
@@ -191,16 +188,18 @@ func _add_unit(kind: int, pos: Vector3, mult: float) -> Unit:
 
 ## 단련은 모든 병사의 체력·공격 +20% (기획서 5.4)
 func _spawn_unit(kind: int, cell: Vector2i) -> Unit:
-	var m: float = 1.2 if gs.has_tech("drill") else 1.0
+	var m: float = 1.2 if gs.has_tech("furnace") else 1.0
 	var jitter: Vector3 = Vector3(rng.randf_range(-0.2, 0.2), 0.0, rng.randf_range(-0.2, 0.2)) # 한곳에서 한꺼번에 나와도 겹치지 않게
 	var u: Unit = _add_unit(kind, field.cell_to_world(cell) + jitter, m)
 	u.island = islands.get(cell, -1)
+	u.home = cell
+	u.leash = Balance.LEASH_RANGED if Balance.UNITS[kind].get("ranged", false) else Balance.LEASH_MELEE
 	return u
 
 
-## 보트 한 척에 탑승할 수 있는 병사 수: 항구 레벨 + 대양 항해 +2명
+## 보트 한 척에 탑승할 수 있는 병사 수: 항구 레벨로 정해진다
 func boat_capacity(b: Unit) -> int:
-	return Balance.PORT_CAPACITY_LV[field.levels[b.home_port] - 1] + (2 if gs.has_tech("ocean") else 0)
+	return Balance.PORT_CAPACITY_LV[field.levels[b.home_port] - 1]
 
 
 func _prune(arr: Array[Unit]) -> void:
@@ -286,19 +285,60 @@ func _stand_cell(c: Vector2i, u: Unit) -> Vector2i:
 	return best
 
 
+## 집에서 수비 반경 안의 가장 가까운 적. 없으면 지원 범위(반경 × 배율) 안의 가까운 적. 둘 다 없으면 null (기획서 6장)
+func _guard_target(u: Unit) -> Unit:
+	var home_pos: Vector3 = field.cell_to_world(u.home)
+	var best: Unit = null
+	var best_d: float = INF
+	var support: Unit = null
+	var support_d: float = INF
+	for p in pirates:
+		if p.island != u.island:
+			continue
+		var d: float = _dist(u.position, p.position)
+		var hd: float = _dist(home_pos, p.position)
+		if hd <= u.leash:
+			if d < best_d:
+				best_d = d
+				best = p
+		elif hd <= u.leash * Balance.LEASH_SUPPORT_MULT and d < support_d:
+			support_d = d
+			support = p
+	return best if best != null else support
+
+
+func _go_home(u: Unit, dt: float) -> void:
+	if _dist(u.position, field.cell_to_world(u.home)) > 0.6:
+		_walk(u, u.home, dt)
+
+
 func _soldier_turn(u: Unit, dt: float) -> void:
 	u.waiting = false
-	# 이동 명령을 받은 병사는 그곳에 도착할 때까지 가까운 적(AGGRO_RANGE 안)만 상대하고 계속 간다. 도착하면 명령이 끝난다 (기획서 6장)
+	if u.home.x < 0 or islands.get(u.home, -1) != u.island: # 섬이 바뀌면(보트) 내린 자리가 새 집이다
+		u.home = field.world_to_cell(u.position)
+	# 이동 명령을 받은 병사는 그곳에 도착할 때까지 가까운 적(AGGRO_RANGE 안)만 상대하고 계속 간다. 도착하면 명령이 끝나고 그 자리가 새 집이 된다 (기획서 6장)
 	if u.order.x >= 0 and islands.get(u.order, -1) == u.island and _dist(u.position, field.cell_to_world(u.order)) <= 0.6:
+		u.home = u.order
 		u.order = Vector2i(-1, -1)
 	var ordered: bool = u.order.x >= 0
-	var t: Unit = _nearest(u.position, pirates, u.island)
+	var t: Unit = _nearest(u.position, pirates, u.island) if ordered else _guard_target(u)
 	if t != null and (not ordered or _dist(u.position, t.position) <= Balance.AGGRO_RANGE):
 		if _engage(u, t.position, dt):
 			t.hp -= u.atk
 			u.cooldown = Balance.ATTACK_INTERVAL
 			u.lunge(t.position)
 			_sfx("hit") # 전투 효과음 (기획서 9.1)
+		return
+	var same: Unit = null if ordered else _nearest(u.position, pirates, u.island)
+	if same != null: # 같은 섬에 적이 있어도 지킬 범위 밖이면 집에서 대기 (섬을 건너지 않는다)
+		if _ships_left == 0 and ships.is_empty(): # 남은 해적선이 없으면 대기하지 않고 가장 가까운 적에게 간다 (기획서 6장)
+			if _engage(u, same.position, dt):
+				same.hp -= u.atk
+				u.cooldown = Balance.ATTACK_INTERVAL
+				u.lunge(same.position)
+				_sfx("hit")
+		else:
+			_go_home(u, dt)
 		return
 	var goal_island: int = -1
 	var goal_pos: Vector3 = Vector3.ZERO
@@ -308,6 +348,7 @@ func _soldier_turn(u: Unit, dt: float) -> void:
 	else:
 		var far: Unit = _nearest(u.position, pirates)
 		if far == null:
+			_go_home(u, dt)
 			return
 		goal_island = far.island
 		goal_pos = far.position
@@ -384,11 +425,11 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 	if tower_first:
 		tower_first = false
 		for c in field.targets():
-			if field.buildings.get(c, 0) == Balance.TOWER and (u.crossing or islands.get(c, -1) == u.island):
+			if Balance.is_tower(field.buildings.get(c, 0)) and (u.crossing or islands.get(c, -1) == u.island):
 				tower_first = true
 				break
 	for c in field.targets():
-		if tower_first and field.buildings.get(c, 0) != Balance.TOWER:
+		if tower_first and not Balance.is_tower(field.buildings.get(c, 0)):
 			continue
 		var p: Vector3 = field.cell_to_world(c)
 		var d: float = _dist(u.position, p)
@@ -410,8 +451,11 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 			tunit = null
 			tcell = c
 			tstand = stand
-	if best_d == INF: # 같은 섬에 노릴 대상이 없으면 물러간다
-		u.hp = 0.0
+	if best_d == INF:
+		if not u.crossing and not field.targets().is_empty(): # 이 섬이 비었어도 다른 섬에 대상이 남아 있으면 바다를 건너 간다 (기획서 6장)
+			u.crossing = true
+			return
+		u.hp = 0.0 # 노릴 대상이 어디에도 없으면 물러간다
 		return
 	if not _engage(u, tpos, dt, tstand, Balance.BUILDING_EDGE if tunit == null else 0.0):
 		return
@@ -428,9 +472,9 @@ func _pirate_turn(u: Unit, dt: float) -> void:
 func _towers_turn(dt: float) -> void:
 	_fx_tick(dt)
 	for c in field.buildings:
-		if field.buildings[c] == Balance.TOWER:
+		if Balance.is_tower(field.buildings[c]):
 			var lv: int = field.levels[c]
-			_shoot(c, Balance.TOWER_ATK_LV[lv - 1], Balance.TOWER_RANGE_LV[lv - 1], dt)
+			_shoot(c, Balance.tower_atk(field.buildings[c], lv), Balance.tower_range(field.buildings[c], lv), dt)
 	for c in field.hqs: # 본부도 약하게 쏜다 (기획서 6장)
 		_shoot(c, Balance.HQ_ATK, Balance.HQ_RANGE, dt)
 

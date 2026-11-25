@@ -11,7 +11,8 @@ func _initialize() -> void:
 	main.place_current(Vector2i(9, 7))
 	main.tiles_required = 0 # 보상 타일 강제 규칙은 m14에서 따로 점검한다
 	gs.gold = 1000
-	gs.researched["trade"] = true
+	gs.researched["math"] = true
+	gs.researched["commerce"] = true
 	# 1. 건설 메뉴: 카테고리를 누르면 목록이 열리고, 건물을 고르면 닫힌다
 	fails += _check(main.category_buttons.size() == 4 and not main.dropdown_panel.visible, "카테고리 버튼 4개, 목록은 닫혀 있다")
 	main._toggle_category(2) # 상업
@@ -26,10 +27,11 @@ func _initialize() -> void:
 	main._on_build_button(Balance.TRADING_POST)
 	fails += _check(main.build_id == Balance.TRADING_POST and main.open_category == -1 and not main.dropdown_panel.visible, "건물을 고르면 설치 모드, 목록은 닫힌다")
 	var post: Vector2i = Vector2i(-1, -1)
-	for c in main.field.cells:
-		if main.try_build(c):
-			post = c
-			break
+	var bb: Rect2i = main.field.bounds # 교역소는 물 위에 짓는다
+	for y in range(bb.position.y, bb.end.y):
+		for x in range(bb.position.x, bb.end.x):
+			if post.x < 0 and main.try_build(Vector2i(x, y)):
+				post = Vector2i(x, y)
 	fails += _check(post.x >= 0 and main.field.trading_post() == post and main.build_id == 0, "교역소 설치, 설치 모드 종료")
 	main.set_build(Balance.TRADING_POST)
 	fails += _check(not main._build_ok(Vector2i(post.x + 1, post.y)), "교역소는 두 번째를 지을 수 없다")

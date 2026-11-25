@@ -6,6 +6,7 @@ func _initialize() -> void:
 	var fails: int = 0
 	var t: Array[int] = Balance.HQ_LEVEL_FOOD
 	fails += _check(t == [5, 12, 22, 35, 50, 70, 95, 125, 160, 200, 245, 295, 350, 410, 475, 545, 620, 700, 785], "레벨 2~20 기준: 5/12/22/35/50/70/95/125/160/200/…/785")
+	fails += _check(Balance.hq_level_food(19) == 785 and Balance.hq_level_food(20) == 875 and Balance.hq_level_food(21) == 970 and Balance.hq_level_food(22) == 1070, "레벨 20 이후도 이어서 오른다 (875/970/1070)")
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
 	fails += _check(gs.research_points == 0, "시작: 연구포인트 0")
 	# 연구수치: 기준(5, 6, 7 …)마다 연구포인트 +1, 남는 수치는 이월
@@ -23,8 +24,8 @@ func _initialize() -> void:
 	rf.build(Balance.LAB, Vector2i(3, 2))
 	fails += _check(rf.research_income() == 9 + rf.hqs.size(), "본부 수 + 도서관 Lv1(3) + 연구소 Lv1(6)")
 	rf.upgrade(Vector2i(3, 2))
-	fails += _check(rf.research_income() == 11 + rf.hqs.size(), "연구소 Lv2(8) → 11 + 본부 수")
-	fails += _check(rf.research_income({"astronomy": true}) == 13 + rf.hqs.size(), "천문학: 도서관·학술원 +1씩")
+	fails += _check(rf.research_income() == 10 + rf.hqs.size(), "대학 Lv2(7) → 10 + 본부 수")
+	fails += _check(rf.research_income({"astronomy": true}) == 12 + rf.hqs.size(), "천문학: 도서관·대학 +1씩")
 	fails += _check(Balance.OBSERVATORY_RESEARCH_LV == [4, 6, 8] and Balance.BUILDINGS[Balance.OBSERVATORY]["mountain_only"], "천문대: 산 전용, 연구수치 4/6/8")
 	# 시장: 4방향으로 붙은 집의 정산 골드 +25%
 	rf.build(Balance.HOUSE, Vector2i(4, 2))

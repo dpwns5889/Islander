@@ -11,24 +11,25 @@ func _initialize() -> void:
 		total += Balance.tech_cost(id)
 		for pre: String in Balance.tech_prereqs(id):
 			fails += _check(Balance.TECHS.has(pre) and Balance.TECHS[pre]["col"] < Balance.TECHS[id]["col"], "%s 선행 %s는 앞 열" % [id, pre])
-	fails += _check(total == 33, "전부 연구하면 33점 (%d)" % total)
-	fails += _check(Balance.tech_prereqs("trade") == ["tools", "mining"] and Balance.tech_prereqs("drill") == ["archery", "ironwork"], "선행이 둘인 연구")
+	fails += _check(total == 14, "전부 연구하면 14점 (%d)" % total)
+	fails += _check(Balance.tech_prereqs("math").is_empty() and Balance.tech_prereqs("furnace") == ["archery", "ironwork"], "선행이 둘인 연구")
 	# 연구: 포인트와 선행 조건
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
 	gs.research_points = 9
-	fails += _check(not gs.can_research("ship"), "선행(항해술) 없이는 조선술 불가")
-	fails += _check(not gs.can_research("sail"), "선행(채광) 없이는 항해술 불가")
-	fails += _check(gs.research("mining") and gs.research_points == 8, "채광 연구: 포인트 1 소모")
-	fails += _check(gs.research("sail") and gs.research_points == 6 and gs.has_tech("sail"), "항해술 연구: 포인트 2 소모")
-	fails += _check(not gs.can_research("trade"), "교역은 농기구도 필요하다")
-	fails += _check(not gs.research("sail"), "같은 연구를 두 번 못 한다")
+	fails += _check(not gs.can_research("tools"), "선행(도구) 없이는 농기구 불가")
+	fails += _check(not gs.can_research("furnace"), "선행 없이는 용광로 불가")
+	fails += _check(gs.research("toolmaking") and gs.research_points == 8, "도구 연구: 포인트 1 소모")
+	fails += _check(gs.research("tools") and gs.research("waterwheel") and gs.research_points == 6 and gs.has_tech("waterwheel"), "농기구·물레방아 연구: 각 1점")
+	fails += _check(not gs.can_research("commerce"), "상업은 화폐가 필요하다")
+	fails += _check(not gs.research("waterwheel"), "같은 연구를 두 번 못 한다")
+	gs.research_points = 0
+	fails += _check(not gs.can_research("engineering"), "포인트 부족 (공학 1점)")
 	gs.research_points = 1
-	fails += _check(not gs.can_research("ship"), "포인트 부족 (조선술 3점)")
-	gs.research_points = 3
-	fails += _check(gs.research("ship") and gs.research_points == 0, "조선술 연구")
-	fails += _check(gs.discounted(20) == 20, "금융 전 할인 없음")
-	gs.researched["finance"] = true
-	fails += _check(gs.discounted(20) == 17 and gs.discounted(50) == 43, "금융: 20→17, 50→43")
+	fails += _check(gs.research("engineering") and gs.research_points == 0, "공학 연구")
+	gs.researched.erase("engineering")
+	fails += _check(gs.upgrade_discounted(20) == 20, "공학 전 할인 없음")
+	gs.researched["engineering"] = true
+	fails += _check(gs.upgrade_discounted(20) == 16 and gs.upgrade_discounted(50) == 40, "공학: 레벨업 20→16, 50→40")
 	gs.reset()
 	fails += _check(gs.researched.is_empty(), "재시작하면 연구 초기화")
 	# 수입 효과
@@ -38,10 +39,12 @@ func _initialize() -> void:
 	var plains: int = f.cells.values().count(Piece.PLAINS)
 	var hq_gold: int = Balance.HQ_BASE_GOLD * f.hqs.size() # 본부 기본 골드
 	fails += _check(f.income() == Vector2i(10 + hq_gold, 5 + plains), "연구 없음: 골드 %d, 식량 %d" % [10 + hq_gold, 5 + plains])
-	fails += _check(f.income({"commerce": true}).x == 12 + hq_gold, "상업: 집 골드 +20%")
+	fails += _check(f.income({"math": true}).x == 12 + hq_gold, "수학: 집 골드 +20%")
 	fails += _check(f.income({"tools": true}).y == floori(5 * 1.3 + plains), "농기구: 밭 +30%")
-	fails += _check(f.income({"tools": true, "harvest": true}).y == floori(5 * 1.8 + plains), "농기구+대풍작: 밭 +80%")
-	fails += _check(f.income({"irrigation": true}).y == floori(5 + plains * 1.5), "관개: 평원 칸 1.5")
+	fails += _check(f.income({"tools": true, "windmill": true}).y == floori(5 * 1.8 + plains), "농기구+풍차: 밭 +80%")
+	fails += _check(f.income({"waterwheel": true}).y == floori(5 + plains * 1.5), "물레방아: 평원 칸 1.5")
+	fails += _check(f.income({"toolmaking": true}).y == 5 + plains + 2, "도구: 식량 +2")
+	fails += _check(f.income({"currency": true}).x == floori((10 + hq_gold) * 1.2), "화폐: 정산 골드 +20%")
 	# 병종과 연구 효과 (전투)
 	var gsb: Node = load("res://assets/scripts/game_state.gd").new()
 	gsb.gold = 1000
@@ -84,27 +87,18 @@ func _initialize() -> void:
 			arbalest = s
 	fails += _check(knight != null and knight.speed == 2.0 and knight.hp == 55.0 and knight.atk == 7.0, "파이크병 능력치")
 	fails += _check(arbalest != null and arbalest.reach == 2.5 and arbalest.hp == 25.0 and arbalest.atk == 6.0, "쇠뇌병 능력치")
-	# 단련 +20%, 대풍작 식량 -1
+	# 용광로 +20%
 	var gs4: Node = load("res://assets/scripts/game_state.gd").new()
-	gs4.researched["drill"] = true
-	gs4.researched["harvest"] = true
+	gs4.researched["furnace"] = true
 	var b4: Battle = Battle.new()
 	b4.setup(_island(), gs4, 1)
-	fails += _check(absf(b4.soldiers[0].hp - 36.0) < 0.01 and absf(b4.soldiers[0].atk - 6.0) < 0.01, "단련: 경비병 체력 36, 공격 6")
-	# 조선술(보트 2척, 속도 +30%), 대양 항해(탑승 +2명)
-	var gs5: Node = load("res://assets/scripts/game_state.gd").new()
-	gs5.researched["ship"] = true
-	gs5.researched["ocean"] = true
+	fails += _check(absf(b4.soldiers[0].hp - 36.0) < 0.01 and absf(b4.soldiers[0].atk - 6.0) < 0.01, "용광로: 경비병 체력 36, 공격 6")
+	# 보트는 항구당 1척, 탑승은 항구 레벨로만 정해진다 (항해 연구 삭제)
 	var f5: Field = _island()
 	f5.build(Balance.PORT, Vector2i(4, 5))
-	var b5: Battle = Battle.new()
-	b5.setup(f5, gs5, 1)
-	fails += _check(b5.boats.size() == 2, "조선술: 항구당 보트 2척")
-	fails += _check(absf(b5.boats[0].speed - 2.5 * 1.3) < 0.001, "조선술: 속도 +30%")
-	fails += _check(b5.boat_capacity(b5.boats[0]) == 6, "대양 항해: 탑승 4+2명")
 	var b6: Battle = Battle.new()
 	b6.setup(f5, load("res://assets/scripts/game_state.gd").new(), 1)
-	fails += _check(b6.boats.size() == 1 and b6.boat_capacity(b6.boats[0]) == 4, "연구 없으면 보트 1척, 탑승 4명")
+	fails += _check(b6.boats.size() == 1 and b6.boat_capacity(b6.boats[0]) == 4, "보트 1척, 탑승 4명")
 	# 부서진 사격장은 복구되지 않는다
 	f2.build(Balance.SHOOTING_RANGE, Vector2i(7, 7))
 	f2.damage(Vector2i(7, 7), 9999.0)
