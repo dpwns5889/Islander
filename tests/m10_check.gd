@@ -7,7 +7,7 @@ func _initialize() -> void:
 	# 1. 같은 자리에 12명을 세워도 서로 밀어내 겹치지 않고, 땅 밖으로 나가지 않는다
 	var b: Battle = _battle(_island(5), 100, 20)
 	for i in 12:
-		b._add_unit(Balance.U_SOLDIER, b.field.cell_to_world(Vector2i(6, 6)), 1.0)
+		b._add_unit(Balance.U_GUARD, b.field.cell_to_world(Vector2i(6, 6)), 1.0)
 	for _i in 60:
 		b.tick(0.1)
 	var min_d: float = INF

@@ -25,6 +25,7 @@ var cards: Array[PieceCard] = []
 var placed_count: int = 0
 var panel: PanelContainer
 var top_panel: PanelContainer
+var res_bar: PanelContainer ## 최상단 고정 자원바 (기획서 7.2)
 var build_panel: PanelContainer
 var side_panel: PanelContainer
 var town_label: Label
@@ -34,8 +35,6 @@ var upgrade_panel: PanelContainer
 var upgrade_title: Label
 var upgrade_effect: Label
 var upgrade_button: Button
-var unit_row: VBoxContainer
-var unit_buttons: Dictionary = {} ## 병종 → 버튼
 var research_panel: PanelContainer
 var research_buttons: Dictionary = {} ## 연구 id → 버튼
 var tech_lines: Control ## 연구 선행 연결선을 그리는 판
@@ -154,8 +153,13 @@ func _build_ui() -> void:
 	# 상단: 자원·웨이브·웨이브 시작, 그 아래 안내 문구
 	var top: VBoxContainer = VBoxContainer.new()
 	var row: HBoxContainer = HBoxContainer.new()
+	# 골드·식량·연구포인트는 최상단 고정바로 분리 (기획서 7.2)
 	stats = Label.new()
-	row.add_child(stats)
+	res_bar = PanelContainer.new()
+	res_bar.add_child(stats)
+	res_bar.visible = false
+	layer.add_child(res_bar)
+	res_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, 0)
 	wave_button = Button.new()
 	wave_button.text = "웨이브 시작"
 	wave_button.pressed.connect(start_wave)
@@ -178,6 +182,7 @@ func _build_ui() -> void:
 	top_panel.visible = false
 	layer.add_child(top_panel)
 	top_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT, Control.PRESET_MODE_MINSIZE, 10)
+	top_panel.position.y = 44 # 고정바 아래
 	# 이번 웨이브 예고는 우상단 별도 패널로 분리한다. 좁게 줄바꿈해 필드를 덜 가린다 (기획서 7.2)
 	wave_info = Label.new()
 	wave_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -188,6 +193,7 @@ func _build_ui() -> void:
 	layer.add_child(wave_panel)
 	wave_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT, Control.PRESET_MODE_MINSIZE, 10)
 	wave_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	wave_panel.position.y = 44
 	# 하단: 건설 메뉴 = 카테고리 버튼. 누르면 그 위로 건물 목록이 펼쳐진다 (기획서 7.2)
 	var bar: HBoxContainer = HBoxContainer.new()
 	var drop_box: VBoxContainer = VBoxContainer.new()
@@ -243,14 +249,6 @@ func _build_ui() -> void:
 	upgrade_button = Button.new()
 	upgrade_button.pressed.connect(upgrade_selected)
 	up.add_child(upgrade_button)
-	unit_row = VBoxContainer.new()
-	for k in Balance.SOLDIER_KINDS:
-		var ub: Button = Button.new()
-		ub.toggle_mode = true
-		ub.pressed.connect(select_unit.bind(k))
-		unit_buttons[k] = ub
-		unit_row.add_child(ub)
-	up.add_child(unit_row)
 	upgrade_panel = PanelContainer.new()
 	upgrade_panel.add_child(up)
 	upgrade_panel.visible = false
@@ -258,7 +256,7 @@ func _build_ui() -> void:
 	upgrade_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 54) # 건설 메뉴 위
 	upgrade_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	upgrade_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	# 가운데: 연구 패널 (4열 13개, 문명5식)
+	# 가운데: 연구 패널 (4열 14개, 문명5식)
 	var rbox: VBoxContainer = VBoxContainer.new()
 	var rtitle: Label = Label.new()
 	rtitle.text = "연구 — 연구포인트로 즉시 연구합니다 (취소 없음)"
@@ -318,7 +316,7 @@ func _build_ui() -> void:
 
 func _over_ui() -> bool:
 	var mp: Vector2 = get_viewport().get_mouse_position()
-	for c: Control in [panel, top_panel, wave_panel, build_panel, side_panel, upgrade_panel, research_panel, dropdown_panel, trade_panel]:
+	for c: Control in [panel, top_panel, res_bar, wave_panel, build_panel, side_panel, upgrade_panel, research_panel, dropdown_panel, trade_panel]:
 		if c.visible and c.get_global_rect().has_point(mp):
 			return true
 	return false
@@ -607,6 +605,7 @@ func place_current(hover: Vector2i) -> bool:
 	_note = ""
 	if was_start:
 		top_panel.visible = true
+		res_bar.visible = true
 		build_panel.visible = true
 		side_panel.visible = true
 		_begin_prep()
@@ -659,28 +658,18 @@ func research(id: String) -> bool:
 	return true
 
 
-## 선택한 병영이 만들 병종을 정한다. 해금된 병종만 고를 수 있다 (기획서 6장)
-func select_unit(kind: int) -> bool:
-	if selected_cell.x < 0 or field.buildings.get(selected_cell, 0) != Balance.BARRACKS or not _unit_unlocked(kind):
-		_refresh_hud()
-		return false
-	field.barracks_unit[selected_cell] = kind
-	_refresh_hud()
-	return true
-
-
 func _unlocked(id: int) -> bool:
 	var tech: String = Balance.BUILDINGS[id].get("tech", "")
 	return tech == "" or GameState.has_tech(tech)
 
 
-func _unit_unlocked(kind: int) -> bool:
-	var tech: String = Balance.UNIT_TECH.get(kind, "")
-	return tech == "" or GameState.has_tech(tech)
+## 병영·사격장 레벨 3 강화는 철기 제작이 필요하다 (기획서 5.2)
+func _upgrade_locked(c: Vector2i) -> bool:
+	return Balance.MILITARY.has(field.buildings[c]) and field.levels[c] + 1 == Balance.MAX_LEVEL and not GameState.has_tech(Balance.LV3_TECH)
 
 
 func upgrade_selected() -> bool:
-	if selected_cell.x < 0 or _blocked() or not field.can_upgrade(selected_cell):
+	if selected_cell.x < 0 or _blocked() or not field.can_upgrade(selected_cell) or _upgrade_locked(selected_cell):
 		return false
 	var cost: int = GameState.discounted(Balance.upgrade_cost(field.buildings[selected_cell], field.levels[selected_cell] + 1))
 	if not GameState.spend(cost):
@@ -778,7 +767,7 @@ func _on_battle_finished(victory: bool) -> void:
 	GameState.add(inc.x, inc.y)
 	GameState.next_wave()
 	var ups: Dictionary = field.settle_levels(GameState.researched) # 본부마다 자기 영역 식량으로 레벨·영역 상승 (기획서 5.3)
-	var rp_gain: int = GameState.add_research_progress(field.research_income()) # 도서관·연구소 (기획서 5.4)
+	var rp_gain: int = GameState.add_research_progress(field.research_income(GameState.researched)) # 도서관·연구소 (기획서 5.4)
 	field.repair_all()
 	_tilt(90.0)
 	build_panel.visible = true
@@ -1028,10 +1017,10 @@ func _refresh_research() -> void:
 
 func _refresh_hud() -> void:
 	var inc: Vector2i = field.income(GameState.researched) # 웨이브 정산 때 들어올 생산량 (기획서 7.2)
-	stats.text = "골드 %d (+%d) · 식량 %d (+%d) · 연구포인트 %d (%d/%d, +%d) · 웨이브 %d   " % [GameState.gold, inc.x, GameState.food, inc.y, GameState.research_points, GameState.research_progress, Balance.research_threshold(GameState.research_gained), field.research_income(), GameState.wave]
+	stats.text = "골드 %d (+%d) · 식량 %d (+%d) · 연구포인트 %d (%d/%d, +%d) · 웨이브 %d   " % [GameState.gold, inc.x, GameState.food, inc.y, GameState.research_points, GameState.research_progress, Balance.research_threshold(GameState.research_gained), field.research_income(GameState.researched), GameState.wave]
 	for id in build_buttons:
 		var bb: Button = build_buttons[id]
-		bb.text = "%s %dG · %s" % [Balance.BUILDINGS[id]["name"], _cost_of(id), Balance.effect_text(id, 1)]
+		bb.text = "%s %dG · %s" % [Balance.BUILDINGS[id]["name"], _cost_of(id), Balance.effect_text(id, 1, GameState.researched)]
 		var need: String = Balance.BUILDINGS[id].get("tech", "")
 		bb.tooltip_text = "" if _unlocked(id) else "필요 연구: " + Balance.TECHS[need]["name"]
 		if _blocked():
@@ -1101,29 +1090,19 @@ func _refresh_hud() -> void:
 	if upgrade_panel.visible:
 		var bid: int = field.buildings[selected_cell]
 		var lv: int = field.levels[selected_cell]
-		var cur_unit: int = field.barracks_unit.get(selected_cell, Balance.U_SOLDIER)
-		upgrade_title.text = "%s Lv %d%s" % [Balance.BUILDINGS[bid]["name"], lv, " · 생산: " + Balance.UNITS[cur_unit]["name"] if bid == Balance.BARRACKS else ""]
-		upgrade_effect.text = Balance.effect_text(bid, lv)
+		upgrade_title.text = "%s Lv %d%s" % [Balance.BUILDINGS[bid]["name"], lv, " · " + Balance.UNITS[Balance.MILITARY[bid]["units"][lv - 1]]["name"] if Balance.MILITARY.has(bid) else ""]
+		upgrade_effect.text = Balance.effect_text(bid, lv, GameState.researched)
 		if bid == Balance.TRADING_POST and not field.is_post_open(selected_cell):
 			upgrade_effect.text += "\n⚠ 물가가 막혀 NPC가 오지 못합니다"
 		if bid == Balance.FISHERY: # 이 낚시터의 실제 생산량
 			upgrade_effect.text = "정산 식량 +%d (이어진 물가 %d칸)" % [field.fishing_food(selected_cell), field.fishing_cells(selected_cell)]
-		unit_row.visible = bid == Balance.BARRACKS
-		if unit_row.visible:
-			for k in unit_buttons:
-				var ub: Button = unit_buttons[k]
-				var info: Dictionary = Balance.UNITS[k]
-				ub.text = info["name"]
-				ub.button_pressed = k == cur_unit
-				ub.disabled = not _unit_unlocked(k)
-				ub.tooltip_text = "체력 %d · 공격 %d · 속도 %.1f%s" % [info["hp"], info["atk"], info["speed"], (" · 사거리 %.1f칸" % info["reach"]) if info.get("ranged", false) else ""]
-				if not _unit_unlocked(k):
-					ub.tooltip_text = "필요 연구: " + Balance.TECHS[Balance.UNIT_TECH[k]]["name"]
 		if field.can_upgrade(selected_cell):
 			var cost: int = GameState.discounted(Balance.upgrade_cost(bid, lv + 1))
 			upgrade_button.text = "레벨 %d로 강화 %dG" % [lv + 1, cost]
-			upgrade_button.tooltip_text = "다음 레벨: " + Balance.effect_text(bid, lv + 1)
-			upgrade_button.disabled = _blocked() or GameState.gold < cost
+			upgrade_button.tooltip_text = "다음 레벨: " + Balance.effect_text(bid, lv + 1, GameState.researched)
+			upgrade_button.disabled = _blocked() or GameState.gold < cost or _upgrade_locked(selected_cell)
+			if _upgrade_locked(selected_cell):
+				upgrade_button.tooltip_text = "필요 연구: " + Balance.TECHS[Balance.LV3_TECH]["name"]
 		else:
 			upgrade_button.text = "최고 레벨"
 			upgrade_button.disabled = true

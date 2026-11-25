@@ -37,7 +37,7 @@ func _initialize() -> void:
 	fails += _check(not f.buildings.has(Vector2i(5, 5)) and not f.levels.has(Vector2i(5, 5)), "파괴된 건물은 복구되지 않는다")
 	fails += _check(f.hp[Vector2i(9, 5)] == 50.0, "살아남은 건물의 피해는 회복된다")
 	fails += _check(f.can_build(Balance.HOUSE, Vector2i(5, 5)), "빈 땅이 되어 다시 지을 수 있다")
-	# 병영 레벨: 시작 병사 3/4/5명, 레벨 3은 체력 +30%
+	# 병영 레벨: 인원은 3명 고정, 레벨 3 체력 보너스 없음
 	for lv in [1, 2, 3]:
 		var f2: Field = _island()
 		f2.build(Balance.BARRACKS, Vector2i(6, 6))
@@ -48,11 +48,7 @@ func _initialize() -> void:
 		gs.food = 1000
 		var b: Battle = Battle.new()
 		b.setup(f2, gs, 1)
-		fails += _check(b.soldiers.size() == Balance.HQ_GUARDS + Balance.BARRACKS_SOLDIERS_LV[lv - 1], "병영 레벨 %d: 병사 %d명" % [lv, Balance.BARRACKS_SOLDIERS_LV[lv - 1]])
-		var top_hp: float = 0.0
-		for s in b.soldiers:
-			top_hp = maxf(top_hp, s.hp)
-		fails += _check((top_hp > 30.0) == (lv == 3), "병영 레벨 3만 병사 체력 +30%%(최대 %.0f)" % top_hp)
+		fails += _check(b.soldiers.size() == Balance.HQ_GUARDS + 3, "병영 레벨 %d: 병사 3명" % lv)
 	# 항구 레벨: 보트 속도
 	var f3: Field = _island()
 	f3.build(Balance.PORT, Vector2i(4, 5))

@@ -5,14 +5,14 @@ extends SceneTree
 func _initialize() -> void:
 	var fails: int = 0
 	# 테크트리 구조: 13개, 비용은 열 번호(1~4점), 선행은 모두 존재하는 연구 (문명5식)
-	fails += _check(Balance.TECHS.size() == 13, "연구 13개")
+	fails += _check(Balance.TECHS.size() == 14, "연구 14개")
 	var total: int = 0
 	for id in Balance.TECHS:
 		total += Balance.tech_cost(id)
 		for pre: String in Balance.tech_prereqs(id):
 			fails += _check(Balance.TECHS.has(pre) and Balance.TECHS[pre]["col"] < Balance.TECHS[id]["col"], "%s 선행 %s는 앞 열" % [id, pre])
-	fails += _check(total == 31, "전부 연구하면 31점 (%d)" % total)
-	fails += _check(Balance.tech_prereqs("trade") == ["tools", "mining"] and Balance.tech_prereqs("drill") == ["archery", "cavalry"], "선행이 둘인 연구")
+	fails += _check(total == 33, "전부 연구하면 33점 (%d)" % total)
+	fails += _check(Balance.tech_prereqs("trade") == ["tools", "mining"] and Balance.tech_prereqs("drill") == ["archery", "ironwork"], "선행이 둘인 연구")
 	# 연구: 포인트와 선행 조건
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
 	gs.research_points = 9
@@ -47,8 +47,7 @@ func _initialize() -> void:
 	gsb.gold = 1000
 	gsb.food = 1000
 	var f2: Field = _island()
-	f2.build(Balance.BARRACKS, Vector2i(6, 6))
-	f2.barracks_unit[Vector2i(6, 6)] = Balance.U_ARCHER
+	f2.build(Balance.SHOOTING_RANGE, Vector2i(6, 6))
 	var b: Battle = Battle.new()
 	b.setup(f2, gsb, 1)
 	var archers: int = 0
@@ -56,7 +55,7 @@ func _initialize() -> void:
 		if s.kind == Balance.U_ARCHER:
 			archers += 1
 			fails += _check(s.reach == 2.0 and s.hp == 20.0 and s.atk == 3.0, "궁수 능력치")
-	fails += _check(archers == Balance.BARRACKS_SOLDIERS_LV[0], "병영이 궁수를 %d명 만든다 (%d)" % [Balance.BARRACKS_SOLDIERS_LV[0], archers])
+	fails += _check(archers == 2, "사격장이 궁수를 2명 만든다 (%d)" % archers)
 	fails += _check(gsb.gold == 1000 and gsb.food == 1000, "병사 생산은 골드·식량을 쓰지 않는다")
 	# 궁수는 사거리 2칸에서 쏜다 (다가가지 않는다)
 	var archer: Unit = b.soldiers[b.soldiers.size() - 1]
@@ -66,22 +65,32 @@ func _initialize() -> void:
 	fails += _check(b._engage(archer, pirate.position, 0.1) and archer.position == before, "궁수는 1.8칸 거리에서 움직이지 않고 공격 준비")
 	var sword: Unit = b.soldiers[0]
 	sword.cooldown = 0.0
-	fails += _check(not b._engage(sword, pirate.position, 0.1), "검병은 3.5칸에서는 공격하지 못하고 다가간다")
-	# 기병: 속도 2.5
+	fails += _check(not b._engage(sword, pirate.position, 0.1), "경비병은 3.5칸에서는 공격하지 못하고 다가간다")
+	# 레벨 3: 기사(속도 2.0), 쇠뇌병
 	var f3: Field = _island()
 	f3.build(Balance.BARRACKS, Vector2i(6, 6))
-	f3.barracks_unit[Vector2i(6, 6)] = Balance.U_CAVALRY
+	f3.build(Balance.SHOOTING_RANGE, Vector2i(7, 6))
+	for c in [Vector2i(6, 6), Vector2i(7, 6)]:
+		f3.upgrade(c)
+		f3.upgrade(c)
 	var b3: Battle = Battle.new()
 	b3.setup(f3, gsb, 1)
-	var cav: Unit = b3.soldiers[b3.soldiers.size() - 1]
-	fails += _check(cav.kind == Balance.U_CAVALRY and cav.speed == 2.5 and cav.hp == 40.0 and cav.atk == 6.0, "기병 능력치")
+	var knight: Unit = null
+	var arbalest: Unit = null
+	for s in b3.soldiers:
+		if s.kind == Balance.U_PIKE:
+			knight = s
+		elif s.kind == Balance.U_ARBALEST:
+			arbalest = s
+	fails += _check(knight != null and knight.speed == 2.0 and knight.hp == 55.0 and knight.atk == 7.0, "파이크병 능력치")
+	fails += _check(arbalest != null and arbalest.reach == 2.5 and arbalest.hp == 25.0 and arbalest.atk == 6.0, "쇠뇌병 능력치")
 	# 단련 +20%, 대풍작 식량 -1
 	var gs4: Node = load("res://assets/scripts/game_state.gd").new()
 	gs4.researched["drill"] = true
 	gs4.researched["harvest"] = true
 	var b4: Battle = Battle.new()
 	b4.setup(_island(), gs4, 1)
-	fails += _check(absf(b4.soldiers[0].hp - 36.0) < 0.01 and absf(b4.soldiers[0].atk - 6.0) < 0.01, "단련: 검병 체력 36, 공격 6")
+	fails += _check(absf(b4.soldiers[0].hp - 36.0) < 0.01 and absf(b4.soldiers[0].atk - 6.0) < 0.01, "단련: 경비병 체력 36, 공격 6")
 	# 조선술(보트 2척, 속도 +30%), 대양 항해(탑승 +2명)
 	var gs5: Node = load("res://assets/scripts/game_state.gd").new()
 	gs5.researched["ship"] = true
@@ -96,12 +105,11 @@ func _initialize() -> void:
 	var b6: Battle = Battle.new()
 	b6.setup(f5, load("res://assets/scripts/game_state.gd").new(), 1)
 	fails += _check(b6.boats.size() == 1 and b6.boat_capacity(b6.boats[0]) == 4, "연구 없으면 보트 1척, 탑승 4명")
-	# 부서진 병영은 복구되지 않고 병종 기록도 사라진다
-	f2.build(Balance.BARRACKS, Vector2i(7, 7))
-	f2.barracks_unit[Vector2i(7, 7)] = Balance.U_ARCHER
+	# 부서진 사격장은 복구되지 않는다
+	f2.build(Balance.SHOOTING_RANGE, Vector2i(7, 7))
 	f2.damage(Vector2i(7, 7), 9999.0)
 	f2.repair_all()
-	fails += _check(not f2.buildings.has(Vector2i(7, 7)) and not f2.barracks_unit.has(Vector2i(7, 7)), "부서진 병영은 복구되지 않는다")
+	fails += _check(not f2.buildings.has(Vector2i(7, 7)) and not f2.levels.has(Vector2i(7, 7)), "부서진 사격장은 복구되지 않는다")
 	print("M9 점검 실패 %d건" % fails)
 	quit(fails)
 

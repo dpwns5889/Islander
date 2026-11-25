@@ -7,7 +7,7 @@ func _initialize() -> void:
 	fails += _check(Balance.UNIT_GAP == 0.3, "밀어내는 거리 0.3칸")
 	# 유닛 크기: 몸통 지름이 밀어내는 간격보다 작다
 	var soldier: Unit = Unit.new()
-	soldier.setup(Balance.U_SOLDIER, 1.0)
+	soldier.setup(Balance.U_GUARD, 1.0)
 	var cap: CapsuleMesh = soldier.body.mesh
 	fails += _check(cap.radius <= 0.13 and cap.height <= 0.45 and cap.radius * 2.0 <= Balance.UNIT_GAP, "병사 크기: 반지름 %.2f, 높이 %.2f" % [cap.radius, cap.height])
 	# 약진: 목표 쪽으로 나갔다가 정확히 제자리로 돌아온다

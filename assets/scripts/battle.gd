@@ -54,15 +54,13 @@ func setup(f: Field, g: Node, w: int) -> void:
 	rng.randomize()
 	for hq_cell in f.hqs: # 본부마다 수비병 (기획서 5.5)
 		for i in Balance.HQ_GUARDS:
-			_spawn_unit(Balance.U_SOLDIER, hq_cell)
+			_spawn_unit(Balance.U_GUARD, hq_cell)
 	for i in g.extra_guards: # 교역 NPC에게 산 수비병 (1회성) (기획서 5.6)
-		_spawn_unit(Balance.U_SOLDIER, f.hq)
+		_spawn_unit(Balance.U_GUARD, f.hq)
 	g.extra_guards = 0
 	# 병영은 웨이브 시작 때만 병사를 만든다. 병사 생산에는 골드·식량이 들지 않는다 (기획서 6장)
 	for entry: Dictionary in barracks_plan(f):
-		var u: Unit = _spawn_unit(entry["kind"], entry["cell"])
-		if entry["lv"] == Balance.MAX_LEVEL:
-			u.hp *= Balance.BARRACKS_L3_HP
+		_spawn_unit(entry["kind"], entry["cell"])
 	for c in f.buildings:
 		if f.buildings[c] == Balance.PORT:
 			var home: Vector2i = f.sea_neighbor(c)
@@ -77,16 +75,16 @@ func setup(f: Field, g: Node, w: int) -> void:
 				b.speed *= speed_mult
 
 
-## 병영이 이번 웨이브에 낼 병력(병영 위치·병종·병영 레벨). 준비 단계 미리보기와 전투 시작이 같은 계산을 쓴다 (기획서 6장)
+## 병영·사격장이 이번 웨이브에 낼 병력(건물 위치·병종·건물 레벨). 준비 단계 미리보기와 전투 시작이 같은 계산을 쓴다 (기획서 6장)
 static func barracks_plan(f: Field) -> Array:
 	var plan: Array = []
 	for c in f.buildings:
-		if f.buildings[c] != Balance.BARRACKS:
+		var m: Dictionary = Balance.MILITARY.get(f.buildings[c], {})
+		if m.is_empty():
 			continue
 		var lv: int = f.levels[c]
-		var kind: int = f.barracks_unit.get(c, Balance.U_SOLDIER)
-		for i in Balance.BARRACKS_SOLDIERS_LV[lv - 1]:
-			plan.append({"cell": c, "kind": kind, "lv": lv})
+		for i in m["count"]:
+			plan.append({"cell": c, "kind": m["units"][lv - 1], "lv": lv})
 	return plan
 
 

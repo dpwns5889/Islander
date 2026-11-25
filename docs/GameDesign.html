@@ -1,10 +1,63 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>BiomeDefender 기획서</title><style>body{max-width:860px;margin:2rem auto;padding:0 1rem;font:16px/1.7 'Malgun Gothic',sans-serif;color:#222}
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>BiomeDefender 기획서</title><style>body{margin:0;font:16px/1.7 'Malgun Gothic',sans-serif;color:#222}
+nav{position:fixed;top:0;left:0;bottom:0;width:260px;overflow:auto;padding:1rem;box-sizing:border-box;background:#f6faf8;border-right:1px solid #ccc;font-size:14px;line-height:1.5}
+nav ul{list-style:none;margin:0;padding-left:.9rem}nav>div>ul{padding-left:0}nav li{margin:.2rem 0}nav a{color:#245;text-decoration:none}nav a:hover{color:#2a7;text-decoration:underline}
+main{max-width:860px;margin:2rem auto;padding:0 1rem 0 calc(260px + 1rem)}
+@media(max-width:1200px){main{margin-left:280px;padding-left:1rem}}
+html{scroll-behavior:smooth}
 h1{border-bottom:3px solid #2a7;padding-bottom:.3rem}h2{margin-top:2.2rem;border-bottom:1px solid #ccc;padding-bottom:.2rem}
 table{border-collapse:collapse;margin:1rem 0}th,td{border:1px solid #ccc;padding:.4rem .8rem;text-align:left}th{background:#eef6f2}
-pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;padding:0 .25rem}</style></head><body><h1 id="biomedefender">BiomeDefender (가칭) — 기획서</h1>
+pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;padding:0 .25rem}</style></head><body><nav><div class="toc">
+<ul>
+<li><a href="#1">1. 개요</a></li>
+<li><a href="#2">2. 핵심 루프</a><ul>
+<li><a href="#_1">시작</a></li>
+</ul>
+</li>
+<li><a href="#3">3. 필드와 지형</a><ul>
+<li><a href="#_2">숲과 산 규칙</a></li>
+<li><a href="#_3">필드 밖 지형</a></li>
+<li><a href="#_4">필드 확장</a></li>
+</ul>
+</li>
+<li><a href="#4">4. 지형 조각</a></li>
+<li><a href="#5">5. 건물, 자원, 연구</a><ul>
+<li><a href="#51">5.1 건물</a></li>
+<li><a href="#52">5.2 건물 레벨</a></li>
+<li><a href="#53">5.3 본부 레벨과 영역</a></li>
+<li><a href="#54">5.4 연구 (테크트리)</a></li>
+<li><a href="#55-1020">5.5 추가 본부 (10·20웨이브 이후)</a></li>
+<li><a href="#56-npc">5.6 교역소와 거래 NPC</a></li>
+</ul>
+</li>
+<li><a href="#6">6. 전투</a><ul>
+<li><a href="#_5">병사</a></li>
+<li><a href="#_6">적</a></li>
+<li><a href="#_7">방어탑</a></li>
+<li><a href="#_8">웨이브와 난이도</a></li>
+</ul>
+</li>
+<li><a href="#7">7. 기술 설계</a><ul>
+<li><a href="#71">7.1 폴더 구조</a></li>
+<li><a href="#72">7.2 렌더링과 카메라</a></li>
+<li><a href="#73">7.3 이동과 경로</a></li>
+<li><a href="#74">7.4 저장</a></li>
+<li><a href="#75">7.5 오토로드</a></li>
+</ul>
+</li>
+<li><a href="#8">8. 범위 밖 (첫 버전에서 제외)</a></li>
+<li><a href="#9">9. 다음 작업</a><ul>
+<li><a href="#91-m7m8">9.1 정해야 할 것 (M7·M8 시작 전, 추천안 포함)</a></li>
+<li><a href="#92-m6">9.2 M6에서 할 일 (순서 제안)</a></li>
+<li><a href="#93">9.3 알아 둘 것</a></li>
+</ul>
+</li>
+<li><a href="#10">10. 변경 이력</a></li>
+</ul>
+</div>
+</nav><main><h1 id="biomedefender">BiomeDefender (가칭) — 기획서</h1>
 <ul>
 <li>최종 수정: 2026-11-25</li>
-<li>게임 버전: 0.29</li>
+<li>게임 버전: 0.31</li>
 <li>엔진: Godot 4.7.2, GDScript, 3D (로우폴리), PC 마우스 전용</li>
 </ul>
 <h2 id="1">1. 개요</h2>
@@ -13,7 +66,7 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <li>승리: 30웨이브 생존</li>
 <li>패배: <strong>모든 본부</strong>가 파괴됨 (본부가 하나라도 남아 있으면 계속)</li>
 <li>땅을 넓힐수록(칸 수·필드 확장) 적이 강해진다.</li>
-<li>자원은 셋이다. <strong>골드</strong>는 건물을 짓고 레벨을 올리는 데, <strong>식량</strong>은 본부 성장(식량 누적)에, <strong>연구포인트</strong>는 문명식 테크트리 연구에 쓰며 도서관·연구소가 만드는 연구수치로 얻는다.</li>
+<li>자원은 셋이다. <strong>골드</strong>는 건물을 짓고 레벨을 올리는 데, <strong>식량</strong>은 본부 성장(식량 누적)에, <strong>연구포인트</strong>는 문명식 테크트리 연구에 쓰며 도서관·학술원·천문대가 만드는 연구수치로 얻는다.</li>
 </ul>
 <h2 id="2">2. 핵심 루프</h2>
 <p>웨이브제다. 한 판은 "준비 단계 → 전투 단계"를 반복한다.</p>
@@ -159,7 +212,15 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <td>100</td>
 <td>처음부터</td>
 <td>평원 (<strong>본부 영역 밖에도 가능</strong>)</td>
-<td><strong>웨이브 시작 때 한 번만</strong> 병사 3명 생산 (병종은 병영마다 선택, 웨이브 중에는 더 만들지 않음). <strong>병사 생산에는 골드·식량이 들지 않는다</strong></td>
+<td><strong>웨이브 시작 때 한 번만 근접 병사 3명</strong> 생산 (인원은 레벨과 무관하게 고정, 병종은 병영 레벨로 정해짐: 경비병 → 창병 → 파이크병, 웨이브 중에는 더 만들지 않음). <strong>병사 생산에는 골드·식량이 들지 않는다</strong></td>
+</tr>
+<tr>
+<td>사격장</td>
+<td>30골드</td>
+<td>100</td>
+<td>연구: 궁술</td>
+<td>평원 (본부 영역 안만)</td>
+<td><strong>웨이브 시작 때 한 번만 원거리 병사 2명</strong> 생산 (인원 고정, 병종은 레벨로 정해짐: 궁수 → 장궁병 → 쇠뇌병). 무료</td>
 </tr>
 <tr>
 <td>항구</td>
@@ -202,12 +263,20 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <td>웨이브 정산 시 <strong>연구수치 +3</strong> (5.4)</td>
 </tr>
 <tr>
-<td>연구소 (임시명)</td>
+<td>학술원 (전 연구소)</td>
 <td>80골드</td>
 <td>70</td>
-<td>처음부터</td>
+<td>연구: 천문학</td>
 <td>평원</td>
 <td>웨이브 정산 시 <strong>연구수치 +6</strong> (5.4)</td>
+</tr>
+<tr>
+<td>천문대</td>
+<td>60골드</td>
+<td>100</td>
+<td>연구: 천문학</td>
+<td><strong>산 칸 전용</strong>(본부 영역 안)</td>
+<td>웨이브 정산 시 <strong>연구수치 +4</strong> (5.4)</td>
 </tr>
 <tr>
 <td>방어탑</td>
@@ -277,8 +346,15 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <td>병영</td>
 <td>30</td>
 <td>45</td>
-<td>병사 4명</td>
-<td>병사 5명, 그 병영 병사 체력 +30%</td>
+<td>창병으로 승급</td>
+<td>파이크병으로 승급 (<strong>연구: 철기 제작 필요</strong>)</td>
+</tr>
+<tr>
+<td>사격장</td>
+<td>30</td>
+<td>45</td>
+<td>장궁병으로 승급</td>
+<td>쇠뇌병으로 승급 (<strong>연구: 철기 제작 필요</strong>)</td>
 </tr>
 <tr>
 <td>항구</td>
@@ -305,8 +381,8 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <td>교역소</td>
 <td>40</td>
 <td>60</td>
-<td>NPC 거래 3개</td>
-<td>NPC 거래 3개(거래 종류가 3가지라 더 늘지 않음)</td>
+<td>NPC 거래 3개 (유물 구매로 변경 예정, 5.6)</td>
+<td>같음</td>
 </tr>
 <tr>
 <td>도서관</td>
@@ -316,11 +392,18 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <td>연구수치 +5</td>
 </tr>
 <tr>
-<td>연구소</td>
+<td>학술원</td>
 <td>80</td>
 <td>120</td>
 <td>연구수치 +8</td>
 <td>연구수치 +10</td>
+</tr>
+<tr>
+<td>천문대</td>
+<td>60</td>
+<td>90</td>
+<td>연구수치 +6</td>
+<td>연구수치 +8</td>
 </tr>
 <tr>
 <td>광산</td>
@@ -340,7 +423,7 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 </table>
 <ul>
 <li>건물 체력은 레벨 2에서 +50%, 레벨 3에서 +100%다. 모래 위 집의 골드는 레벨과 관계없이 ×1.5다(레벨 1 +15, 레벨 2 +24, 레벨 3 +36).</li>
-<li>전투 중 <strong>파괴된 건물은 복구되지 않는다</strong>. 그 칸은 빈 땅이 되고, 다시 쓰려면 레벨 1로 새로 지어야 한다(레벨·병영 병종 선택도 사라진다). 대신 살아남은 건물이 입은 <strong>피해(체력)는 웨이브가 끝나면 모두 회복</strong>된다. 지는 순간 판이 끝난다.</li>
+<li>전투 중 <strong>파괴된 건물은 복구되지 않는다</strong>. 그 칸은 빈 땅이 되고, 다시 쓰려면 레벨 1로 새로 지어야 한다(레벨·병영 병종도 사라진다). 대신 살아남은 건물이 입은 <strong>피해(체력)는 웨이브가 끝나면 모두 회복</strong>된다. 지는 순간 판이 끝난다.</li>
 </ul>
 <h3 id="53">5.3 본부 레벨과 영역</h3>
 <ul>
@@ -358,9 +441,9 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <h3 id="54">5.4 연구 (테크트리)</h3>
 <ul>
 <li>준비 단계에서 왼쪽 패널의 "연구"를 열어 연구포인트로 항목을 선택하면 즉시 적용된다. 취소·재분배는 없다.</li>
-<li><strong>문명5식 트리</strong>: 총 13개이고 4열로 놓는다. 연구마다 <strong>선행 연구</strong>가 있고(없는 것, 하나, 둘), 선행을 <strong>모두</strong> 마쳐야 열린다. 갈래를 가로지르는 선행이 있다. 연구 화면은 열을 왼쪽에서 오른쪽으로 놓고 선행에서 후속으로 선을 그린다(마친 선행의 선은 밝게).</li>
-<li>비용은 열 번호와 같다: 1열 1점, 2열 2점, 3열 3점, 4열 4점. 전부 연구하려면 31점이 필요하다.</li>
-<li><strong>연구수치</strong>: 과학 건물(도서관·연구소)이 <strong>웨이브 정산마다</strong> 레벨에 따른 연구수치를 쌓는다. <strong>살아 있는 본부마다 정산 때 연구수치 +1</strong>도 받는다(건물이 없어도 받는다). 연구수치로 연구포인트를 얻는 데 필요한 양은 <strong>뒤로 갈수록 커진다</strong>: 첫 포인트는 5, 이후 포인트마다 1씩 늘어난다(5, 6, 7, 8 …, n번째 포인트는 4+n). 기준을 넘을 때마다 연구포인트 +1을 얻고 남는 수치는 이월한다. 기준을 세는 것은 연구수치로 얻은 포인트만이다(거래·유적지로 얻은 포인트는 세지 않는다). 31점까지 필요한 연구수치는 누적 620이다. 상단에 "연구포인트 n (쌓인 수치/다음 기준, +정산 때 얻을 수치)"로 표시한다. 연구포인트를 얻는 다른 길은 교역 NPC 거래와 유적지 원정이다.</li>
+<li><strong>문명5식 트리</strong>: 총 14개이고 4열로 놓는다. 연구마다 <strong>선행 연구</strong>가 있고(없는 것, 하나, 둘), 선행을 <strong>모두</strong> 마쳐야 열린다. 갈래를 가로지르는 선행이 있다. 연구 화면은 열을 왼쪽에서 오른쪽으로 놓고 선행에서 후속으로 선을 그린다(마친 선행의 선은 밝게).</li>
+<li>비용은 열 번호와 같다: 1열 1점, 2열 2점, 3열 3점, 4열 4점. 전부 연구하려면 33점이 필요하다.</li>
+<li><strong>연구수치</strong>: 과학 건물(도서관·학술원·천문대)이 <strong>웨이브 정산마다</strong> 레벨에 따른 연구수치를 쌓는다. <strong>살아 있는 본부마다 정산 때 연구수치 +1</strong>도 받는다(건물이 없어도 받는다). 연구수치로 연구포인트를 얻는 데 필요한 양은 <strong>뒤로 갈수록 커진다</strong>: 첫 포인트는 5, 이후 포인트마다 1씩 늘어난다(5, 6, 7, 8 …, n번째 포인트는 4+n). 기준을 넘을 때마다 연구포인트 +1을 얻고 남는 수치는 이월한다. 기준을 세는 것은 연구수치로 얻은 포인트만이다(거래·유적지로 얻은 포인트는 세지 않는다). 33점까지 필요한 연구수치는 누적 693이다. 상단에 "연구포인트 n (쌓인 수치/다음 기준, +정산 때 얻을 수치)"로 표시한다. 연구포인트를 얻는 다른 길은 교역 NPC 거래와 유적지 원정이다.</li>
 </ul>
 <table>
 <thead>
@@ -388,7 +471,7 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <td>1열 (1점)</td>
 <td>궁술</td>
 <td>-</td>
-<td>궁수·방어탑 해금</td>
+<td>사격장·방어탑 해금</td>
 </tr>
 <tr>
 <td>2열 (2점)</td>
@@ -398,9 +481,15 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 </tr>
 <tr>
 <td>2열 (2점)</td>
-<td>기마술</td>
+<td>천문학</td>
+<td>채광</td>
+<td>천문대·학술원 해금, 도서관·학술원의 정산 연구수치 +1 (천문대는 표의 수치에 이미 포함)</td>
+</tr>
+<tr>
+<td>2열 (2점)</td>
+<td>철기 제작</td>
 <td>농기구</td>
-<td>기병 해금</td>
+<td>병영·사격장 레벨 3 강화 해금 (파이크병·쇠뇌병)</td>
 </tr>
 <tr>
 <td>2열 (2점)</td>
@@ -423,7 +512,7 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <tr>
 <td>3열 (3점)</td>
 <td>단련</td>
-<td>궁술, 기마술</td>
+<td>궁술, 철기 제작</td>
 <td>모든 병사 체력·공격 +20%</td>
 </tr>
 <tr>
@@ -454,7 +543,7 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 </table>
 <ul>
 <li>같은 대상의 보너스는 더한다(밭: 농기구 +30%와 대풍작 +50% → +80%).</li>
-<li>해금되지 않은 건물·병종은 건설 메뉴·병영 선택 목록에서 어둡게 표시하고, 필요한 연구를 툴팁으로 알려 준다.</li>
+<li>해금되지 않은 건물은 건설 메뉴에서, 철기 제작 전의 레벨 3 강화는 건물 패널에서 어둡게 표시하고 필요한 연구를 툴팁으로 알려 준다.</li>
 </ul>
 <h3 id="55-1020">5.5 추가 본부 (10·20웨이브 이후)</h3>
 <ul>
@@ -481,30 +570,9 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <li><strong>방문 시기</strong>: 교역소를 지으면 <strong>다음 라운드의 준비 단계</strong>에 NPC가 처음 와서 교역소 옆에 서 있고, 그다음부터 <strong>3라운드마다</strong> 방문한다(1웨이브에 지으면 2·5·8웨이브). 교역소를 다시 지으면 일정이 새로 시작된다. 방문하는 순간 <strong>효과음</strong>이 난다.</li>
 <li><strong>거래 창</strong>: NPC가 있는 동안 상단에 "교역 NPC 방문!" 버튼이 떠서 거래 창을 연다. 창을 닫아도 버튼은 남아서 웨이브를 시작하기 전까지 몇 번이든 다시 열 수 있다. 보상 타일을 놓기 전에도 거래할 수 있다.</li>
 <li><strong>떠남</strong>: "웨이브 시작"을 누르면(전투 진행) NPC와 버튼이 사라진다.</li>
-<li><strong>거래 목록</strong>: 방문할 때마다 아래 3종을 보여 준다(풀이 3종이라 레벨과 상관없이 전부). 각 거래는 방문당 한 번만 살 수 있다. 가격은 웨이브와 상관없이 고정이다. <strong>식량은 거래에 쓰지 않는다</strong>(식량은 본부 레벨 전용). 거래 항목은 추후 다시 정리한다.</li>
+<li><strong>유물 구매 (기획 변경, 미구현)</strong>: 거래 창의 고정 거래 3종(연구포인트·조각·수비병)을 <strong>없애고</strong>, NPC에게 <strong>골드를 내고 유물을 얻는</strong> 방식으로 바꾼다. 유물은 <strong>무작위 효과</strong>를 주는 영구 보너스이고, 구매할 때까지 어떤 효과가 나올지 모른다. <strong>식량은 거래에 쓰지 않는다</strong>(식량은 본부 레벨 전용). 가격·유물 종류·효과 수치·방문당 구매 횟수·중복 규칙은 9.1에서 정한다. 구현하기 전까지는 위 거래 3종이 그대로 동작한다.</li>
+<li>지금 동작(구현 전까지): 방문할 때마다 골드 60 → 연구포인트 1, 골드 40 → 조각 +1(이번 준비 단계에 놓을 조각이 늘고 선택지를 새로 뽑음), 골드 30 → 수비병 +2(다음 전투 시작 1회성)를 방문당 한 번씩 살 수 있다.</li>
 </ul>
-<table>
-<thead>
-<tr>
-<th>거래</th>
-<th>효과</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>골드 60 → 연구포인트 1</td>
-<td>연구포인트를 산다</td>
-</tr>
-<tr>
-<td>골드 40 → 조각 +1</td>
-<td>이번 준비 단계에 놓을 조각이 1개 늘고 선택지를 새로 뽑는다</td>
-</tr>
-<tr>
-<td>골드 30 → 수비병 +2</td>
-<td>다음 전투 시작에 본부에서 수비병 2명이 더 나온다(1회성)</td>
-</tr>
-</tbody>
-</table>
 <h2 id="6">6. 전투</h2>
 <h3 id="_5">병사</h3>
 <ul>
@@ -513,12 +581,13 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <li>플레이어는 <strong>이동 명령</strong>만 내린다(전투 중 땅을 클릭). 개별 지휘는 없다.</li>
 <li>유닛은 서로 겹치지 않는다. 가까이 붙으면 서로 밀어내고(최소 간격 0.3칸), 땅 유닛은 땅 위에서, 배는 바다 위에서만 밀린다. 유닛 몸통은 지름 0.24칸으로 작게 그린다.</li>
 <li><strong>공격 애니메이션</strong>: 공격할 때 몸통이 목표 쪽으로 0.35칸 약진했다가 0.22초 만에 제자리로 돌아온다(부딪히는 느낌). 전투 배속에 맞춰 같이 빨라진다.</li>
-<li>병종은 3가지다. 궁수와 기병은 연구로 해금한다(5.4).</li>
+<li>병종은 6가지이고 건물 레벨이 병종을 정한다. 병영은 근접(경비병 → 창병 → 파이크병), 사격장은 원거리(궁수 → 장궁병 → 쇠뇌병)다. 레벨 3(파이크병·쇠뇌병)은 연구 "철기 제작"이 필요하다(5.4).</li>
 </ul>
 <table>
 <thead>
 <tr>
 <th>병종</th>
+<th>건물·레벨</th>
 <th>체력</th>
 <th>공격</th>
 <th>속도</th>
@@ -527,31 +596,58 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 </thead>
 <tbody>
 <tr>
-<td>검병</td>
+<td>경비병</td>
+<td>병영 1</td>
 <td>30</td>
 <td>5</td>
 <td>1.5칸/초</td>
 <td>근접</td>
 </tr>
 <tr>
+<td>창병</td>
+<td>병영 2</td>
+<td>40</td>
+<td>6</td>
+<td>1.5칸/초</td>
+<td>근접</td>
+</tr>
+<tr>
+<td>파이크병</td>
+<td>병영 3</td>
+<td>55</td>
+<td>7</td>
+<td>2.0칸/초</td>
+<td>근접</td>
+</tr>
+<tr>
 <td>궁수</td>
+<td>사격장 1</td>
 <td>20</td>
 <td>3</td>
 <td>1.5칸/초</td>
 <td>2칸</td>
 </tr>
 <tr>
-<td>기병</td>
-<td>40</td>
+<td>장궁병</td>
+<td>사격장 2</td>
+<td>25</td>
+<td>4</td>
+<td>1.5칸/초</td>
+<td>2.5칸</td>
+</tr>
+<tr>
+<td>쇠뇌병</td>
+<td>사격장 3</td>
+<td>25</td>
 <td>6</td>
-<td>2.5칸/초</td>
-<td>근접</td>
+<td>1.5칸/초</td>
+<td>2.5칸</td>
 </tr>
 </tbody>
 </table>
 <ul>
-<li><strong>병사 생산은 무료</strong>다. 병영이 웨이브 시작 때 내보내는 병사와 본부의 수비병에는 골드·식량이 들지 않는다. 준비 단계 예고에 "병영 병력 3명 (검병 3)"처럼 이번 웨이브에 나올 병력을 보여 준다.</li>
-<li><strong>병영마다 생산할 병종을 하나 고른다.</strong> 병영을 클릭해 정하고(기본 검병), 그 병영은 웨이브 시작 때 그 병종만 만든다. 본부의 수비병과 웨이브 중 생산은 항상 검병이다.</li>
+<li><strong>병사 생산은 무료</strong>다. 병영·사격장이 웨이브 시작 때 내보내는 병사와 본부의 수비병에는 골드·식량이 들지 않는다. 준비 단계 예고에 "병영 병력 5명 (경비병 3, 궁수 2)"처럼 이번 웨이브에 나올 병력을 보여 준다.</li>
+<li><strong>병종 선택은 없다.</strong> 병영은 3명, 사격장은 2명을 레벨과 무관하게 내고, 레벨이 오르면 같은 인원이 더 센 병종이 된다. 건물 레벨 체력 보너스(+50%/+100%)만 건물 체력에 적용된다. 본부의 수비병과 웨이브 중 생산은 항상 경비병이다(본부 레벨과 무관).</li>
 <li><strong>섬</strong>은 4방향으로 이어진 땅이다. 이동 명령이 없으면 병사는 같은 섬의 가장 가까운 적을 쫓고, 같은 섬에 적이 없으면 다른 섬의 적을 향해 간다.</li>
 <li>다른 섬으로 가야 하면 같은 섬의 항구로 가서 기다린다. <strong>항구마다 보트 1척</strong>이 있고, 기다리는 병사를 최대 4명 태워 목표 섬의 해안에 내려 주고 돌아온다. 항구가 없는 섬의 병사는 건너가지 못한다. 항구가 부서지면 그 보트도 사라진다.</li>
 <li><strong>클릭 이동</strong>: 전투 중 땅을 클릭하면 모든 병사가 그 칸으로 이동해 0.6칸 안에 도착하면 명령이 끝난다(깃발은 없고 클릭한 자리에 잠깐 표시만 퍼진다). 이동하는 동안 병사는 <strong>2.5칸 안의 적만</strong> 상대하고 계속 간다. 클릭한 곳이 다른 섬이면 같은 섬의 항구에서 보트로 건넌다. 우클릭으로 이동을 취소하면 다시 가까운 적을 쫓는다. 준비 단계에서는 내릴 수 없다.</li>
@@ -707,9 +803,9 @@ docs/          기획서 (.gdignore)
 <li>3D 격자. 지형 칸은 로우폴리 블록, 유닛·건물은 플레이스홀더 메시(색 큐브·캡슐)로 시작한다.</li>
 <li>Camera3D 하나. 준비 단계 90°, 전투 단계 약 55°로 트윈 전환하고, 전투에서는 준비 단계보다 더 확대한다(카메라 크기 18 → 13.5).</li>
 <li>입력: 카드를 고른 뒤 필드를 클릭해 조각 배치, 우클릭 또는 R키로 회전.</li>
-<li>UI: 상단 자원(골드·식량·연구포인트, 골드·식량 옆 괄호에 다음 정산 생산량 "(+n)")과 전투 중 배속 버튼, 오른쪽 아래 건설 메뉴(아래 "건설 메뉴")와 하단 가운데의 조각 카드(전투 보상 타일 3개, 본부 조각), 왼쪽 패널(본부 Lv·식량 누적, 조각 구매, 연구 버튼). 건물을 클릭하면 레벨업(병영은 병종 선택 포함) 패널이 나온다.</li>
+<li>UI: 상단 자원(골드·식량·연구포인트, 골드·식량 옆 괄호에 다음 정산 생산량 "(+n)")과 전투 중 배속 버튼, 오른쪽 아래 건설 메뉴(아래 "건설 메뉴")와 하단 가운데의 조각 카드(전투 보상 타일 3개, 본부 조각), 왼쪽 패널(본부 Lv·식량 누적, 조각 구매, 연구 버튼). 건물을 클릭하면 레벨업(병영·사격장은 현재 병종 표시) 패널이 나온다.</li>
 <li><strong>건설 메뉴</strong>: 화면 <strong>오른쪽 아래</strong>에 카테고리 버튼 4개가 있고, 누르면 <strong>그 위로 목록이 펼쳐진다</strong>(드롭다운). 건물을 고르거나 바깥을 누르면 닫힌다. 건물을 고르면 오른쪽 아래의 레벨업 패널은 그 위에 나온다.</li>
-<li><strong>생산</strong>: 집, 밭, 낚시터 · <strong>군사·해상</strong>: 병영, 항구, 방어탑 · <strong>상업</strong>: 시장, 교역소 · <strong>과학</strong>: 도서관, 연구소</li>
+<li><strong>생산</strong>: 집, 밭, 낚시터 · <strong>군사·해상</strong>: 병영, 사격장, 항구, 방어탑 · <strong>상업</strong>: 시장, 교역소 · <strong>과학</strong>: 도서관, 학술원, 천문대</li>
 <li>목록 항목은 "이름 비용 · 효과"를 보여 주고, 연구가 필요하거나 골드가 모자라면 어둡게 표시하며 이유를 툴팁으로 알려 준다. 건물을 하나 지으면 설치 모드와 목록이 닫힌다.</li>
 </ul>
 <h3 id="73">7.3 이동과 경로</h3>
@@ -728,7 +824,7 @@ docs/          기획서 (.gdignore)
 </ul>
 <h2 id="8">8. 범위 밖 (첫 버전에서 제외)</h2>
 <ul>
-<li>방어탑, 연구 취소·재분배, 메타 진행, 판 도중 저장, 개별 병사 지휘.</li>
+<li>연구 취소·재분배, 메타 진행, 판 도중 저장, 개별 병사 지휘, 배경음.</li>
 </ul>
 <h2 id="9">9. 다음 작업</h2>
 <p>마일스톤 순서대로 진행한다. 각 마일스톤은 끝에 "확인" 항목을 실제로 실행해 볼 수 있어야 완료다. 끝난 항목은 지운다.</p>
@@ -742,31 +838,47 @@ docs/          기획서 (.gdignore)
 </thead>
 <tbody>
 <tr>
+<td><strong>M7 연구 개편</strong></td>
+<td>연구 트리·비용·효과를 다시 설계한다(방향은 9.1에서 정함). 기획서 5.4를 먼저 고친 뒤 구현</td>
+<td>새 연구로 시작부터 30웨이브까지 한 판이 가능하다</td>
+</tr>
+<tr>
+<td><strong>M8 유물 교역</strong></td>
+<td>5.6의 NPC 거래를 골드로 무작위 유물을 사는 방식으로 바꾼다(수치는 9.1에서 정함)</td>
+<td>교역소 방문 때 골드로 유물을 사고 효과가 전투에 반영된다</td>
+</tr>
+<tr>
 <td><strong>M6 완성도</strong> (마지막)</td>
-<td>밸런스 시뮬레이션 (승리·패배 화면, 메인 메뉴, 최고 웨이브 저장, 전투 효과음은 0.28에서 구현)</td>
+<td>아래 9.2의 밸런스 시뮬레이션, 화면 확인, 효과음 점검</td>
 <td>메뉴에서 시작해 30웨이브까지 한 판을 끝까지 할 수 있다</td>
 </tr>
 </tbody>
 </table>
-<h3 id="91">9.1 정해진 것</h3>
-<p>2026-11-25에 정했고 7번을 뺀 나머지는 0.27·0.28에서 구현했다.</p>
-<ol>
-<li><strong>식량</strong>: 본부 레벨 전용으로 둔다. NPC 거래의 식량 항목은 삭제했다(거래 목록은 추후 다시 정리). 보유 식량의 새 용도는 만들지 않는다.</li>
-<li><strong>교역소가 닫힌 경우</strong>: 철거·이전 기능은 넣지 않는다. 11웨이브부터 나오는 바다 섞인 타일로 다시 여는 방법뿐이다.</li>
-<li><strong>막힌 바닷길</strong>: 해적이 가장 가까운 땅에 내려 바다를 ×0.4 속도로 건너온다(6장 "적").</li>
-<li><strong>승리 화면</strong>: 30웨이브 클리어 때 결과(웨이브·땅 칸 수·본부 수)와 "계속하기(무한 모드) / 처음으로"를 보여 준다. 최고 웨이브는 무한 모드까지 포함해 저장한다.</li>
-<li><strong>메인 메뉴</strong>: 시작 / 최고 웨이브 표시 / 종료. 설정 화면은 없다.</li>
-<li><strong>사운드</strong>: 전투 효과음(공격·방어탑·상륙·승패)과 보스 등장음만 임시음으로 넣고 배경음은 이번에 하지 않는다.</li>
-<li><strong>숲·산·유적지·영역·도서관/연구소 수치</strong>: 지금 수치를 그대로 두고(필드 밖 대륙에는 숲·산을 넣지 않음, 이름은 도서관·연구소 임시명 유지) 시뮬레이션 표에서 어긋나는 곳만 조정한다.</li>
-</ol>
-<h3 id="92-m6">9.2 M6에서 할 일 (순서 제안)</h3>
+<h3 id="91-m7m8">9.1 정해야 할 것 (M7·M8 시작 전, 추천안 포함)</h3>
 <ul>
-<li><strong>밸런스 시뮬레이션</strong>: <code>tests/</code>에 1~30웨이브 곡선(적 수·병력·골드 수입)을 표로 뽑는 점검을 추가하고 어긋나는 수치만 <code>balance.gd</code>에서 조정한다. 마지막에 직접 한 판 돌려 느낌을 확인한다.</li>
+<li><strong>연구 개편(M7)</strong>: 무엇이 불만인지(트리 모양·비용·효과 종류·연구포인트 수급 중 어디)를 정한다. 추천: 지금 13개 문명5식 트리는 두고 효과가 약하거나 밋밋한 연구를 바꾸는 것부터 한다.</li>
+<li><strong>유물 가격(M8)</strong>: 추천 골드 80 고정, 같은 방문에서 구매는 1번.</li>
+<li><strong>유물 종류와 수치(M8)</strong>: 추천 8~10종(골드 정산 +, 병사 능력 +, 본부 체력 +, 방어탑 사거리 +, 식량 +, 연구수치 + 등), 효과 세기는 작게(5~10%).</li>
+<li><strong>중복·획득 방식(M8)</strong>: 추천 이미 가진 유물은 다시 나오지 않고(전부 가지면 구매 불가), 구매 즉시 무작위로 결정해 알려 준다.</li>
 </ul>
+<h3 id="92-m6">9.2 M6에서 할 일 (순서 제안)</h3>
+<ol>
+<li><strong>밸런스 시뮬레이션</strong>: <code>tests/</code>에 1~30웨이브 곡선(적 수·병력·골드·식량·연구수치 수입)을 표로 뽑는 점검을 추가하고, 시뮬레이션 표에서 어긋나는 수치(숲·산·유적지·영역·도서관/연구소 포함)만 <code>balance.gd</code>에서 조정한다. 마지막에 직접 한 판을 처음부터 끝까지 돌려 느낌을 확인한다. 특히 0.29 변경의 체감을 본다.</li>
+<li>0.30 병종 개편(병영 3명·사격장 2명 고정, 레벨별 병종 수치, 철기 제작)</li>
+<li>사거리 축소(근접 0.7·궁수 2·석궁수 1.8·방어탑 3/3.5/4)와 본부 공격(공격 3, 사거리 2.5)</li>
+<li>적 배율 계수 완화(땅 0.035, 확장 0.07)</li>
+<li>연구: 연구수치 기준 5부터 +1씩, 본부 연구수치 +1, 전부 연구하면 33점(누적 693)</li>
+<li>낚시터 식량: 바깥 바다와 이어지면 거의 항상 9</li>
+<li>본부별 레벨·영역(정사각형 60%), 새 본부는 최고 레벨의 절반에서 시작</li>
+<li><strong>화면 확인</strong>: 본부가 여럿일 때 왼쪽 패널의 본부별 줄, 메인 메뉴, 승리 화면을 캡처로 확인한다(0.28·0.29에서 구현만 하고 캡처로 보지 못했다).</li>
+<li><strong>효과음 점검</strong>: 임시음(<code>tools/make_sfx.py</code>)을 직접 들어 보고 어색하면 바꾼다.</li>
+<li><strong>폰트</strong>: <code>assets/fonts/DreamHeumulKR.ttf</code>(git에 올라가 있지 않고 아직 쓰지 않는다)를 쓸지 정한다. 쓴다면 라이선스를 확인한 뒤 프로젝트 테마로 적용하고, 안 쓰면 지우거나 <code>.gitignore</code>에 넣는다.</li>
+</ol>
 <h3 id="93">9.3 알아 둘 것</h3>
 <ul>
-<li>테스트와 화면 확인 방법은 <code>CLAUDE.md</code>의 "실행과 테스트"에 있다. 지금 <code>tests/</code>의 점검이 모두 통과한 상태(0.28)다.</li>
+<li>테스트와 화면 확인 방법은 <code>CLAUDE.md</code>의 "실행과 테스트"에 있다. 지금 <code>tests/</code>의 점검(<code>*_check.gd</code>·<code>*_flow.gd</code> 33개)이 모두 통과한 상태(0.31)다. <code>m14_flow.gd</code>는 한 번 무작위로 실패한 적이 있어(7번 다시 돌리면 통과) 지형 무작위에 영향을 받는 것으로 보이나 원인은 확인하지 못했다.</li>
 <li>사용자가 Godot 에디터를 켜 두는 경우가 많아서 Godot 프로세스를 강제로 종료하지 않는다(에디터가 같이 꺼진다).</li>
+<li>연구 화면(열 배치·연결선)은 <code>tests/screenshot.gd</code>의 <code>prep research</code> 모드로 캡처한다.</li>
 </ul>
 <h2 id="10">10. 변경 이력</h2>
 <table>
@@ -923,5 +1035,15 @@ docs/          기획서 (.gdignore)
 <td>2026-11-25</td>
 <td><strong>전투</strong><br>- 본부가 사거리 2.5칸 안의 해적을 1초마다 공격 3으로 자동 공격<br>- 본부마다 정산 때 연구수치 +1, 연구포인트에 필요한 연구수치를 5부터 1씩 늘어나게 변경(고정 10 삭제)<br>- 적 체력·공격 배율의 증가 계수를 약 30% 낮춤(땅 0.05 → 0.035, 확장 0.1 → 0.07)<br>- 본부 레벨·식량 누적·영역을 본부마다 따로(자기 영역의 식량만 셈), 영역 확장은 정사각형 우선 60%·무작위 40%, 영역은 겹치지 않음(먼저 차지한 쪽), 새 본부는 최고 레벨의 절반에서 시작<br>- 광산을 채광 연구로 해금, 연구를 문명5식 13개 4열 트리(선행 여러 개·갈래 교차, 비용 1~4점, 총 31점)로 재배치하고 연구 화면에 선행 연결선 표시<br>- 낚시터 식량은 물길로 이어진 바다 전체를 센다(4칸 제한 삭제), 병영은 영역 밖에도 설치 가능<br>- 사거리 조정: 근접 0.9 → 0.7, 궁수 4 → 2, 석궁수 3.5 → 1.8, 방어탑 4/4.5/5 → 3/3.5/4, 이동 명령 중 교전 거리 3 → 2.5<br>- 건물 공격 거리는 칸 가장자리부터 잰다, 원거리 판정은 <code>ranged</code> 값</td>
 </tr>
+<tr>
+<td>0.30</td>
+<td>2026-11-25</td>
+<td><strong>UI</strong><br>- 골드·식량·연구포인트(웨이브 번호 포함)를 화면 최상단 전체 폭 고정바로 분리<br><strong>병종</strong><br>- 병영은 근접 3명 고정, 레벨이 병종을 정함(병사 → 검사 → 기사), 병종 선택 UI·병영 레벨 체력 보너스 삭제, 검병·기병 이름을 병사·기사로 변경<br>- 사격장 추가(30골드, 궁술 해금, 본부 영역 안, 원거리 2명 고정, 궁수 → 장궁병 → 쇠뇌병)<br>- 연구 기마술을 철기 제작으로 변경(병영·사격장 레벨 3 강화 해금), 궁술은 사격장·방어탑 해금</td>
+</tr>
+<tr>
+<td>0.31</td>
+<td>2026-11-25</td>
+<td><strong>병종·과학</strong><br>- 근접 병종 이름을 경비병 → 창병 → 파이크병으로 변경(코드 상수 <code>U_GUARD</code>·<code>U_SPEAR</code>·<code>U_PIKE</code> 포함)<br>- 연구 천문학 추가(2열, 선행 채광): 천문대·학술원 해금, 도서관·학술원 연구수치 +1<br>- 천문대 추가(산 칸 전용, 60골드, 연구수치 +4/+6/+8), 연구소를 학술원으로 이름 바꾸고 천문학 연구로 해금</td>
+</tr>
 </tbody>
-</table></body></html>
+</table></main></body></html>

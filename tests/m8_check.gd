@@ -24,6 +24,8 @@ func _initialize() -> void:
 	fails += _check(rf.research_income() == 9 + rf.hqs.size(), "본부 수 + 도서관 Lv1(3) + 연구소 Lv1(6)")
 	rf.upgrade(Vector2i(3, 2))
 	fails += _check(rf.research_income() == 11 + rf.hqs.size(), "연구소 Lv2(8) → 11 + 본부 수")
+	fails += _check(rf.research_income({"astronomy": true}) == 13 + rf.hqs.size(), "천문학: 도서관·학술원 +1씩")
+	fails += _check(Balance.OBSERVATORY_RESEARCH_LV == [4, 6, 8] and Balance.BUILDINGS[Balance.OBSERVATORY]["mountain_only"], "천문대: 산 전용, 연구수치 4/6/8")
 	# 시장: 4방향으로 붙은 집의 정산 골드 +25%
 	rf.build(Balance.HOUSE, Vector2i(4, 2))
 	var g0: int = rf.income().x

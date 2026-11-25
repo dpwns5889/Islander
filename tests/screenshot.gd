@@ -115,7 +115,7 @@ func _initialize() -> void:
 	main.set_build(0)
 	main.field.expand_all()
 	if args.size() > 2 and args[2] == "prep":
-		for id in [Balance.HOUSE, Balance.FARM, Balance.BARRACKS]:
+		for id in [Balance.HOUSE, Balance.FARM, Balance.BARRACKS, Balance.SHOOTING_RANGE]:
 			main.set_build(id)
 			for c in isl:
 				if isl[c] == hq_island and main.try_build(c):
@@ -127,7 +127,6 @@ func _initialize() -> void:
 		for c in main.field.buildings:
 			if main.field.buildings[c] == Balance.BARRACKS:
 				main.select_building(c)
-				main.select_unit(Balance.U_ARCHER)
 		if args.size() > 3 and args[3] == "research":
 			root.get_node("GameState").research_points = 2
 			main._toggle_research()

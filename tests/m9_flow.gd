@@ -26,7 +26,7 @@ func _initialize() -> void:
 			built = true
 			break
 	fails += _check(built and main.field.buildings.values().has(Balance.PORT), "연구 뒤에는 항구를 지을 수 있다")
-	# 병영 병종 선택: 궁수는 궁술 뒤에
+	# 철기 제작 전에는 병영 레벨 3 강화를 못 한다
 	main.set_build(Balance.BARRACKS)
 	var barracks: Vector2i = Vector2i(-1, -1)
 	for c in main.field.cells:
@@ -34,12 +34,12 @@ func _initialize() -> void:
 			barracks = c
 			break
 	main.set_build(0)
-	fails += _check(main.select_building(barracks) and main.unit_row.visible, "병영을 고르면 병종 버튼이 보인다")
-	fails += _check(not main.select_unit(Balance.U_ARCHER), "궁술 전에는 궁수를 못 고른다")
-	fails += _check(main.research("archery") and main.select_unit(Balance.U_ARCHER) and main.field.barracks_unit[barracks] == Balance.U_ARCHER, "궁술 뒤에는 궁수를 고른다")
-	fails += _check(main.select_unit(Balance.U_SOLDIER) and main.field.barracks_unit[barracks] == Balance.U_SOLDIER, "검병으로 되돌릴 수 있다")
+	gs.gold = 1000
+	fails += _check(main.select_building(barracks) and main.upgrade_selected(), "병영 레벨 2 강화")
+	fails += _check(not main.upgrade_selected(), "철기 제작 전에는 레벨 3 강화 불가")
+	fails += _check(main.research("tools") and main.research("ironwork") and main.upgrade_selected() and main.field.levels[barracks] == 3, "철기 제작 뒤에는 레벨 3 강화")
 	# 금융: 건설 비용 할인
-	fails += _check(main.research("tools") and main.research("trade") and main.research("commerce") and main.research("finance"), "농기구·교역·상업·금융 연구")
+	fails += _check(main.research("trade") and main.research("commerce") and main.research("finance"), "농기구·교역·상업·금융 연구")
 	main.set_build(Balance.HOUSE)
 	fails += _check(main._cost_of(Balance.HOUSE) == 17, "금융: 집 20 → 17골드")
 	main.set_build(0)

@@ -67,7 +67,7 @@ func _initialize() -> void:
 	main.try_build(barracks) # 병영 30골드
 	gs.gold = 0
 	main._refresh_hud()
-	fails += _check("병영 병력 3명 (검병 3)" in main.wave_info.text and "모자라" not in main.wave_info.text, "골드가 0이어도 병력 표시: " + main.wave_info.text)
+	fails += _check("병영 병력 3명 (경비병 3)" in main.wave_info.text and "모자라" not in main.wave_info.text, "골드가 0이어도 병력 표시: " + main.wave_info.text)
 	gs.gold = 40
 	gs.food = 7
 	main.tiles_required = 0

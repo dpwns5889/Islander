@@ -457,7 +457,6 @@ func carve_count(p: Piece, origin: Vector2i) -> int:
 var buildings: Dictionary = {}
 var hp: Dictionary = {} ## 건물 위치 → 체력
 var levels: Dictionary = {} ## 건물 위치 → 레벨 (1~3)
-var barracks_unit: Dictionary = {} ## 병영 위치 → 생산할 병종 (없으면 검병)
 var _nodes: Dictionary = {} ## 건물·본부 위치 → 화면 노드들 (첫 번째가 본체)
 
 
@@ -682,7 +681,6 @@ func damage(c: Vector2i, amount: float) -> bool:
 			buildings.erase(c)
 			hp.erase(c)
 			levels.erase(c)
-			barracks_unit.erase(c)
 		else:
 			_tint(c)
 	return false
@@ -834,16 +832,18 @@ func _market_bonus(c: Vector2i) -> float:
 	return best
 
 
-## 웨이브 정산 때 얻는 연구수치: 본부 수 + 도서관·연구소 레벨 합 (기획서 5.4)
-func research_income() -> int:
+## 웨이브 정산 때 얻는 연구수치: 본부 수 + 도서관·학술원·천문대 레벨 합 (기획서 5.4)
+func research_income(techs: Dictionary = {}) -> int:
 	var n: int = Balance.HQ_RESEARCH * hqs.size() # 본부마다 +1
 	for c in buildings:
 		if not in_territory(c):
 			continue
 		if buildings[c] == Balance.LIBRARY:
-			n += Balance.LIBRARY_RESEARCH_LV[levels[c] - 1]
+			n += Balance.LIBRARY_RESEARCH_LV[levels[c] - 1] + Balance.science_bonus(techs)
 		elif buildings[c] == Balance.LAB:
-			n += Balance.LAB_RESEARCH_LV[levels[c] - 1]
+			n += Balance.LAB_RESEARCH_LV[levels[c] - 1] + Balance.science_bonus(techs)
+		elif buildings[c] == Balance.OBSERVATORY:
+			n += Balance.OBSERVATORY_RESEARCH_LV[levels[c] - 1]
 	return n
 
 

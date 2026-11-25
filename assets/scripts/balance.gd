@@ -10,9 +10,11 @@ const FARM: int = 5
 const FISHERY: int = 6 ## 낚시터
 const TRADING_POST: int = 7 ## 교역소
 const TOWER: int = 9 ## 방어탑
+const SHOOTING_RANGE: int = 13 ## 사격장 (원거리 병사 생산)
 const LIBRARY: int = 10 ## 도서관 (임시명)
 const LAB: int = 11 ## 연구소 (임시명)
 const MINE: int = 12 ## 광산 (산 칸 전용)
+const OBSERVATORY: int = 14 ## 천문대 (산 칸 전용, 과학)
 const MAX_LEVEL: int = 3
 
 ## cost: 건설 골드, hp: 체력(M3부터), sand: 모래 위 건설 가능 여부, sea: 인접 바다 필요 여부
@@ -25,38 +27,46 @@ const BUILDINGS: Dictionary = {
 	FISHERY: {"name": "낚시터", "cost": 25, "hp": 50, "sand": true, "sea": false, "on_water": true, "color": Color(0.2, 0.65, 0.75)},
 	TRADING_POST: {"name": "교역소", "cost": 40, "hp": 70, "tech": "trade", "sand": true, "sea": false, "open_sea": true, "unique": true, "color": Color(0.7, 0.35, 0.75)},
 	LIBRARY: {"name": "도서관", "cost": 40, "hp": 60, "sand": true, "sea": false, "color": Color(0.55, 0.35, 0.65)},
-	LAB: {"name": "연구소", "cost": 80, "hp": 70, "sand": false, "sea": false, "color": Color(0.25, 0.7, 0.6)},
+	LAB: {"name": "학술원", "cost": 80, "hp": 70, "tech": "astronomy", "sand": false, "sea": false, "color": Color(0.25, 0.7, 0.6)},
 	MINE: {"name": "광산", "cost": 60, "hp": 100, "tech": "mining", "sand": false, "sea": false, "mountain_only": true, "color": Color(0.5, 0.45, 0.4)},
+	SHOOTING_RANGE: {"name": "사격장", "cost": 30, "hp": 100, "tech": "archery", "sand": false, "sea": false, "color": Color(0.3, 0.5, 0.35)},
+	OBSERVATORY: {"name": "천문대", "cost": 60, "hp": 100, "tech": "astronomy", "sand": false, "sea": false, "mountain_only": true, "color": Color(0.3, 0.3, 0.6)},
 	TOWER: {"name": "방어탑", "cost": 40, "hp": 200, "tech": "archery", "sand": true, "sea": false, "color": Color(0.35, 0.4, 0.55)},
 }
 
 ## 건설 메뉴 카테고리 (아래에서 위로 펼쳐지는 드롭다운) (기획서 7.2)
 const CATEGORIES: Array = [
 	{"name": "생산", "ids": [HOUSE, FARM, FISHERY, MINE]},
-	{"name": "군사·해상", "ids": [BARRACKS, PORT, TOWER]},
+	{"name": "군사·해상", "ids": [BARRACKS, SHOOTING_RANGE, PORT, TOWER]},
 	{"name": "상업", "ids": [MARKET, TRADING_POST]},
-	{"name": "과학", "ids": [LIBRARY, LAB]},
+	{"name": "과학", "ids": [LIBRARY, LAB, OBSERVATORY]},
 ]
 
-const U_SOLDIER: int = 0
+const U_GUARD: int = 0
 const U_PIRATE: int = 1
 const U_SHIP: int = 2
 const U_BOAT: int = 3
 const U_ARCHER: int = 4
-const U_CAVALRY: int = 5
+const U_PIKE: int = 5 ## 파이크병
 const U_CROSSBOW: int = 6 ## 석궁수 (적)
 const U_AXE: int = 7 ## 도끼병 (적)
 const U_SHIELD: int = 8 ## 방패병 (적)
 const U_CAPTAIN: int = 9 ## 선장 (보스 라운드의 적)
+const U_SPEAR: int = 10 ## 창병
+const U_LONGBOW: int = 11 ## 장궁병
+const U_ARBALEST: int = 12 ## 쇠뇌병
 const ENEMY_KINDS: Array[int] = [U_PIRATE, U_CROSSBOW, U_AXE, U_SHIELD, U_CAPTAIN]
-const SOLDIER_KINDS: Array[int] = [U_SOLDIER, U_ARCHER, U_CAVALRY] ## 병영에서 고를 수 있는 병종
+const SOLDIER_KINDS: Array[int] = [U_GUARD, U_SPEAR, U_PIKE, U_ARCHER, U_LONGBOW, U_ARBALEST] ## 아군 병종
 const UNITS: Dictionary = {
-	U_SOLDIER: {"name": "검병", "hp": 30.0, "atk": 5.0, "speed": 1.5, "reach": 0.7, "color": Color(0.2, 0.4, 1.0)},
+	U_GUARD: {"name": "경비병", "hp": 30.0, "atk": 5.0, "speed": 1.5, "reach": 0.7, "color": Color(0.2, 0.4, 1.0)},
 	U_PIRATE: {"name": "해적", "hp": 25.0, "atk": 2.0, "speed": 1.2, "reach": 0.7, "color": Color(0.15, 0.05, 0.1)},
 	U_SHIP: {"name": "해적선", "hp": 1.0, "atk": 0.0, "speed": 2.0, "reach": 0.7, "color": Color(0.45, 0.3, 0.15)},
 	U_BOAT: {"name": "보트", "hp": 1.0, "atk": 0.0, "speed": 2.5, "reach": 0.7, "color": Color(0.85, 0.75, 0.55)},
 	U_ARCHER: {"name": "궁수", "hp": 20.0, "atk": 3.0, "speed": 1.5, "reach": 2.0, "ranged": true, "color": Color(0.2, 0.75, 0.3)},
-	U_CAVALRY: {"name": "기병", "hp": 40.0, "atk": 6.0, "speed": 2.5, "reach": 0.7, "color": Color(0.95, 0.55, 0.1)},
+	U_SPEAR: {"name": "창병", "hp": 40.0, "atk": 6.0, "speed": 1.5, "reach": 0.7, "color": Color(0.3, 0.55, 1.0)},
+	U_PIKE: {"name": "파이크병", "hp": 55.0, "atk": 7.0, "speed": 2.0, "reach": 0.7, "color": Color(0.95, 0.55, 0.1)},
+	U_LONGBOW: {"name": "장궁병", "hp": 25.0, "atk": 4.0, "speed": 1.5, "reach": 2.5, "ranged": true, "color": Color(0.3, 0.85, 0.4)},
+	U_ARBALEST: {"name": "쇠뇌병", "hp": 25.0, "atk": 6.0, "speed": 1.5, "reach": 2.5, "ranged": true, "color": Color(0.1, 0.6, 0.45)},
 	U_CROSSBOW: {"name": "석궁수", "hp": 18.0, "atk": 3.0, "speed": 1.1, "reach": 1.8, "ranged": true, "color": Color(0.55, 0.15, 0.3)},
 	U_AXE: {"name": "도끼병", "hp": 50.0, "atk": 4.0, "speed": 1.2, "reach": 0.7, "color": Color(0.45, 0.1, 0.1)},
 	U_SHIELD: {"name": "방패병", "hp": 100.0, "atk": 2.5, "speed": 0.9, "reach": 0.7, "color": Color(0.3, 0.3, 0.35)},
@@ -95,7 +105,12 @@ const PIRATES_PER_SHIP: int = 3
 const MIN_PIRATES_PER_SHIP: int = 2 ## 해적선 한 척의 최소 인원. 한 명만 타고 오는 배는 없다 (기획서 6장)
 const SHIP_INTERVAL: float = 3.0
 const HQ_GUARDS: int = 2 ## 웨이브 시작 때 본부가 무료로 내보내는 수비병
-const UNIT_TECH: Dictionary = {U_ARCHER: "archery", U_CAVALRY: "cavalry"} ## 병종을 해금하는 연구
+## 병영·사격장: 레벨이 병종을 정하고 인원은 고정이다 (기획서 5.1, 6장)
+const MILITARY: Dictionary = {
+	BARRACKS: {"units": [U_GUARD, U_SPEAR, U_PIKE], "count": 3},
+	SHOOTING_RANGE: {"units": [U_ARCHER, U_LONGBOW, U_ARBALEST], "count": 2},
+}
+const LV3_TECH: String = "ironwork" ## 병영·사격장 레벨 3 강화에 필요한 연구
 const WAVE_TIME_LIMIT: float = 120.0 ## 이 시간이 지나면 남은 적을 정리하고 웨이브를 끝낸다
 const COMBAT_PITCH: float = 55.0
 const SEA_TILE_WAVE: int = 10 ## 이 웨이브보다 뒤부터 바다 칸이 섞인 타일이 후보에 나온다 (기획서 4장)
@@ -123,7 +138,7 @@ const FOREST_SPEED: float = 0.7 ## 숲 위 이동속도 배율 (아군·적 모�
 const SEA_CROSS_SPEED: float = 0.4 ## 바닷길이 막혔을 때 해적이 바다 칸을 걸어 건너는 속도 배율 (기획서 6장)
 ## 숲·산에 지을 수 있는 건물 (평원은 전부, 모래는 건물의 sand 값) (기획서 3장)
 const FOREST_BUILDINGS: Array[int] = [HOUSE, LIBRARY, TOWER]
-const MOUNTAIN_BUILDINGS: Array[int] = [TOWER, MINE]
+const MOUNTAIN_BUILDINGS: Array[int] = [TOWER, MINE, OBSERVATORY]
 const MINE_GOLD_LV: Array[int] = [20, 32, 48] ## 광산 정산 골드 (기획서 5.1)
 const HQ_BASE_GOLD: int = 20 ## 살아 있는 본부마다 웨이브 정산 때 받는 기본 골드 (기획서 5.1)
 
@@ -137,8 +152,6 @@ const START_FOOD: int = 20
 const HP_MULT: Array[float] = [1.0, 1.5, 2.0]
 const HOUSE_GOLD_LV: Array[int] = [10, 16, 24] ## 모래 위는 ×1.5
 const FARM_FOOD_LV: Array[int] = [5, 8, 12]
-const BARRACKS_SOLDIERS_LV: Array[int] = [3, 4, 5] ## 웨이브 시작 때 한 번만 만드는 병사 수
-const BARRACKS_L3_HP: float = 1.3
 const PORT_CAPACITY_LV: Array[int] = [4, 6, 8]
 const BOAT_SPEED_LV: Array[float] = [1.0, 1.0, 1.3]
 const FISHERY_MULT_LV: Array[float] = [1.0, 1.5, 2.0]
@@ -157,23 +170,26 @@ const FOOD_PER_PLAINS: int = 1
 const MARKET_HOUSE_BONUS_LV: Array[float] = [0.25, 0.4, 0.6] ## 시장과 4방향으로 붙은 집의 정산 골드 보너스 (기획서 5.1)
 const LIBRARY_RESEARCH_LV: Array[int] = [3, 4, 5] ## 웨이브 정산 때 얻는 연구수치 (기획서 5.4)
 const LAB_RESEARCH_LV: Array[int] = [6, 8, 10]
+const OBSERVATORY_RESEARCH_LV: Array[int] = [4, 6, 8] ## 천문학 보너스 +1이 이미 들어간 값 (기획서 5.4)
+const ASTRONOMY_BONUS: int = 1 ## 천문학 연구: 도서관·학술원의 정산 연구수치 +1
 const RESEARCH_FIRST: int = 5 ## 첫 연구포인트에 필요한 연구수치 (기획서 5.4)
 const RESEARCH_STEP: int = 1 ## 포인트를 얻을 때마다 다음 기준이 이만큼 늘어난다
 const HQ_RESEARCH: int = 1 ## 살아 있는 본부마다 정산 때 받는 연구수치
 
 
-## 연구 (테크트리, 문명5식): 4열 13개. 비용은 열 번호(1~4점)와 같고 선행 연구를 모두 마쳐야 한다 (기획서 5.4)
+## 연구 (테크트리, 문명5식): 4열 14개. 비용은 열 번호(1~4점)와 같고 선행 연구를 모두 마쳐야 한다 (기획서 5.4)
 ## col: 열(0~3), row: 화면의 줄, pre: 선행 연구 목록
 const TECHS: Dictionary = {
 	"tools": {"name": "농기구", "desc": "밭 식량 +30%", "col": 0, "row": 0, "pre": []},
+	"astronomy": {"name": "천문학", "desc": "천문대·학술원 해금, 도서관·학술원 연구수치 +1", "col": 1, "row": 4, "pre": ["mining"]},
 	"mining": {"name": "채광", "desc": "광산 해금", "col": 0, "row": 2, "pre": []},
-	"archery": {"name": "궁술", "desc": "궁수·방어탑 해금", "col": 0, "row": 4, "pre": []},
+	"archery": {"name": "궁술", "desc": "사격장·방어탑 해금", "col": 0, "row": 4, "pre": []},
 	"irrigation": {"name": "관개", "desc": "평원 칸 식량 +1 → +1.5", "col": 1, "row": 0, "pre": ["tools"]},
-	"cavalry": {"name": "기마술", "desc": "기병 해금", "col": 1, "row": 1, "pre": ["tools"]},
+	"ironwork": {"name": "철기 제작", "desc": "병영·사격장 레벨 3 해금", "col": 1, "row": 1, "pre": ["tools"]},
 	"trade": {"name": "교역", "desc": "시장·교역소 해금", "col": 1, "row": 2, "pre": ["tools", "mining"]},
 	"sail": {"name": "항해술", "desc": "항구 해금", "col": 1, "row": 3, "pre": ["mining"]},
 	"harvest": {"name": "대풍작", "desc": "밭 식량 +50%", "col": 2, "row": 0, "pre": ["irrigation"]},
-	"drill": {"name": "단련", "desc": "모든 병사 체력·공격 +20%", "col": 2, "row": 1, "pre": ["archery", "cavalry"]},
+	"drill": {"name": "단련", "desc": "모든 병사 체력·공격 +20%", "col": 2, "row": 1, "pre": ["archery", "ironwork"]},
 	"commerce": {"name": "상업", "desc": "집 골드 +20%", "col": 2, "row": 2, "pre": ["trade"]},
 	"ship": {"name": "조선술", "desc": "보트 +1척, 속도 +30%", "col": 2, "row": 3, "pre": ["sail"]},
 	"finance": {"name": "금융", "desc": "건설·레벨업 비용 -15%", "col": 3, "row": 2, "pre": ["commerce"]},
@@ -212,8 +228,13 @@ static func fishing_food(sea_cells: int, level: int) -> int:
 	return floori(base * FISHERY_MULT_LV[level - 1])
 
 
+## 천문학을 연구했으면 도서관·학술원의 연구수치에 더하는 값 (기획서 5.4)
+static func science_bonus(techs: Dictionary) -> int:
+	return ASTRONOMY_BONUS if techs.has("astronomy") else 0
+
+
 ## 레벨별 효과 설명 (UI)
-static func effect_text(id: int, level: int) -> String:
+static func effect_text(id: int, level: int, techs: Dictionary = {}) -> String:
 	var i: int = level - 1
 	if id == HOUSE:
 		return "정산 골드 +%d (모래 위 +%d)" % [house_gold(level, false), house_gold(level, true)]
@@ -221,16 +242,18 @@ static func effect_text(id: int, level: int) -> String:
 		return "산 위에만 · 정산 골드 +%d" % MINE_GOLD_LV[i]
 	if id == FARM:
 		return "정산 식량 +%d" % FARM_FOOD_LV[i]
-	if id == BARRACKS:
-		return "웨이브 시작 병사 %d명%s" % [BARRACKS_SOLDIERS_LV[i], ", 병사 체력 +30%" if level == MAX_LEVEL else ""]
+	if MILITARY.has(id):
+		return "웨이브 시작 %s %d명" % [UNITS[MILITARY[id]["units"][i]]["name"], MILITARY[id]["count"]]
 	if id == PORT:
 		return "보트 탑승 %d명%s" % [PORT_CAPACITY_LV[i], ", 보트 속도 +30%" if level == MAX_LEVEL else ""]
 	if id == MARKET:
 		return "붙어 있는 집의 정산 골드 +%d%%" % roundi(MARKET_HOUSE_BONUS_LV[i] * 100.0)
 	if id == LIBRARY:
-		return "정산 연구수치 +%d (첫 %d점부터 연구포인트 1)" % [LIBRARY_RESEARCH_LV[i], RESEARCH_FIRST]
+		return "정산 연구수치 +%d (첫 %d점부터 연구포인트 1)" % [LIBRARY_RESEARCH_LV[i] + science_bonus(techs), RESEARCH_FIRST]
 	if id == LAB:
-		return "정산 연구수치 +%d (첫 %d점부터 연구포인트 1)" % [LAB_RESEARCH_LV[i], RESEARCH_FIRST]
+		return "정산 연구수치 +%d (첫 %d점부터 연구포인트 1)" % [LAB_RESEARCH_LV[i] + science_bonus(techs), RESEARCH_FIRST]
+	if id == OBSERVATORY:
+		return "산 위에만 · 정산 연구수치 +%d" % OBSERVATORY_RESEARCH_LV[i]
 	if id == FISHERY:
 		return "물 위에 설치 · 정산 식량 +%d~%d (이어진 물가가 넓을수록)" % [fishing_food(0, level), fishing_food(FISH_CAP, level)]
 	if id == TRADING_POST:
