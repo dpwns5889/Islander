@@ -34,6 +34,26 @@ func _initialize() -> void:
 	fails += _check(f.variants[Vector2i(9, 2)] == 3, "번호를 지정해 지을 수 있다")
 	f.damage(Vector2i(9, 2), 9999.0)
 	fails += _check(not f.variants.has(Vector2i(9, 2)), "파괴되면 기록 삭제")
+	# 밭도 같은 규칙: 4종류 무작위, 레벨업하면 같은 번호의 다음 레벨 모델, 진화하면 상자
+	var fc: Vector2i = Vector2i(5, 2)
+	f.build(Balance.FARM, fc)
+	var fv: int = f.variants[fc]
+	var fm1: Mesh = (f._nodes[fc][0] as MeshInstance3D).mesh
+	f.upgrade(fc)
+	fails += _check(fv >= 1 and fv <= 4 and f.variants[fc] == fv and (f._nodes[fc][0] as MeshInstance3D).mesh != fm1, "밭: 바리에이션 1~4, 레벨업하면 같은 번호의 다음 모델")
+	f.upgrade(fc)
+	f.evolve(fc, Balance.FARMSTEAD)
+	fails += _check(not f.variants.has(fc) and (f._nodes[fc][0] as MeshInstance3D).mesh is BoxMesh, "농장은 상자")
+	# 전투 중에는 건물 이름을 숨긴다
+	f.show_labels(false)
+	var hidden: bool = true
+	for c in f.buildings:
+		hidden = hidden and not (f._nodes[c][1] as Label3D).visible
+	f.show_labels(true)
+	var shown: bool = true
+	for c in f.buildings:
+		shown = shown and (f._nodes[c][1] as Label3D).visible
+	fails += _check(hidden and shown, "건물 이름 글자를 숨기고 다시 보인다")
 	print("M28 점검 실패 %d건" % fails)
 	quit(fails)
 

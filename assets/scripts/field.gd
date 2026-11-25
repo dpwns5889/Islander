@@ -676,6 +676,12 @@ func upgrade(c: Vector2i) -> void:
 	_tint(c)
 
 
+## 건물 이름 글자를 보이거나 숨긴다: 전투 중에는 숨긴다 (기획서 7.2)
+func show_labels(on: bool) -> void:
+	for c in buildings:
+		(_nodes[c][1] as Label3D).visible = on
+
+
 ## 레벨 3 건물을 진화 건물 to로 바꾼다: 새 건물 레벨 1에서 시작한다 (기획서 5.2.1)
 func evolve(c: Vector2i, to: int) -> void:
 	variants.erase(c)

@@ -26,11 +26,11 @@ func _initialize() -> void:
 	fails += _check(not main.upgrade_selected() and main.field.buildings[cell] == Balance.HOUSE, "연구 전에는 진화 안 됨")
 	gs.researched["currency"] = true
 	main._refresh_hud()
-	fails += _check(not main.upgrade_button.disabled and not main.build_buttons[Balance.HOUSE].visible and main.build_buttons[Balance.MANSION].visible, "화폐 뒤: 진화 가능, 건설 목록은 집 대신 저택")
+	fails += _check(not main.upgrade_button.disabled and main.build_buttons[Balance.HOUSE].visible and not main.build_buttons.has(Balance.MANSION), "화폐 뒤: 진화 가능, 건설 목록에는 집만 있고 저택은 없다")
 	var before: int = gs.gold
 	fails += _check(main.upgrade_selected() and main.field.buildings[cell] == Balance.MANSION and main.field.levels[cell] == 1 and gs.gold == before - 28, "저택으로 진화: 28골드, 레벨 1")
 	fails += _check(main.upgrade_button.text.begins_with("레벨 2로 강화"), "진화 뒤에는 다시 레벨업 버튼")
-	fails += _check(not main._unlocked(Balance.HOUSE) and main._unlocked(Balance.MANSION), "집은 더 못 짓고 저택은 짓는다")
+	fails += _check(main._unlocked(Balance.HOUSE), "진화 뒤에도 집은 계속 지을 수 있다")
 	print("M27 흐름 점검 실패 %d건" % fails)
 	quit(fails)
 

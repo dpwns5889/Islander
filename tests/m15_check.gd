@@ -12,9 +12,10 @@ func _initialize() -> void:
 	listed.sort()
 	var all_ids: Array[int] = []
 	for id in Balance.BUILDINGS:
-		all_ids.append(id)
+		if not Balance.is_evolved(id):
+			all_ids.append(id)
 	all_ids.sort()
-	fails += _check(listed == all_ids and all_ids.size() == 18, "카테고리가 건물 18종(진화 5종 포함)을 한 번씩 담는다")
+	fails += _check(listed == all_ids and all_ids.size() == 12, "카테고리가 건물 12종(진화 건물 6종 제외)을 한 번씩 담는다")
 	fails += _check(Balance.BUILDINGS[Balance.FISHERY]["cost"] == 25 and Balance.BUILDINGS[Balance.TRADING_POST]["cost"] == 40, "건설비: 낚시터 25, 교역소 40")
 	fails += _check(Balance.BUILDINGS[Balance.TRADING_POST]["tech"] == "commerce" and Balance.BUILDINGS[Balance.FISHERY]["tech"] == "fishing", "교역소는 상업, 낚시터는 낚시 연구 필요")
 	# 낚시터 식량: 3 + ⌊칸/6⌋ (최대 9), 레벨 ×1/×1.5/×2

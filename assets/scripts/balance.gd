@@ -25,11 +25,11 @@ const EVOLVE_COST_RATE: float = 0.7 ## 기존 레벨 3 건물을 진화시키는
 
 ## cost: 건설 골드, hp: 체력(M3부터), sand: 모래 위 건설 가능 여부, sea: 인접 바다 필요 여부
 const BUILDINGS: Dictionary = {
-	HOUSE: {"name": "집", "cost": 20, "hp": 50, "sand": true, "sea": false, "evolves_to": MANSION, "model": "res://assets/models/house_t%d_v%d.glb", "model_variants": 4, "color": Color(0.6, 0.4, 0.2)},
+	HOUSE: {"name": "집", "cost": 20, "hp": 50, "sand": true, "sea": false, "evolves_to": MANSION, "model": "res://assets/models/house/house_t%d_v%d.glb", "model_variants": 4, "color": Color(0.6, 0.4, 0.2)},
 	PORT: {"name": "항구", "cost": 50, "hp": 80, "sand": true, "sea": true, "color": Color(0.15, 0.25, 0.6)},
 	BARRACKS: {"name": "병영", "cost": 30, "hp": 100, "sand": false, "sea": false, "color": Color(0.45, 0.45, 0.5)},
 	MARKET: {"name": "시장", "cost": 50, "hp": 70, "tech": "math", "sand": false, "sea": false, "color": Color(0.85, 0.65, 0.1)},
-	FARM: {"name": "밭", "cost": 25, "hp": 50, "sand": false, "sea": false, "evolves_to": FARMSTEAD, "color": Color(0.35, 0.55, 0.2)},
+	FARM: {"name": "밭", "cost": 25, "hp": 50, "sand": false, "sea": false, "evolves_to": FARMSTEAD, "model": "res://assets/models/field/field_t%d_v%d.glb", "model_variants": 4, "color": Color(0.35, 0.55, 0.2)},
 	FISHERY: {"name": "낚시터", "cost": 25, "hp": 50, "sand": true, "sea": false, "tech": "fishing", "on_water": true, "evolves_to": FISH_VILLAGE, "color": Color(0.2, 0.65, 0.75)},
 	TRADING_POST: {"name": "교역소", "cost": 40, "hp": 70, "tech": "commerce", "sand": true, "sea": false, "on_water": true, "open_sea": true, "unique": true, "color": Color(0.7, 0.35, 0.75)},
 	LIBRARY: {"name": "도서관", "cost": 40, "hp": 60, "sand": true, "sea": false, "evolves_to": LAB, "color": Color(0.55, 0.35, 0.65)},
@@ -45,12 +45,12 @@ const BUILDINGS: Dictionary = {
 	FORTRESS: {"name": "요새", "cost": 80, "hp": 400, "tech": "engineering", "sand": true, "sea": false, "color": Color(0.5, 0.55, 0.8)},
 }
 
-## 건설 메뉴 카테고리 (아래에서 위로 펼쳐지는 드롭다운) (기획서 7.2)
+## 건설 메뉴 카테고리 (아래에서 위로 펼쳐지는 드롭다운). 진화 건물은 목록에 없고 진화로만 얻는다 (기획서 5.2.1, 7.2)
 const CATEGORIES: Array = [
-	{"name": "생산", "ids": [HOUSE, MANSION, FARM, FARMSTEAD, FISHERY, FISH_VILLAGE, MINE, SMELTER]},
-	{"name": "군사·해상", "ids": [BARRACKS, SHOOTING_RANGE, PORT, TOWER, FORTRESS]},
+	{"name": "생산", "ids": [HOUSE, FARM, FISHERY, MINE]},
+	{"name": "군사·해상", "ids": [BARRACKS, SHOOTING_RANGE, PORT, TOWER]},
 	{"name": "상업", "ids": [MARKET, TRADING_POST]},
-	{"name": "과학", "ids": [LIBRARY, LAB, OBSERVATORY]},
+	{"name": "과학", "ids": [LIBRARY, OBSERVATORY]},
 ]
 
 const U_GUARD: int = 0
@@ -290,11 +290,6 @@ static func is_evolved(id: int) -> bool:
 			return true
 	return false
 
-
-## 건설 메뉴에 보이는지: 진화 건물의 해금 연구를 마치면 기본 건물은 목록에서 사라진다 (기획서 5.2.1)
-static func menu_visible(id: int, techs: Dictionary) -> bool:
-	var to: int = evolve_to(id)
-	return to == 0 or not techs.has(BUILDINGS[to].get("tech", ""))
 
 
 ## 낚시터 식량: 이어진 바다 칸 수와 레벨로 정한다 (기획서 5.1)

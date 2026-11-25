@@ -18,8 +18,11 @@ func _initialize() -> void:
 		fails += _check(Balance.evolve_to(r[0]) == to and Balance.BUILDINGS[to]["tech"] == r[2] and Balance.BUILDINGS[to]["cost"] == r[3] and Balance.evolve_cost(to) == r[4], "%s → %s: 연구 %s, 건설 %d, 진화 %d" % [Balance.BUILDINGS[r[0]]["name"], Balance.BUILDINGS[to]["name"], r[2], r[3], r[4]])
 	for id in [Balance.BARRACKS, Balance.SHOOTING_RANGE, Balance.PORT, Balance.MARKET, Balance.TRADING_POST, Balance.OBSERVATORY]:
 		fails += _check(Balance.evolve_to(id) == 0, "진화 없음: " + Balance.BUILDINGS[id]["name"])
-	# 해금하면 기본 건물은 목록에서 사라진다
-	fails += _check(Balance.menu_visible(Balance.LIBRARY, {}) and not Balance.menu_visible(Balance.LIBRARY, {"astronomy": true}) and Balance.menu_visible(Balance.LAB, {"astronomy": true}), "천문학 뒤에는 도서관 대신 대학")
+	# 진화 건물은 건설 목록에 없다
+	var listed: Array[int] = []
+	for cat in Balance.CATEGORIES:
+		listed.append_array(cat["ids"])
+	fails += _check(not listed.has(Balance.LAB) and not listed.has(Balance.MANSION) and not listed.has(Balance.FORTRESS) and listed.has(Balance.LIBRARY) and listed.has(Balance.HOUSE), "건설 목록에는 기본 건물만")
 	# 수치
 	fails += _check(Balance.house_gold(1, false, Balance.MANSION) == 34 and Balance.house_gold(3, false, Balance.MANSION) == 48 and Balance.house_gold(1, true, Balance.MANSION) == 51, "저택 골드 34/41/48, 모래 ×1.5")
 	fails += _check(Balance.FARMSTEAD_FOOD_LV == [17, 20, 24] and Balance.SMELTER_GOLD_LV == [67, 82, 96], "농장·제련소 수치")

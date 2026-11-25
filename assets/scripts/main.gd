@@ -679,7 +679,7 @@ func research(id: String) -> bool:
 
 func _unlocked(id: int) -> bool:
 	var tech: String = Balance.BUILDINGS[id].get("tech", "")
-	return (tech == "" or GameState.has_tech(tech)) and Balance.menu_visible(id, GameState.researched)
+	return (tech == "" or GameState.has_tech(tech))
 
 
 ## 병영·사격장 레벨 3 강화는 철기 제작이 필요하다 (기획서 5.2)
@@ -739,6 +739,7 @@ func start_wave() -> void:
 	wave_button.disabled = true
 	_tilt(Balance.COMBAT_PITCH)
 	field.buildings_lost.clear()
+	field.show_labels(false) # 전투 중에는 건물 이름을 숨긴다 (기획서 7.2)
 	battle = Battle.new()
 	add_child(battle)
 	battle.setup(field, GameState, GameState.wave)
@@ -791,6 +792,7 @@ func _ping(c: Vector2i) -> void:
 func _on_battle_finished(victory: bool) -> void:
 	battle.queue_free()
 	battle = null
+	field.show_labels(true)
 	speed_button.visible = false
 	if not victory:
 		SaveManager.record(GameState.wave) # 졌어도 도달한 웨이브는 기록한다
@@ -1093,7 +1095,6 @@ func _refresh_hud() -> void:
 		if _blocked():
 			bb.tooltip_text = "전투 보상 타일을 먼저 놓으세요"
 		bb.disabled = _blocked() or not _unlocked(id) or GameState.gold < _cost_of(id)
-		bb.visible = Balance.menu_visible(id, GameState.researched) # 해금 뒤에는 기본 건물이 목록에서 사라진다 (기획서 5.2.1)
 	for cbtn in category_buttons:
 		cbtn.disabled = _blocked() or battle != null
 	if _blocked() and open_category >= 0:
