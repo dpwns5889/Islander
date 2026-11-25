@@ -517,6 +517,7 @@ func carve_count(p: Piece, origin: Vector2i) -> int:
 
 ## 건물 위치 → 건물 종류 (본부는 hq에 따로 기록)
 var buildings: Dictionary = {}
+var variants: Dictionary = {} ## 모델 건물 위치 → 모델 바리에이션 번호(1부터) (기획서 7.2)
 var hp: Dictionary = {} ## 건물 위치 → 체력
 var levels: Dictionary = {} ## 건물 위치 → 레벨 (1~3)
 var _nodes: Dictionary = {} ## 건물·본부 위치 → 화면 노드들 (첫 번째가 본체)
@@ -669,12 +670,15 @@ func can_upgrade(c: Vector2i) -> bool:
 func upgrade(c: Vector2i) -> void:
 	levels[c] += 1
 	hp[c] = max_hp(c)
+	if variants.has(c):
+		_set_model(c)
 	(_nodes[c][1] as Label3D).text = _label_text(c)
 	_tint(c)
 
 
 ## 레벨 3 건물을 진화 건물 to로 바꾼다: 새 건물 레벨 1에서 시작한다 (기획서 5.2.1)
 func evolve(c: Vector2i, to: int) -> void:
+	variants.erase(c)
 	for n: Node in _nodes[c]:
 		n.queue_free()
 	_nodes.erase(c)
@@ -686,20 +690,15 @@ func _label_text(c: Vector2i) -> String:
 	return name.left(1) + (str(levels[c]) if levels[c] > 1 else "")
 
 
-func build(id: int, c: Vector2i, level: int = 1) -> void:
+func build(id: int, c: Vector2i, level: int = 1, variant: int = 0) -> void:
 	buildings[c] = id
 	levels[c] = level
 	var data: Dictionary = Balance.BUILDINGS[id]
 	hp[c] = max_hp(c)
 	var mi: MeshInstance3D = MeshInstance3D.new()
 	var base_y: float = BLOCK_H if cells.has(c) else 0.0 # 물 위 건물은 바다 면에 놓인다
-	var body_h: float = 0.5 # 본체 높이(글자를 이 위에 둔다)
-	if data.has("model"): # 블렌더 모델: 원점이 바닥 가운데 (기획서 7.2)
-		var md: Dictionary = Toon.model(data["model"])
-		mi.mesh = md["mesh"]
-		mi.material_override = Toon.material(Color.WHITE, md["tex"])
-		mi.position = cell_to_world(c) + Vector3(0, base_y, 0)
-		body_h = data["model_height"]
+	if data.has("model"): # 블렌더 모델: 지을 때 바리에이션을 무작위로 고르고 레벨이 올라도 같은 번호를 쓴다 (기획서 7.2)
+		variants[c] = variant if variant > 0 else 1 + randi() % int(data["model_variants"])
 	else:
 		var bm: BoxMesh = BoxMesh.new()
 		bm.size = Vector3(0.72, 0.62, 0.72) if Balance.is_evolved(id) else Vector3(0.6, 0.5, 0.6) # 진화 건물은 더 크게 (기획서 5.2.1)
@@ -714,10 +713,25 @@ func build(id: int, c: Vector2i, level: int = 1) -> void:
 	label.outline_size = 16
 	label.layers = PixelView.LABEL_LAYER
 	label.rotation_degrees = Vector3(-90, 0, 0)
-	label.position = cell_to_world(c) + Vector3(0, base_y + body_h + 0.02, 0)
 	add_child(label)
 	_nodes[c] = [mi, label]
+	if variants.has(c):
+		_set_model(c)
+	else:
+		label.position = cell_to_world(c) + Vector3(0, base_y + 0.52, 0)
 	_tint(c)
+
+
+## 모델 건물의 모델을 레벨·바리에이션에 맞게 바꾸고 글자를 모델 위에 둔다 (기획서 7.2)
+func _set_model(c: Vector2i) -> void:
+	var data: Dictionary = Balance.BUILDINGS[buildings[c]]
+	var md: Dictionary = Toon.model(data["model"] % [mini(levels[c], Balance.MAX_LEVEL), variants[c]])
+	var mi: MeshInstance3D = _nodes[c][0]
+	var base_y: float = BLOCK_H if cells.has(c) else 0.0
+	mi.mesh = md["mesh"]
+	mi.material_override = Toon.material(Color.WHITE, md["tex"])
+	mi.position = cell_to_world(c) + Vector3(0, base_y, 0)
+	(_nodes[c][1] as Label3D).position = cell_to_world(c) + Vector3(0, base_y + (md["mesh"] as Mesh).get_aabb().size.y + 0.02, 0)
 
 
 ## 체력 비율만큼 본체 색을 어둡게 해 피해를 보여 준다
@@ -768,6 +782,7 @@ func damage(c: Vector2i, amount: float) -> bool:
 			_nodes.erase(c)
 			buildings_lost[buildings[c]] = int(buildings_lost.get(buildings[c], 0)) + 1
 			buildings.erase(c)
+			variants.erase(c)
 			hp.erase(c)
 			levels.erase(c)
 		else:

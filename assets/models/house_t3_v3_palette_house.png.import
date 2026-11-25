@@ -2,24 +2,23 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dpfqd5ka4yitc"
-path.s3tc="res://.godot/imported/house_palette_house.png-6d54c7f2beb6c54dfa65329bab50a3e8.s3tc.ctex"
+uid="uid://yahw7e5bhop4"
+path="res://.godot/imported/house_t3_v3_palette_house.png-6e6348825086b9b7aa11427a47ae032c.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
-"vram_texture": true
+"vram_texture": false
 }
 generator_parameters={
-"md5": "395c78b8398cd8cd6494eaf9070697a4"
+"md5": "f340a9c56bcbe1a4a42d0aad641f60f2"
 }
 
 [deps]
 
-source_file="res://assets/models/house_palette_house.png"
-dest_files=["res://.godot/imported/house_palette_house.png-6d54c7f2beb6c54dfa65329bab50a3e8.s3tc.ctex"]
+source_file="res://assets/models/house_t3_v3_palette_house.png"
+dest_files=["res://.godot/imported/house_t3_v3_palette_house.png-6e6348825086b9b7aa11427a47ae032c.ctex"]
 
 [params]
 
-compress/mode=2
+compress/mode=0
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -27,7 +26,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

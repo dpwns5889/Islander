@@ -25,7 +25,7 @@ const EVOLVE_COST_RATE: float = 0.7 ## 기존 레벨 3 건물을 진화시키는
 
 ## cost: 건설 골드, hp: 체력(M3부터), sand: 모래 위 건설 가능 여부, sea: 인접 바다 필요 여부
 const BUILDINGS: Dictionary = {
-	HOUSE: {"name": "집", "cost": 20, "hp": 50, "sand": true, "sea": false, "evolves_to": MANSION, "model": "res://assets/models/house.glb", "model_height": 0.7, "color": Color(0.6, 0.4, 0.2)},
+	HOUSE: {"name": "집", "cost": 20, "hp": 50, "sand": true, "sea": false, "evolves_to": MANSION, "model": "res://assets/models/house_t%d_v%d.glb", "model_variants": 4, "color": Color(0.6, 0.4, 0.2)},
 	PORT: {"name": "항구", "cost": 50, "hp": 80, "sand": true, "sea": true, "color": Color(0.15, 0.25, 0.6)},
 	BARRACKS: {"name": "병영", "cost": 30, "hp": 100, "sand": false, "sea": false, "color": Color(0.45, 0.45, 0.5)},
 	MARKET: {"name": "시장", "cost": 50, "hp": 70, "tech": "math", "sand": false, "sea": false, "color": Color(0.85, 0.65, 0.1)},
