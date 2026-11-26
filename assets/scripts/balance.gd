@@ -181,6 +181,13 @@ const START_FOOD: int = 20
 
 ## 건물 레벨별 수치 (인덱스 0 = 레벨 1) (기획서 5.2)
 const HP_MULT: Array[float] = [1.0, 1.5, 2.0]
+## 파손과 수리 (기획서 5.2.2)
+const DMG_STAGE1: float = 0.6 ## 체력 비율이 이 이하면 파손 1단계
+const DMG_STAGE2: float = 0.3 ## 이 이하면 파손 2단계
+const DMG_PERF: Array[float] = [1.0, 0.75, 0.5] ## 파손 단계별 건물 성능
+const SOLDIER_DMG_FLOOR: float = 0.5 ## 병영 병사 능력 = 이 값 + (1 - 이 값) × 건물 체력 비율
+const REPAIR_RATE: float = 0.5 ## 건물 수리비 = 투자 골드 × 잃은 체력 비율 × 이 값
+const HQ_REPAIR_COST: int = 50 ## 본부 수리비 = 이 값 × 잃은 체력 비율
 const HOUSE_GOLD_LV: Array[int] = [10, 16, 24] ## 모래 위는 ×1.5
 const MANSION_GOLD_LV: Array[int] = [34, 41, 48] ## 저택 정산 골드, 모래 위는 ×1.5 (기획서 5.2.1)
 const FARM_FOOD_LV: Array[int] = [5, 8, 12]
@@ -276,10 +283,36 @@ static func tower_range(id: int, level: int) -> float:
 	return (FORTRESS_RANGE_LV if id == FORTRESS else TOWER_RANGE_LV)[level - 1]
 
 
-## 모델 파일 경로: 종류별 폴더 안에 레벨·번호마다 한 폴더 (기획서 7.2)
-static func model_path(kind: String, level: int, variant: int) -> String:
+## 모델 파일 경로: 종류별 폴더 안에 레벨·번호마다 한 폴더, 파손 단계는 _dmg1·_dmg2 (기획서 7.2)
+static func model_path(kind: String, level: int, variant: int, stage: int = 0) -> String:
 	var name: String = "%s_t%d_v%d" % [kind, level, variant]
-	return "res://assets/models/%s/%s/%s.glb" % [kind, name, name]
+	var suffix: String = "" if stage == 0 else "_dmg%d" % stage
+	return "res://assets/models/%s/%s/%s%s.glb" % [kind, name, name, suffix]
+
+
+## 체력 비율(0~1)에 따른 파손 단계 0~2 (기획서 5.2.2)
+static func damage_stage(ratio: float) -> int:
+	if ratio <= DMG_STAGE2 + 0.0001:
+		return 2
+	return 1 if ratio <= DMG_STAGE1 + 0.0001 else 0
+
+
+## 병영·사격장 건물 체력 비율에 따른 병사 체력·공격 배율 (기획서 5.2.2)
+static func soldier_damage_mult(ratio: float) -> float:
+	return SOLDIER_DMG_FLOOR + (1.0 - SOLDIER_DMG_FLOOR) * clampf(ratio, 0.0, 1.0)
+
+
+## 건물에 들인 골드: 건설비 + level까지의 강화비 (기획서 5.2.2)
+static func invested(id: int, level: int) -> int:
+	var total: int = BUILDINGS[id]["cost"]
+	for to in range(2, level + 1):
+		total += upgrade_cost(id, to)
+	return total
+
+
+## 수리비: full골드 × 잃은 체력 비율, 올림 (부동소수 오차로 1골드 더 받지 않게 조금 뺀다)
+static func repair_price(full: float, ratio: float) -> int:
+	return maxi(0, ceili(full * (1.0 - clampf(ratio, 0.0, 1.0)) - 0.001))
 
 
 ## 진화 건물 id, 없으면 0 (기획서 5.2.1)

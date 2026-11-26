@@ -19,7 +19,8 @@ func _initialize() -> void:
 	fails += _check(not f.can_build(Balance.HOUSE, m), "산에 집은 못 짓는다")
 	f.build(Balance.MINE, m)
 	fails += _check(f.income().x == 20, "광산 Lv1 골드 +20 (%d)" % f.income().x)
-	f.levels[m] = 3
+	f.upgrade(m)
+	f.upgrade(m)
 	fails += _check(f.income().x == 48, "광산 Lv3 골드 +48 (%d)" % f.income().x)
 	f.hqs[Vector2i(6, 5)] = 1.0
 	fails += _check(f.income().x == 68, "본부 1개 기본 골드 +20 (%d)" % f.income().x)

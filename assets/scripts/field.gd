@@ -646,7 +646,7 @@ func fishing_cells(c: Vector2i) -> int:
 
 
 func fishing_food(c: Vector2i) -> int:
-	return Balance.fishing_food(fishing_cells(c), levels.get(c, 1), buildings.get(c, Balance.FISHERY))
+	return floori(Balance.fishing_food(fishing_cells(c), levels.get(c, 1), buildings.get(c, Balance.FISHERY)) * performance(c))
 
 
 ## 교역소 위치, 없으면 (-1, -1)
@@ -669,8 +669,6 @@ func can_upgrade(c: Vector2i) -> bool:
 func upgrade(c: Vector2i) -> void:
 	levels[c] += 1
 	hp[c] = max_hp(c)
-	if variants.has(c):
-		_set_model(c)
 	(_nodes[c][1] as Label3D).text = _label_text(c)
 	_tint(c)
 
@@ -722,36 +720,71 @@ func build(id: int, c: Vector2i, level: int = 1, variant: int = 0) -> void:
 	label.rotation_degrees = Vector3(-90, 0, 0)
 	add_child(label)
 	_nodes[c] = [mi, label]
-	if variants.has(c):
-		_set_model(c)
-	else:
+	if not variants.has(c):
 		label.position = cell_to_world(c) + Vector3(0, base_y + 0.52, 0)
 	_tint(c)
 
 
-## 모델 건물의 모델을 레벨·바리에이션에 맞게 바꾼다 (기획서 7.2)
+## 모델 건물의 모델을 레벨·바리에이션·파손 단계에 맞게 바꾼다 (기획서 7.2)
 func _set_model(c: Vector2i) -> void:
 	var data: Dictionary = Balance.BUILDINGS[buildings[c]]
-	var md: Dictionary = Toon.model(Balance.model_path(data["model"], mini(levels[c], Balance.MAX_LEVEL), variants[c]))
+	var md: Dictionary = Toon.model(Balance.model_path(data["model"], mini(levels[c], Balance.MAX_LEVEL), variants[c], Balance.damage_stage(hp_ratio(c))))
 	var mi: MeshInstance3D = _nodes[c][0]
+	if mi.mesh == md["mesh"]:
+		return
 	var base_y: float = BLOCK_H if cells.has(c) else 0.0
 	mi.mesh = md["mesh"]
 	mi.material_override = Toon.material(Color.WHITE, md["tex"])
 	mi.position = cell_to_world(c) + Vector3(0, base_y, 0)
 
 
-## 체력 비율만큼 본체 색을 어둡게 해 피해를 보여 준다
+## 피해를 보여 준다: 모델 건물은 파손 모델, 상자 건물과 본부는 체력만큼 어둡게 (기획서 5.2.2)
 func _tint(c: Vector2i) -> void:
-	var base: Color = HQ_COLOR
-	var ratio: float = 1.0
-	if hqs.has(c):
-		ratio = hqs[c] / Balance.HQ_HP
-	else:
-		var data: Dictionary = Balance.BUILDINGS[buildings[c]]
-		base = Color.WHITE if data.has("model") else data["color"] # 모델은 팔레트 색에 곱한다
-		ratio = hp[c] / max_hp(c)
+	if variants.has(c):
+		_set_model(c)
+		return
+	var base: Color = HQ_COLOR if hqs.has(c) else Balance.BUILDINGS[buildings[c]]["color"]
 	var mi: MeshInstance3D = _nodes[c][0]
-	Toon.set_color(mi.material_override, base.lerp(Color.BLACK, (1.0 - ratio) * 0.7))
+	Toon.set_color(mi.material_override, base.lerp(Color.BLACK, (1.0 - hp_ratio(c)) * 0.7))
+
+
+## 남은 체력 비율(0~1). 건물·본부가 없으면 1
+func hp_ratio(c: Vector2i) -> float:
+	if hqs.has(c):
+		return hqs[c] / Balance.HQ_HP
+	return hp[c] / max_hp(c) if hp.has(c) else 1.0
+
+
+## 파손 단계에 따른 건물 성능 배율 (본부에는 쓰지 않는다) (기획서 5.2.2)
+func performance(c: Vector2i) -> float:
+	return Balance.DMG_PERF[Balance.damage_stage(hp_ratio(c))]
+
+
+## c의 건물·본부를 가득 고치는 값, 멀쩡하면 0 (기획서 5.2.2)
+func repair_cost(c: Vector2i) -> int:
+	if hp_ratio(c) >= 1.0:
+		return 0
+	if hqs.has(c):
+		return Balance.repair_price(Balance.HQ_REPAIR_COST, hp_ratio(c))
+	return Balance.repair_price(Balance.invested(buildings[c], levels[c]) * Balance.REPAIR_RATE, hp_ratio(c))
+
+
+func total_repair_cost() -> int:
+	var total: int = 0
+	for c in targets():
+		total += repair_cost(c)
+	return total
+
+
+## c의 건물·본부 체력을 가득 채운다. 골드는 부르는 쪽이 낸다
+func repair(c: Vector2i) -> void:
+	if hqs.has(c):
+		hqs[c] = Balance.HQ_HP
+	elif buildings.has(c):
+		hp[c] = max_hp(c)
+	else:
+		return
+	_tint(c)
 
 
 ## 적이 노리는 칸: 건물과 살아 있는 본부
@@ -796,14 +829,10 @@ func damage(c: Vector2i, amount: float) -> bool:
 	return false
 
 
-## 웨이브가 끝나면 살아남은 건물·본부가 입은 피해를 모두 회복한다. 파괴된 건물·본부는 돌아오지 않는다 (기획서 5.2)
+## 살아남은 건물·본부를 모두 고친다(전체 수리). 파괴된 건물·본부는 돌아오지 않는다 (기획서 5.2.2)
 func repair_all() -> void:
-	for c in hqs:
-		hqs[c] = Balance.HQ_HP
-	for c in buildings:
-		hp[c] = max_hp(c)
-	for c in _nodes:
-		_tint(c)
+	for c in targets():
+		repair(c)
 
 
 func land_count() -> int:
@@ -938,23 +967,23 @@ func _market_bonus(c: Vector2i) -> float:
 	var best: float = 0.0
 	for d in DIRS:
 		if buildings.get(c + d, 0) == Balance.MARKET:
-			best = maxf(best, Balance.MARKET_HOUSE_BONUS_LV[levels[c + d] - 1])
+			best = maxf(best, Balance.MARKET_HOUSE_BONUS_LV[levels[c + d] - 1] * performance(c + d))
 	return best
 
 
 ## 웨이브 정산 때 얻는 연구수치: 본부 수 + 도서관·학술원·천문대 레벨 합 (기획서 5.4)
 func research_income(techs: Dictionary = {}) -> int:
-	var n: int = Balance.HQ_RESEARCH * hqs.size() # 본부마다 +1
+	var n: float = Balance.HQ_RESEARCH * hqs.size() # 본부마다 +1 (파손돼도 그대로)
 	for c in buildings:
 		if not in_territory(c):
 			continue
 		if buildings[c] == Balance.LIBRARY:
-			n += Balance.LIBRARY_RESEARCH_LV[levels[c] - 1] + Balance.science_bonus(techs)
+			n += (Balance.LIBRARY_RESEARCH_LV[levels[c] - 1] + Balance.science_bonus(techs)) * performance(c)
 		elif buildings[c] == Balance.LAB:
-			n += Balance.LAB_RESEARCH_LV[levels[c] - 1] + Balance.science_bonus(techs)
+			n += (Balance.LAB_RESEARCH_LV[levels[c] - 1] + Balance.science_bonus(techs)) * performance(c)
 		elif buildings[c] == Balance.OBSERVATORY:
-			n += Balance.OBSERVATORY_RESEARCH_LV[levels[c] - 1]
-	return n
+			n += Balance.OBSERVATORY_RESEARCH_LV[levels[c] - 1] * performance(c)
+	return floori(n)
 
 
 ## 웨이브 정산 수입: x = 골드, y = 식량 (기획서 5장)
@@ -968,15 +997,15 @@ func income(techs: Dictionary = {}, owner: Vector2i = Vector2i(-999, -999)) -> V
 		if not _counts(c, owner): # 영역 밖 건물은 생산하지 않는다 (기획서 5.3)
 			continue
 		if buildings[c] == Balance.HOUSE or buildings[c] == Balance.MANSION:
-			gold += Balance.house_gold(levels[c], cells[c] == Piece.SAND, buildings[c]) * (house_mult + _market_bonus(c))
+			gold += Balance.house_gold(levels[c], cells[c] == Piece.SAND, buildings[c]) * (house_mult + _market_bonus(c)) * performance(c)
 		elif buildings[c] == Balance.MINE:
-			gold += Balance.MINE_GOLD_LV[levels[c] - 1]
+			gold += Balance.MINE_GOLD_LV[levels[c] - 1] * performance(c)
 		elif buildings[c] == Balance.SMELTER:
-			gold += Balance.SMELTER_GOLD_LV[levels[c] - 1]
+			gold += Balance.SMELTER_GOLD_LV[levels[c] - 1] * performance(c)
 		elif buildings[c] == Balance.FARM:
-			food += Balance.FARM_FOOD_LV[levels[c] - 1] * farm_mult
+			food += Balance.FARM_FOOD_LV[levels[c] - 1] * farm_mult * performance(c)
 		elif buildings[c] == Balance.FARMSTEAD:
-			food += Balance.FARMSTEAD_FOOD_LV[levels[c] - 1] * farm_mult
+			food += Balance.FARMSTEAD_FOOD_LV[levels[c] - 1] * farm_mult * performance(c)
 		elif buildings[c] == Balance.FISHERY or buildings[c] == Balance.FISH_VILLAGE:
 			food += fishing_food(c)
 	var per_plain: float = Balance.FOOD_PER_PLAINS * (1.5 if techs.has("waterwheel") else 1.0)

@@ -28,14 +28,14 @@ func _initialize() -> void:
 	var plains: int = f.cells.values().count(Piece.PLAINS)
 	var hq_gold: int = Balance.HQ_BASE_GOLD * f.hqs.size() # 본부 기본 골드
 	fails += _check(f.income() == Vector2i(24 + 15 + hq_gold, 8 + plains), "수입: 골드 %d, 식량 %d" % [24 + 15 + hq_gold, 8 + plains])
-	# 부서진 건물은 승리해도 복구되지 않고, 살아남은 건물이 입은 피해는 회복된다
+	# 부서진 건물은 수리해도 돌아오지 않고, 살아남은 건물의 피해는 수리하면 회복된다
 	f.damage(Vector2i(5, 5), 1000.0)
 	fails += _check(not f.buildings.has(Vector2i(5, 5)), "체력 0이면 파괴")
 	f.damage(Vector2i(9, 5), 20.0)
 	fails += _check(f.hp[Vector2i(9, 5)] == 30.0, "피해를 입는다")
 	f.repair_all()
 	fails += _check(not f.buildings.has(Vector2i(5, 5)) and not f.levels.has(Vector2i(5, 5)), "파괴된 건물은 복구되지 않는다")
-	fails += _check(f.hp[Vector2i(9, 5)] == 50.0, "살아남은 건물의 피해는 회복된다")
+	fails += _check(f.hp[Vector2i(9, 5)] == 50.0, "살아남은 건물의 피해는 수리하면 회복된다")
 	fails += _check(f.can_build(Balance.HOUSE, Vector2i(5, 5)), "빈 땅이 되어 다시 지을 수 있다")
 	# 병영 레벨: 인원은 3명 고정, 레벨 3 체력 보너스 없음
 	for lv in [1, 2, 3]:
