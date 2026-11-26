@@ -117,7 +117,7 @@ const BATTLE_SPEEDS: Array[int] = [1, 2, 4] ## 전투 배속
 const ATTACK_INTERVAL: float = 1.0
 const PIRATES_PER_SHIP: int = 3
 const MIN_PIRATES_PER_SHIP: int = 2 ## 해적선 한 척의 최소 인원. 한 명만 타고 오는 배는 없다 (기획서 6장)
-const SHIP_INTERVAL: float = 3.0
+const SHIP_SPAWN_TIME: float = 2.0 ## 모든 해적선이 이 시간(초) 안에 나타난다 (기획서 6장)
 const HQ_GUARDS: int = 2 ## 웨이브 시작 때 본부가 무료로 내보내는 수비병
 ## 병영·사격장: 레벨이 병종을 정하고 인원은 고정이다 (기획서 5.1, 6장)
 const MILITARY: Dictionary = {
