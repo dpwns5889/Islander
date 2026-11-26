@@ -28,8 +28,8 @@ var _terr_nodes: Array[Node] = []
 var hq_lost: int = 0 ## 영구히 잃은 본부 수
 var buildings_lost: Dictionary = {} ## 이번 전투에서 무너진 건물 종류 → 개수(본부 제외). 전투를 시작할 때 비운다 (기획서 5.2)
 var hq_level: Dictionary = {} ## 본부 위치 → 그 본부의 레벨 (본부마다 따로) (기획서 5.3)
-const BAR_W: float = 1.9 ## 본부 레벨업 바 크기 (기획서 5.3)
-const BAR_H: float = 0.42
+const BAR_W: float = 0.95 ## 본부 레벨업 바 크기 (기획서 5.3)
+const BAR_H: float = 0.21
 var _hq_bars: Dictionary = {} ## 본부 위치 → 레벨업까지 식량 바 [배경, 채움, 글자] (기획서 5.3)
 var hq_food: Dictionary = {} ## 본부 위치 → 그 본부 영역에서 번 식량 누적
 ## 첫 번째 본부 위치 (없으면 (-1, -1))
@@ -290,14 +290,14 @@ func refresh_hq_bars(show: bool = true) -> void:
 		if not _hq_bars.has(c):
 			var label: Label3D = Label3D.new()
 			label.font_size = 64
-			label.pixel_size = 0.0066
+			label.pixel_size = 0.0033
 			label.outline_size = 14
 			label.billboard = BaseMaterial3D.BILLBOARD_ENABLED # 카메라가 기울어도 바는 항상 화면을 향한다
 			label.no_depth_test = true
 			label.render_priority = 14
 			label.layers = PixelView.LABEL_LAYER # 글자는 원래 해상도 화면에 그린다 (기획서 7.2)
 			add_child(label)
-			_hq_bars[c] = [_bar_quad(Color(0.05, 0.05, 0.07), BAR_W + 0.08, BAR_H + 0.08, 10), _bar_quad(Color(0.28, 0.28, 0.32), BAR_W, BAR_H, 11), _bar_quad(Color(0.35, 0.9, 0.35), BAR_W, BAR_H, 12), label]
+			_hq_bars[c] = [_bar_quad(Color(0.05, 0.05, 0.07), BAR_W + 0.04, BAR_H + 0.04, 10), _bar_quad(Color(0.28, 0.28, 0.32), BAR_W, BAR_H, 11), _bar_quad(Color(0.35, 0.9, 0.35), BAR_W, BAR_H, 12), label]
 		var lv: int = hq_level[c]
 		var nxt: int = next_level_food(c)
 		var prev: int = Balance.hq_level_food(lv - 1) if lv > 1 else 0
@@ -692,6 +692,8 @@ func evolve(c: Vector2i, to: int) -> void:
 
 
 func _label_text(c: Vector2i) -> String:
+	if Balance.BUILDINGS[buildings[c]].has("model"):
+		return "" # 모델 건물은 글자가 모델을 가려서 비운다 (기획서 7.2)
 	var name: String = Balance.BUILDINGS[buildings[c]]["name"]
 	return name.left(1) + (str(levels[c]) if levels[c] > 1 else "")
 
@@ -728,7 +730,7 @@ func build(id: int, c: Vector2i, level: int = 1, variant: int = 0) -> void:
 	_tint(c)
 
 
-## 모델 건물의 모델을 레벨·바리에이션에 맞게 바꾸고 글자를 모델 위에 둔다 (기획서 7.2)
+## 모델 건물의 모델을 레벨·바리에이션에 맞게 바꾼다 (기획서 7.2)
 func _set_model(c: Vector2i) -> void:
 	var data: Dictionary = Balance.BUILDINGS[buildings[c]]
 	var md: Dictionary = Toon.model(data["model"] % [mini(levels[c], Balance.MAX_LEVEL), variants[c]])
@@ -737,7 +739,6 @@ func _set_model(c: Vector2i) -> void:
 	mi.mesh = md["mesh"]
 	mi.material_override = Toon.material(Color.WHITE, md["tex"])
 	mi.position = cell_to_world(c) + Vector3(0, base_y, 0)
-	(_nodes[c][1] as Label3D).position = cell_to_world(c) + Vector3(0, base_y + (md["mesh"] as Mesh).get_aabb().size.y + 0.02, 0)
 
 
 ## 체력 비율만큼 본체 색을 어둡게 해 피해를 보여 준다

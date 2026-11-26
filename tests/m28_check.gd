@@ -54,6 +54,10 @@ func _initialize() -> void:
 	for c in f.buildings:
 		shown = shown and (f._nodes[c][1] as Label3D).visible
 	fails += _check(hidden and shown, "건물 이름 글자를 숨기고 다시 보인다")
+	var house: Vector2i = Vector2i(4, 2)
+	f.build(Balance.HOUSE, house)
+	f.upgrade(house)
+	fails += _check((f._nodes[house][1] as Label3D).text == "" and (f._nodes[fc][1] as Label3D).text != "", "모델 건물은 글자 없음, 상자 건물은 글자 있음")
 	print("M28 점검 실패 %d건" % fails)
 	quit(fails)
 
