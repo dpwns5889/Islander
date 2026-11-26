@@ -94,14 +94,6 @@ func command_move(cell: Vector2i) -> void:
 			r.order = cell
 
 
-func clear_orders() -> void:
-	for u in soldiers:
-		u.order = Vector2i(-1, -1)
-	for b in boats:
-		for r in b.cargo:
-			r.order = Vector2i(-1, -1)
-
-
 func _process(delta: float) -> void:
 	var left: float = delta * speed_scale # 배속이 커도 한 번에 0.1초씩만 계산해 움직임이 튀지 않게 한다
 	while left > 0.0 and not done:

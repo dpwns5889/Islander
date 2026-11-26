@@ -53,9 +53,6 @@ func _initialize() -> void:
 	for s in b4.soldiers:
 		arrived = arrived and s.order.x == -1
 	fails += _check(arrived, "도착하면 이동 명령이 끝난다 (깃발처럼 계속 남지 않는다)")
-	b4.command_move(Vector2i(4, 4))
-	b4.clear_orders()
-	fails += _check(b4.soldiers[0].order == Vector2i(-1, -1), "이동 취소")
 	# 5. 이동 중에도 가까운 적(3칸 안)은 상대한다
 	var f5: Field = _island(10)
 	var b5: Battle = _battle(f5, 100, 20)

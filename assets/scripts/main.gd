@@ -69,8 +69,11 @@ var wave_info: Label ## 준비 단계의 이번 웨이브 적 예고
 var battle_speed_index: int = 0
 var layer: CanvasLayer
 var battle: Battle = null
-var _pitch: float = 90.0
+var _blend: float = 0.0 ## 카메라 전환 정도: 0이면 준비 시점, 1이면 전투 시점
 var _zoom: float = 1.0 ## 준비 단계 휠 줌 배율(작을수록 확대)
+var _battle_zoom: float = 1.0 ## 전투 중 휠 줌 배율
+var _battle_pitch: float = Balance.COMBAT_PITCH ## 전투 카메라 기울기(도)
+var _battle_yaw: float = 0.0 ## 전투 카메라 좌우 회전(도)
 var _note: String = ""
 var _gmats: Dictionary = {}
 
@@ -114,7 +117,7 @@ func _build_world() -> void:
 	cursor.mesh = cm
 	cursor.visible = false
 	add_child(cursor)
-	_set_pitch(90.0)
+	_update_camera()
 
 
 func _build_ui() -> void:
@@ -432,7 +435,7 @@ func _begin_prep() -> void:
 	tiles_required = 1 # 전투 보상 타일: 놓기 전에는 건설·강화·웨이브 시작이 막힌다
 	if GameState.wave > 1 and (GameState.wave - 1) % Balance.GROW_EVERY == 0: # 2라운드마다 4방으로 확장 (기획서 3장)
 		field.expand_all()
-		_set_pitch(_pitch)
+		_update_camera()
 		_note = "필드가 사방으로 넓어졌습니다 (%dx%d)" % [field.bounds.size.x, field.bounds.size.y]
 	explored = false
 	_roll_choices()
@@ -458,7 +461,7 @@ func _make_room(pieces: Array[Piece]) -> int:
 			field.expand(d)
 			grown += 1
 	if grown > 0:
-		_set_pitch(_pitch)
+		_update_camera()
 	return grown
 
 
@@ -737,7 +740,10 @@ func start_wave() -> void:
 	build_panel.visible = false
 	side_panel.visible = false
 	wave_button.disabled = true
-	_tilt(Balance.COMBAT_PITCH)
+	_battle_zoom = 1.0 # 전투는 항상 기본 시점에서 시작한다 (기획서 2장)
+	_battle_pitch = Balance.COMBAT_PITCH
+	_battle_yaw = 0.0
+	_blend_camera(1.0)
 	field.buildings_lost.clear()
 	field.show_labels(false) # 전투 중에는 건물 이름을 숨긴다 (기획서 7.2)
 	battle = Battle.new()
@@ -805,7 +811,7 @@ func _on_battle_finished(victory: bool) -> void:
 	var ups: Dictionary = field.settle_levels(GameState.researched) # 본부마다 자기 영역 식량으로 레벨·영역 상승 (기획서 5.3)
 	var rp_gain: int = GameState.add_research_progress(field.research_income(GameState.researched)) # 도서관·연구소 (기획서 5.4)
 	field.repair_all()
-	_tilt(90.0)
+	_blend_camera(0.0)
 	build_panel.visible = true
 	side_panel.visible = true
 	_begin_prep()
@@ -870,24 +876,41 @@ func _result_panel(text: String, buttons: Array) -> PanelContainer:
 	return pc
 
 
-func _tilt(deg: float) -> void:
-	create_tween().tween_method(_set_pitch, _pitch, deg, 0.8)
+func _blend_camera(to: float) -> void:
+	create_tween().tween_method(_set_blend, _blend, to, 0.8)
 
 
-func _set_pitch(deg: float) -> void:
-	_pitch = deg
-	var r: float = deg_to_rad(deg)
-	var center: Vector3 = field.center_world()
-	var cam_pos: Vector3 = center + Vector3(0, 20.0 * sin(r), 20.0 * cos(r))
+func _set_blend(t: float) -> void:
+	_blend = t
+	_update_camera()
+
+
+## 준비 시점(90도, 회전 0)과 전투 시점을 전환 정도만큼 섞어 카메라를 놓는다 (기획서 2장, 7.2)
+func _update_camera() -> void:
+	var pitch: float = lerpf(90.0, _battle_pitch, _blend)
+	var yaw: float = _battle_yaw * _blend
+	var r: float = deg_to_rad(pitch)
+	# 직교 카메라라 거리는 화면 크기와 무관하다. 낮게 기울여도 땅이 잘리지 않게 멀리 둔다
+	var offset: Vector3 = Vector3(0, sin(r), cos(r)).rotated(Vector3.UP, deg_to_rad(yaw)) * 100.0
 	var scale: float = maxf(field.bounds.size.x / float(Field.W), field.bounds.size.y / float(Field.H)) # 넓어진 필드에 맞춰 줌아웃
-	var t: float = (90.0 - deg) / (90.0 - Balance.COMBAT_PITCH)
-	pixel.aim(cam_pos, deg, lerpf(Balance.PREP_CAM_SIZE, Balance.COMBAT_CAM_SIZE, t) * scale * lerpf(_zoom, 1.0, t)) # 전투 때는 더 확대한다, 휠 줌은 준비 단계만 (기획서 2장)
+	var size: float = lerpf(Balance.PREP_CAM_SIZE * _zoom, Balance.COMBAT_CAM_SIZE * _battle_zoom, _blend)
+	pixel.aim(field.center_world() + offset, pitch, size * scale, yaw)
 
 
-## 준비 단계 휠 확대/축소 (기획서 2장)
+## 휠 확대/축소: 준비 단계와 전투가 배율을 따로 가진다 (기획서 2장)
 func _wheel_zoom(f: float) -> void:
-	_zoom = clampf(_zoom * f, Balance.ZOOM_MIN, Balance.ZOOM_MAX)
-	_set_pitch(_pitch)
+	if battle == null:
+		_zoom = clampf(_zoom * f, Balance.ZOOM_MIN, Balance.ZOOM_MAX)
+	else:
+		_battle_zoom = clampf(_battle_zoom * f, Balance.ZOOM_MIN, Balance.ZOOM_MAX)
+	_update_camera()
+
+
+## 전투 중 우클릭 드래그: 가로는 좌우 회전, 세로는 기울기 (기획서 7.2)
+func _drag_camera(motion: Vector2) -> void:
+	_battle_yaw = wrapf(_battle_yaw - motion.x * Balance.CAM_ROTATE_SENS, -180.0, 180.0)
+	_battle_pitch = clampf(_battle_pitch + motion.y * Balance.CAM_ROTATE_SENS, Balance.CAM_PITCH_MIN, Balance.CAM_PITCH_MAX)
+	_update_camera()
 
 
 func _rebuild_ghost() -> void:
@@ -998,7 +1021,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key == KEY_P and not event.is_echo(): # 도트 화면 켜고 끄기 (기획서 7.2)
 		pixel.set_enabled(not pixel.enabled)
 		return
-	if battle == null and event is InputEventMouseButton and event.pressed and (event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN):
+	if event is InputEventMouseButton and event.pressed and (event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN):
 		_wheel_zoom(Balance.ZOOM_STEP if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / Balance.ZOOM_STEP)
 		return
 	if open_category >= 0 and (left or right or key == KEY_ESCAPE): # 목록 바깥을 누르면 닫는다
@@ -1024,11 +1047,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				select_building(hc)
 		elif right or key == KEY_ESCAPE:
 			select_building(Vector2i(-1, -1))
-	else: # 전투 중에는 클릭한 땅이 병사 집결지가 된다
+	else: # 전투 중에는 클릭한 땅으로 병사가 이동하고, 우클릭 드래그로 카메라를 돌린다
 		if left:
 			command_move(_hover_cell())
-		elif right:
-			battle.clear_orders()
+		elif event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_RIGHT:
+			_drag_camera((event as InputEventMouseMotion).relative)
 
 
 ## 본부를 위치 순서로 정렬한 목록 (왼쪽 패널 표시용)
@@ -1189,7 +1212,7 @@ func _refresh_hud() -> void:
 			upgrade_button.disabled = true
 	var s: String
 	if battle != null:
-		s = battle.summary() + "\n땅을 클릭하면 병사가 그곳으로 이동합니다 · 우클릭으로 이동 취소"
+		s = battle.summary() + "\n땅을 클릭하면 병사가 그곳으로 이동합니다 · 우클릭 드래그로 시점 회전 · 휠로 확대/축소"
 	elif placed_count == 0:
 		s = "시작 조각을 놓으세요 (빨간 칸이 본부) · 좌클릭 배치 · R/우클릭 회전"
 	elif current != null and placing_hq:
