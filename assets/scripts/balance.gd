@@ -126,7 +126,8 @@ const MILITARY: Dictionary = {
 }
 const LV3_TECH: String = "ironwork" ## 병영·사격장 레벨 3 강화에 필요한 연구
 const WAVE_TIME_LIMIT: float = 300.0 ## 적이 막혀 끝나지 않을 때만 쓰는 안전장치(초). 이 시간이 지나면 남은 적을 정리하고 웨이브를 끝낸다
-const COMBAT_PITCH: float = 55.0
+const COMBAT_PITCH: float = 35.0 ## 전투 시작 기울기(도): 쿼터뷰 (기획서 2장, 7.2)
+const COMBAT_YAW: float = 45.0 ## 전투 시작 좌우 회전(도)
 const CAM_PITCH_MIN: float = 35.0 ## 전투 중 드래그로 기울일 수 있는 범위(도) (기획서 7.2)
 const CAM_PITCH_MAX: float = 90.0
 const CAM_ROTATE_SENS: float = 0.3 ## 우클릭 드래그 1픽셀당 회전 각도(도)

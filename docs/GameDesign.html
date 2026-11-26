@@ -59,7 +59,7 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 </nav><main><h1 id="biomedefender">BiomeDefender (가칭) — 기획서</h1>
 <ul>
 <li>최종 수정: 2026-11-26</li>
-<li>게임 버전: 0.62</li>
+<li>게임 버전: 0.63</li>
 <li>엔진: Godot 4.7.2, GDScript, 3D (로우폴리), PC 마우스 전용</li>
 </ul>
 <h2 id="1">1. 개요</h2>
@@ -83,10 +83,10 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <li><strong>우상단 별도 패널</strong>에 <strong>이번 웨이브의 적 예고</strong>(해적 수, 해적선 수, 해적 체력·공격 배율)가 표시된다. 조각을 놓거나 필드를 넓히면 배율이 바로 바뀐다.</li>
 <li>카메라는 완전 탑다운(90°).</li>
 <li><strong>전투 단계</strong> (실시간)</li>
-<li>카메라가 약 55° 대각선 시점으로 전환된다. 필드 밖 8칸까지 보인다.</li>
+<li>카메라가 <strong>쿼터뷰</strong>(좌우 45° 회전, 기울기 35°)로 전환된다. 필드 밖 8칸까지 보인다.</li>
 <li>웨이브가 시작될 때 병영과 본부가 병사를 <strong>한 번에</strong> 내보내고(웨이브 중에는 더 만들지 않음), 적 해적선이 바깥 바다에서 들어온다.</li>
 <li>상단의 <strong>배속 버튼</strong>으로 전투 속도를 x1 → x2 → x4 → x1로 바꾼다. 정한 배속은 다음 전투에도 유지된다.</li>
-<li>전투 중 땅 위에서 <strong>휠 버튼을 클릭</strong>하면 병사들이 <strong>그 지점으로 이동</strong>한다(깃발 없이 한 번의 명령, 취소 조작은 없다). 전투 카메라는 준비 단계보다 <strong>더 확대</strong>된다. 준비 단계에서는 <strong>마우스 휠로 확대/축소</strong>할 수 있다(0.4~1.3배, 화면 중앙 기준). <strong>전투 중에도 같은 범위로 확대/축소</strong>하고, <strong>좌클릭 드래그로 카메라를 옮기고</strong>(화면 중앙은 필드 안까지), <strong>우클릭 드래그로 돌린다</strong>(좌우 360°, 상하 35~90°). 전투는 항상 기본 시점(필드 중앙, 55°, 회전 0°, 기본 배율)에서 시작하고, 전투가 끝나면 필드 중앙·90°·회전 0°·전투 전의 준비 단계 배율로 돌아간다.</li>
+<li>전투 중 땅 위에서 <strong>휠 버튼을 클릭</strong>하면 병사들이 <strong>그 지점으로 이동</strong>한다(깃발 없이 한 번의 명령, 취소 조작은 없다). 전투 카메라는 준비 단계보다 <strong>더 확대</strong>된다. 준비 단계에서는 <strong>마우스 휠로 확대/축소</strong>할 수 있다(0.4~1.3배, 화면 중앙 기준). <strong>전투 중에도 같은 범위로 확대/축소</strong>하고, <strong>좌클릭 드래그로 카메라를 옮기고</strong>(화면 중앙은 필드 안까지), <strong>우클릭 드래그로 돌린다</strong>(좌우 360°, 상하 35~90°). 전투는 항상 기본 시점(필드 중앙, 기울기 35°, 회전 45°, 기본 배율)에서 시작하고, 전투가 끝나면 필드 중앙·90°·회전 0°·전투 전의 준비 단계 배율로 돌아간다.</li>
 <li><strong>정산</strong>: 웨이브가 끝나면 수입을 한 번에 정산한다. 살아남은 건물·본부가 입은 <strong>피해는 그대로 남아 골드로 수리해야 하고</strong>(5.2.2), 전투 중 <strong>파괴된 건물과 본부는 복구되지 않는다</strong>(건물은 같은 칸에 레벨 1로 다시 지어야 한다). 그다음 준비 단계로 돌아간다.</li>
 </ol>
 <h3 id="_1">시작</h3>
@@ -925,7 +925,7 @@ docs/          기획서 (.gdignore)
 <ul>
 <li>3D 격자. 지형 칸은 로우폴리 블록, 유닛·건물은 플레이스홀더 메시(색 큐브·캡슐)로 시작한다.</li>
 <li><strong>화면 설정</strong>: 기본 해상도 <strong>1920x1080</strong>, UI는 약 1.67배(<code>stretch/scale</code>)로 키워 1152x648 기준 배치를 유지한다. 실행하면 <strong>전체화면</strong>이고 창 모드 전환 키는 없다(게임 중 종료는 Alt+F4). <strong>스플래시 이미지는 없다</strong>(배경 검정).</li>
-<li>Camera3D 하나. 준비 단계 90°, 전투 단계 약 55°로 트윈 전환하고, 전투에서는 준비 단계보다 더 확대한다(카메라 크기 18 → 13.5).</li>
+<li>Camera3D 하나. 준비 단계 90°, 전투 단계 쿼터뷰(기울기 35° <code>COMBAT_PITCH</code>, 좌우 회전 45° <code>COMBAT_YAW</code>)로 트윈 전환하고, 전투에서는 준비 단계보다 더 확대한다(카메라 크기 18 → 13.5).</li>
 <li><strong>전투 카메라 조작</strong>: 좌클릭을 누른 채 끌면 땅이 마우스를 따라오도록 옮긴다(화면 중앙이 필드 밖으로 나가지 않는다). 회전과 확대의 중심은 화면 중앙이다. 우클릭을 누른 채 가로로 끌면 좌우 회전, 세로로 끌면 기울기(아래로 끌수록 위에서 본다, 35~90°). 감도는 논리 화면 1픽셀당 0.3°(<code>CAM_ROTATE_SENS</code>).</li>
 <li><strong>도트 화면</strong>: 3D를 낮은 해상도로 그려 정수 배로 확대해 도트처럼 보이게 한다(<code>PixelView</code>, 셰이더는 <code>assets/shaders/</code>).</li>
 <li><strong>켜고 끄기(테스트용)</strong>: 게임 중 <strong>P키</strong>로 도트 화면을 켜고 끈다(화면 버튼 없음). 끄면 원래 해상도로 외곽선 없이 그리고, 빛 3단계는 그대로다. 설정은 저장하지 않으며 <strong>게임을 시작할 때는 항상 도트 화면</strong>이다.</li>
@@ -1015,7 +1015,7 @@ docs/          기획서 (.gdignore)
 </ol>
 <h3 id="93">9.3 알아 둘 것</h3>
 <ul>
-<li>테스트와 화면 확인 방법은 <code>CLAUDE.md</code>의 "실행과 테스트"에 있다. 지금 <code>tests/</code>의 점검(<code>*_check.gd</code>·<code>*_flow.gd</code> 42개)이 모두 통과한 상태(0.62)다. 무작위에 영향을 받아 한 번씩 실패한 적이 있는 점검이 셋 있다(<code>m14_flow.gd</code>: 지형 무작위, <code>m3_check.gd</code>: 적 구성 시드, <code>m9_flow.gd</code>: 병영 강화 2건). 다시 돌리면 통과했고 원인은 확인하지 못했다.</li>
+<li>테스트와 화면 확인 방법은 <code>CLAUDE.md</code>의 "실행과 테스트"에 있다. 지금 <code>tests/</code>의 점검(<code>*_check.gd</code>·<code>*_flow.gd</code> 42개)이 모두 통과한 상태(0.63)다. 무작위에 영향을 받아 한 번씩 실패한 적이 있는 점검이 셋 있다(<code>m14_flow.gd</code>: 지형 무작위, <code>m3_check.gd</code>: 적 구성 시드, <code>m9_flow.gd</code>: 병영 강화 2건). 다시 돌리면 통과했다. <code>m9_flow.gd</code>는 무작위 시작 조각에서 항구가 본부 영역의 마지막 빈 땅을 차지해 병영 자리가 없을 때 실패한다(60번 중 2번). 나머지 둘의 원인은 확인하지 못했다.</li>
 <li>사용자가 Godot 에디터를 켜 두는 경우가 많아서 Godot 프로세스를 강제로 종료하지 않는다(에디터가 같이 꺼진다).</li>
 <li>연구 화면(열 배치·연결선)은 <code>tests/screenshot.gd</code>의 <code>prep research</code> 모드로 캡처한다.</li>
 <li>도트 화면은 후처리가 화면을 복사해 덮어쓰면 반투명 물체(격자·영역선·미리보기)가 지워진다. 후처리를 바꿀 때는 반투명 덮개 방식을 유지한다(7.2). 점검 결과를 파일로 받을 때는 한 번에 한 번만 돌린다(같은 파일에 겹쳐 쓰면 깨진다).</li>
@@ -1339,6 +1339,11 @@ docs/          기획서 (.gdignore)
 <td>0.62</td>
 <td>2026-11-26</td>
 <td><strong>UI</strong><br>- 건물 패널을 오른쪽 아래 고정에서 클릭한 건물·본부 바로 위에 뜨도록 변경(위에 자리가 없으면 아래, 화면 밖으로 나가지 않음)</td>
+</tr>
+<tr>
+<td>0.63</td>
+<td>2026-11-26</td>
+<td><strong>전투 카메라</strong><br>- 전투 시작 시점을 정면 55°에서 쿼터뷰(좌우 45° 회전, 기울기 35°)로 변경</td>
 </tr>
 </tbody>
 </table></main></body></html>

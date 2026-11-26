@@ -75,7 +75,7 @@ var _blend: float = 0.0 ## 카메라 전환 정도: 0이면 준비 시점, 1이�
 var _zoom: float = 1.0 ## 준비 단계 휠 줌 배율(작을수록 확대)
 var _battle_zoom: float = 1.0 ## 전투 중 휠 줌 배율
 var _battle_pitch: float = Balance.COMBAT_PITCH ## 전투 카메라 기울기(도)
-var _battle_yaw: float = 0.0 ## 전투 카메라 좌우 회전(도)
+var _battle_yaw: float = Balance.COMBAT_YAW ## 전투 카메라 좌우 회전(도)
 var _battle_pan: Vector3 = Vector3.ZERO ## 전투 중 화면 중앙이 필드 중심에서 옮겨 간 거리
 var _note: String = ""
 var _gmats: Dictionary = {}
@@ -774,7 +774,7 @@ func start_wave() -> void:
 	wave_button.disabled = true
 	_battle_zoom = 1.0 # 전투는 항상 기본 시점에서 시작한다 (기획서 2장)
 	_battle_pitch = Balance.COMBAT_PITCH
-	_battle_yaw = 0.0
+	_battle_yaw = Balance.COMBAT_YAW
 	_battle_pan = Vector3.ZERO
 	_blend_camera(1.0)
 	field.buildings_lost.clear()
