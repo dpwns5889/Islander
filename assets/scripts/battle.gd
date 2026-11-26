@@ -36,6 +36,7 @@ var _pirates_left: int:
 		while _queue.size() > maxi(v, 0):
 			_queue.pop_back()
 var _ship_timer: float = 0.0
+var _ship_gap: float = 0.0 ## 해적선이 나오는 간격(초)
 var speed_scale: float = 1.0 ## 전투 배속
 var _mult: float = 1.0
 
@@ -49,6 +50,7 @@ func setup(f: Field, g: Node, w: int) -> void:
 	sea_nav = f.nav(true)
 	islands = f.island_map()
 	_ships_left = Balance.ship_count(w, g.run_seed)
+	_ship_gap = Balance.SHIP_SPAWN_TIME / maxi(_ships_left, 1)
 	_queue = Balance.enemy_queue(w, g.run_seed)
 	_mult = Balance.enemy_mult(f.land_count(), f.expansions)
 	rng.randomize()
@@ -572,13 +574,15 @@ func _boat_load(b: Unit) -> void:
 	b.state = BOAT_OUT
 
 
+## 간격이 한 번의 계산(dt)보다 짧으면 한 번에 여러 척이 나온다 (기획서 6장)
 func _spawn_ships(dt: float) -> void:
-	if _ships_left <= 0:
-		return
 	_ship_timer -= dt
-	if _ship_timer > 0.0:
-		return
-	_ship_timer = Balance.SHIP_INTERVAL
+	while _ships_left > 0 and _ship_timer <= 0.0:
+		_ship_timer += _ship_gap
+		_spawn_ship()
+
+
+func _spawn_ship() -> void:
 	_ships_left -= 1
 	var load: Array[int] = [] # 강한 적이 먼저 탄다
 	var n_load: int = ceili(_queue.size() / float(_ships_left + 1)) # 남은 인원을 남은 배에 고르게 나눠 한 명짜리 배가 없게 한다 (기획서 6장)
