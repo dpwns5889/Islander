@@ -25,11 +25,11 @@ const EVOLVE_COST_RATE: float = 0.7 ## 기존 레벨 3 건물을 진화시키는
 
 ## cost: 건설 골드, hp: 체력(M3부터), sand: 모래 위 건설 가능 여부, sea: 인접 바다 필요 여부
 const BUILDINGS: Dictionary = {
-	HOUSE: {"name": "집", "cost": 20, "hp": 50, "sand": true, "sea": false, "evolves_to": MANSION, "model": "res://assets/models/house/house_t%d_v%d.glb", "model_variants": 4, "color": Color(0.6, 0.4, 0.2)},
+	HOUSE: {"name": "집", "cost": 20, "hp": 50, "sand": true, "sea": false, "evolves_to": MANSION, "model": "house", "model_variants": 4, "color": Color(0.6, 0.4, 0.2)},
 	PORT: {"name": "항구", "cost": 50, "hp": 80, "sand": true, "sea": true, "color": Color(0.15, 0.25, 0.6)},
-	BARRACKS: {"name": "병영", "cost": 30, "hp": 100, "sand": false, "sea": false, "color": Color(0.45, 0.45, 0.5)},
+	BARRACKS: {"name": "병영", "cost": 30, "hp": 100, "sand": false, "sea": false, "model": "barracks", "model_variants": 2, "color": Color(0.45, 0.45, 0.5)},
 	MARKET: {"name": "시장", "cost": 50, "hp": 70, "tech": "math", "sand": false, "sea": false, "color": Color(0.85, 0.65, 0.1)},
-	FARM: {"name": "밭", "cost": 25, "hp": 50, "sand": false, "sea": false, "evolves_to": FARMSTEAD, "model": "res://assets/models/field/field_t%d_v%d.glb", "model_variants": 4, "color": Color(0.35, 0.55, 0.2)},
+	FARM: {"name": "밭", "cost": 25, "hp": 50, "sand": false, "sea": false, "evolves_to": FARMSTEAD, "model": "field", "model_variants": 4, "color": Color(0.35, 0.55, 0.2)},
 	FISHERY: {"name": "낚시터", "cost": 25, "hp": 50, "sand": true, "sea": false, "tech": "fishing", "on_water": true, "evolves_to": FISH_VILLAGE, "color": Color(0.2, 0.65, 0.75)},
 	TRADING_POST: {"name": "교역소", "cost": 40, "hp": 70, "tech": "commerce", "sand": true, "sea": false, "on_water": true, "open_sea": true, "unique": true, "color": Color(0.7, 0.35, 0.75)},
 	LIBRARY: {"name": "도서관", "cost": 40, "hp": 60, "sand": true, "sea": false, "evolves_to": LAB, "color": Color(0.55, 0.35, 0.65)},
@@ -274,6 +274,12 @@ static func tower_atk(id: int, level: int) -> float:
 
 static func tower_range(id: int, level: int) -> float:
 	return (FORTRESS_RANGE_LV if id == FORTRESS else TOWER_RANGE_LV)[level - 1]
+
+
+## 모델 파일 경로: 종류별 폴더 안에 레벨·번호마다 한 폴더 (기획서 7.2)
+static func model_path(kind: String, level: int, variant: int) -> String:
+	var name: String = "%s_t%d_v%d" % [kind, level, variant]
+	return "res://assets/models/%s/%s/%s.glb" % [kind, name, name]
 
 
 ## 진화 건물 id, 없으면 0 (기획서 5.2.1)

@@ -732,7 +732,7 @@ func build(id: int, c: Vector2i, level: int = 1, variant: int = 0) -> void:
 ## 모델 건물의 모델을 레벨·바리에이션에 맞게 바꾼다 (기획서 7.2)
 func _set_model(c: Vector2i) -> void:
 	var data: Dictionary = Balance.BUILDINGS[buildings[c]]
-	var md: Dictionary = Toon.model(data["model"] % [mini(levels[c], Balance.MAX_LEVEL), variants[c]])
+	var md: Dictionary = Toon.model(Balance.model_path(data["model"], mini(levels[c], Balance.MAX_LEVEL), variants[c]))
 	var mi: MeshInstance3D = _nodes[c][0]
 	var base_y: float = BLOCK_H if cells.has(c) else 0.0
 	mi.mesh = md["mesh"]
