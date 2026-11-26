@@ -20,6 +20,10 @@ func _initialize() -> void:
 					var path: String = Balance.model_path(data["model"], level, variant, stage)
 					if not ResourceLoader.exists(path):
 						missing.append(path)
+	for variant in range(1, Balance.HQ_MODEL_VARIANTS + 1):
+		for stage in [0, 1, 2]:
+			if not ResourceLoader.exists(Balance.model_path(Balance.HQ_MODEL, 0, variant, stage)):
+				missing.append(Balance.model_path(Balance.HQ_MODEL, 0, variant, stage))
 	fails += _check(missing.is_empty() and Balance.BUILDINGS[Balance.BARRACKS].has("model"), "모델 파일 (없는 것 %s)" % [missing])
 
 	var main: Node = load("res://assets/scenes/main.tscn").instantiate()
@@ -63,7 +67,11 @@ func _initialize() -> void:
 	fails += _check(worn.size() == 3 and is_equal_approx(worn[0].hp, 30.0 * 0.65) and is_equal_approx(worn[0].atk, 5.0 * 0.65), "병영 30%: 병사 3명, 체력·공격 65%")
 	b.free()
 	# 웨이브가 끝나도 피해가 남는다
+	var castle: MeshInstance3D = f._nodes[f.hq][0]
+	var castle_full: Mesh = castle.mesh
 	f.damage(f.hq, 150.0)
+	var castle_hurt: Mesh = castle.mesh
+	fails += _check(castle_full != null and castle_hurt != castle_full, "본부: 체력 50%면 파손 모델")
 	var left: float = f.hp[house]
 	main.start_wave()
 	main.battle._ships_left = 0
@@ -75,6 +83,7 @@ func _initialize() -> void:
 	gs.gold = 1000
 	fails += _check(main.select_building(f.hq) and main.repair_button.text == "수리 25G" and not main.upgrade_button.visible, "본부 패널: 수리 25G")
 	fails += _check(main.repair_selected() and gs.gold == 975 and f.hq_hp == Balance.HQ_HP, "본부 수리")
+	fails += _check(castle.mesh == castle_full, "본부 수리 뒤 정상 모델")
 	# 골드가 모자라면 못 고친다
 	gs.gold = 0
 	main._refresh_hud()
@@ -84,6 +93,12 @@ func _initialize() -> void:
 	fails += _check(main.repair_everything() and gs.gold == 1000 - total and f.total_repair_cost() == 0, "전체 수리 %dG" % total)
 	fails += _check(mi.mesh == meshes[0] and not main.repair_all_button.visible, "수리하면 정상 모델, 버튼 숨김")
 	fails += _check(main.select_building(house) and main.upgrade_selected(), "수리 뒤에는 강화 가능")
+	# 무너진 본부 칸에 상자 건물을 지어도 본부 모델 기록이 남지 않는다
+	var old: Vector2i = f.hq
+	f.damage(old, 9999.0)
+	f.build(Balance.MARKET, old)
+	f.damage(old, 40.0)
+	fails += _check(not f.variants.has(old) and (f._nodes[old][0] as MeshInstance3D).mesh is BoxMesh, "본부 자리의 새 건물")
 	print("M31 점검 실패 %d건" % fails)
 	quit(fails)
 

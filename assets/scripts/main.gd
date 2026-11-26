@@ -1293,7 +1293,7 @@ func _refresh_hud() -> void:
 	if battle != null:
 		s = battle.summary() + "\n휠 버튼으로 땅을 클릭하면 병사가 그곳으로 이동합니다\n좌클릭 드래그 이동 · 우클릭 드래그 회전 · 휠 확대/축소"
 	elif placed_count == 0:
-		s = "시작 조각을 놓으세요 (빨간 칸이 본부) · 좌클릭 배치 · R/우클릭 회전"
+		s = "시작 조각을 놓으세요 (본부 성이 함께 놓입니다) · 좌클릭 배치 · R/우클릭 회전"
 	elif current != null and placing_hq:
 		s = "본부 조각: 좌클릭 배치 · R/우클릭 회전 (놓아야 웨이브를 시작할 수 있습니다)"
 	elif current != null:
