@@ -995,6 +995,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	var left: bool = event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT
 	var right: bool = event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT
 	var key: int = (event as InputEventKey).keycode if event is InputEventKey and event.pressed else 0
+	if key == KEY_P and not event.is_echo(): # 도트 화면 켜고 끄기 (기획서 7.2)
+		pixel.set_enabled(not pixel.enabled)
+		return
 	if battle == null and event is InputEventMouseButton and event.pressed and (event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN):
 		_wheel_zoom(Balance.ZOOM_STEP if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / Balance.ZOOM_STEP)
 		return

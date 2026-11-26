@@ -7,6 +7,8 @@ const POST_SHADER: Shader = preload("res://assets/shaders/pixel_post.gdshader")
 const LABEL_LAYER: int = 2 ## 글자(Label3D)가 그려지는 3D 레이어 번호 (1은 일반 물체)
 
 var camera: Camera3D ## 도트 화면을 그리는 카메라(격자에 맞춰 움직인다)
+var enabled: bool = true ## 끄면 원래 해상도로 외곽선 없이 그린다. 저장하지 않아 시작은 늘 도트 (기획서 7.2)
+var _post: MeshInstance3D
 var _sub: SubViewport
 var _tex: TextureRect
 var _lsub: SubViewport
@@ -38,18 +40,18 @@ func _ready() -> void:
 	camera.cull_mask = 1
 	_sub.add_child(camera)
 	camera.current = true
-	var post: MeshInstance3D = MeshInstance3D.new()
+	_post = MeshInstance3D.new()
 	var q: QuadMesh = QuadMesh.new()
 	q.size = Vector2(2, 2)
-	post.mesh = q
-	post.extra_cull_margin = 16384.0
+	_post.mesh = q
+	_post.extra_cull_margin = 16384.0
 	var pm: ShaderMaterial = ShaderMaterial.new()
 	pm.shader = POST_SHADER
 	pm.render_priority = 127 # 반투명 물체(격자·영역선·미리보기)를 다 그린 뒤 맨 마지막에 후처리한다
-	post.material_override = pm
-	post.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	camera.add_child(post)
-	post.position = Vector3(0, 0, -1)
+	_post.material_override = pm
+	_post.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	camera.add_child(_post)
+	_post.position = Vector3(0, 0, -1)
 	# 글자 전용 화면: 원래 해상도로 그려 도트 위에 얹는다
 	var front: CanvasLayer = CanvasLayer.new()
 	front.layer = -1
@@ -78,10 +80,21 @@ func _ready() -> void:
 	_resize()
 
 
+## 도트 화면을 켜고 끈다 (기획서 7.2)
+func set_enabled(on: bool) -> void:
+	enabled = on
+	_post.visible = on
+	_tex.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if on else CanvasItem.TEXTURE_FILTER_LINEAR
+	_resize()
+
+
 func _resize() -> void:
 	var logical: Vector2 = get_viewport().get_visible_rect().size
-	_k = maxf(1.0, logical.y / float(Balance.PIXEL_HEIGHT))
-	_sub.size = Vector2i(ceili(logical.x / _k) + 2, Balance.PIXEL_HEIGHT + 2) # 위아래·양옆에 1도트씩 여유(카메라 격자 맞춤용)
+	var height: int = Balance.PIXEL_HEIGHT if enabled else maxi(1, get_window().size.y)
+	_k = logical.y / float(height)
+	if enabled:
+		_k = maxf(1.0, _k)
+	_sub.size = Vector2i(ceili(logical.x / _k) + 2, height + 2) # 위아래·양옆에 1도트씩 여유(카메라 격자 맞춤용)
 	_tex.size = Vector2(_sub.size) * _k
 	_lsub.size = Vector2i(maxi(1, get_window().size.x), maxi(1, get_window().size.y))
 
@@ -95,7 +108,7 @@ func aim(pos: Vector3, pitch_deg: float, size: float) -> void:
 
 func _process(_delta: float) -> void:
 	var basis: Basis = Basis.from_euler(Vector3(deg_to_rad(-_pitch), 0.0, 0.0))
-	var texel: float = _size / float(Balance.PIXEL_HEIGHT)
+	var texel: float = _size / float(_sub.size.y - 2)
 	var x: float = _pos.dot(basis.x)
 	var y: float = _pos.dot(basis.y)
 	var sx: float = roundf(x / texel) * texel
