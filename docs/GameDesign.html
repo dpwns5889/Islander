@@ -864,6 +864,7 @@ docs/          기획서 (.gdignore)
 <h3 id="72">7.2 렌더링과 카메라</h3>
 <ul>
 <li>3D 격자. 지형 칸은 로우폴리 블록, 유닛·건물은 플레이스홀더 메시(색 큐브·캡슐)로 시작한다.</li>
+<li><strong>화면 설정</strong>: 기본 해상도 <strong>1920x1080</strong>, UI는 약 1.67배(<code>stretch/scale</code>)로 키워 1152x648 기준 배치를 유지한다. 실행하면 <strong>전체화면</strong>이고 창 모드 전환 키는 없다(게임 중 종료는 Alt+F4). <strong>스플래시 이미지는 없다</strong>(배경 검정).</li>
 <li>Camera3D 하나. 준비 단계 90°, 전투 단계 약 55°로 트윈 전환하고, 전투에서는 준비 단계보다 더 확대한다(카메라 크기 18 → 13.5).</li>
 <li><strong>도트 화면</strong>: 3D를 낮은 해상도로 그려 정수 배로 확대해 도트처럼 보이게 한다(<code>PixelView</code>, 셰이더는 <code>assets/shaders/</code>).</li>
 <li><strong>켜고 끄기(테스트용)</strong>: 게임 중 <strong>P키</strong>로 도트 화면을 켜고 끈다(화면 버튼 없음). 끄면 원래 해상도로 외곽선·모서리 빛 없이 그리고, 빛 3단계는 그대로다. 설정은 저장하지 않으며 <strong>게임을 시작할 때는 항상 도트 화면</strong>이다.</li>
