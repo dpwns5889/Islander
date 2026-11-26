@@ -74,6 +74,7 @@ var _zoom: float = 1.0 ## 준비 단계 휠 줌 배율(작을수록 확대)
 var _battle_zoom: float = 1.0 ## 전투 중 휠 줌 배율
 var _battle_pitch: float = Balance.COMBAT_PITCH ## 전투 카메라 기울기(도)
 var _battle_yaw: float = 0.0 ## 전투 카메라 좌우 회전(도)
+var _battle_pan: Vector3 = Vector3.ZERO ## 전투 중 화면 중앙이 필드 중심에서 옮겨 간 거리
 var _note: String = ""
 var _gmats: Dictionary = {}
 
@@ -743,6 +744,7 @@ func start_wave() -> void:
 	_battle_zoom = 1.0 # 전투는 항상 기본 시점에서 시작한다 (기획서 2장)
 	_battle_pitch = Balance.COMBAT_PITCH
 	_battle_yaw = 0.0
+	_battle_pan = Vector3.ZERO
 	_blend_camera(1.0)
 	field.buildings_lost.clear()
 	field.show_labels(false) # 전투 중에는 건물 이름을 숨긴다 (기획서 7.2)
@@ -892,9 +894,13 @@ func _update_camera() -> void:
 	var r: float = deg_to_rad(pitch)
 	# 직교 카메라라 거리는 화면 크기와 무관하다. 낮게 기울여도 땅이 잘리지 않게 멀리 둔다
 	var offset: Vector3 = Vector3(0, sin(r), cos(r)).rotated(Vector3.UP, deg_to_rad(yaw)) * 100.0
-	var scale: float = maxf(field.bounds.size.x / float(Field.W), field.bounds.size.y / float(Field.H)) # 넓어진 필드에 맞춰 줌아웃
-	var size: float = lerpf(Balance.PREP_CAM_SIZE * _zoom, Balance.COMBAT_CAM_SIZE * _battle_zoom, _blend)
-	pixel.aim(field.center_world() + offset, pitch, size * scale, yaw)
+	pixel.aim(field.center_world() + _battle_pan * _blend + offset, pitch, _view_size(), yaw)
+
+
+## 카메라에 세로로 담기는 크기: 넓어진 필드에 맞춰 줌아웃한다
+func _view_size() -> float:
+	var scale: float = maxf(field.bounds.size.x / float(Field.W), field.bounds.size.y / float(Field.H))
+	return lerpf(Balance.PREP_CAM_SIZE * _zoom, Balance.COMBAT_CAM_SIZE * _battle_zoom, _blend) * scale
 
 
 ## 휠 확대/축소: 준비 단계와 전투가 배율을 따로 가진다 (기획서 2장)
@@ -903,6 +909,17 @@ func _wheel_zoom(f: float) -> void:
 		_zoom = clampf(_zoom * f, Balance.ZOOM_MIN, Balance.ZOOM_MAX)
 	else:
 		_battle_zoom = clampf(_battle_zoom * f, Balance.ZOOM_MIN, Balance.ZOOM_MAX)
+	_update_camera()
+
+
+## 전투 중 좌클릭 드래그: 땅이 마우스를 따라오게 옮긴다. 화면 중앙은 필드 안에 둔다 (기획서 7.2)
+func _pan_camera(motion: Vector2) -> void:
+	var per_pixel: float = _view_size() / get_viewport().get_visible_rect().size.y
+	var ground: Vector3 = Vector3(-motion.x, 0.0, -motion.y / sin(deg_to_rad(_battle_pitch))) * per_pixel
+	_battle_pan += ground.rotated(Vector3.UP, deg_to_rad(_battle_yaw))
+	var half: Vector2 = Vector2(field.bounds.size) / 2.0
+	_battle_pan.x = clampf(_battle_pan.x, -half.x, half.x)
+	_battle_pan.z = clampf(_battle_pan.z, -half.y, half.y)
 	_update_camera()
 
 
@@ -1047,9 +1064,11 @@ func _unhandled_input(event: InputEvent) -> void:
 				select_building(hc)
 		elif right or key == KEY_ESCAPE:
 			select_building(Vector2i(-1, -1))
-	else: # 전투 중에는 클릭한 땅으로 병사가 이동하고, 우클릭 드래그로 카메라를 돌린다
-		if left:
+	else: # 전투 중: 휠 버튼 클릭은 병사 이동, 좌클릭 드래그는 카메라 이동, 우클릭 드래그는 회전
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_MIDDLE:
 			command_move(_hover_cell())
+		elif event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+			_pan_camera((event as InputEventMouseMotion).relative)
 		elif event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_RIGHT:
 			_drag_camera((event as InputEventMouseMotion).relative)
 
@@ -1212,7 +1231,7 @@ func _refresh_hud() -> void:
 			upgrade_button.disabled = true
 	var s: String
 	if battle != null:
-		s = battle.summary() + "\n땅을 클릭하면 병사가 그곳으로 이동합니다 · 우클릭 드래그로 시점 회전 · 휠로 확대/축소"
+		s = battle.summary() + "\n휠 버튼으로 땅을 클릭하면 병사가 그곳으로 이동합니다\n좌클릭 드래그 이동 · 우클릭 드래그 회전 · 휠 확대/축소"
 	elif placed_count == 0:
 		s = "시작 조각을 놓으세요 (빨간 칸이 본부) · 좌클릭 배치 · R/우클릭 회전"
 	elif current != null and placing_hq:
