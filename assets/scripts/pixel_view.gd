@@ -9,6 +9,7 @@ const LABEL_LAYER: int = 2 ## 글자(Label3D)가 그려지는 3D 레이어 번�
 var camera: Camera3D ## 도트 화면을 그리는 카메라(격자에 맞춰 움직인다)
 var enabled: bool = true ## 끄면 원래 해상도로 외곽선 없이 그린다. 저장하지 않아 시작은 늘 도트 (기획서 7.2)
 var _post: MeshInstance3D
+var _pm: ShaderMaterial ## 외곽선 후처리 재질
 var _sub: SubViewport
 var _tex: TextureRect
 var _lsub: SubViewport
@@ -16,6 +17,7 @@ var _ltex: TextureRect
 var _lcam: Camera3D
 var _pos: Vector3 = Vector3(0, 20, 0)
 var _pitch: float = 90.0
+var _yaw: float = 0.0
 var _size: float = 18.0
 var _k: float = 1.0 ## 도트 한 개가 화면에서 차지하는 크기(논리 픽셀)
 
@@ -45,10 +47,10 @@ func _ready() -> void:
 	q.size = Vector2(2, 2)
 	_post.mesh = q
 	_post.extra_cull_margin = 16384.0
-	var pm: ShaderMaterial = ShaderMaterial.new()
-	pm.shader = POST_SHADER
-	pm.render_priority = 127 # 반투명 물체(격자·영역선·미리보기)를 다 그린 뒤 맨 마지막에 후처리한다
-	_post.material_override = pm
+	_pm = ShaderMaterial.new()
+	_pm.shader = POST_SHADER
+	_pm.render_priority = 127 # 반투명 물체(격자·영역선·미리보기)를 다 그린 뒤 맨 마지막에 후처리한다
+	_post.material_override = _pm
 	_post.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	camera.add_child(_post)
 	_post.position = Vector3(0, 0, -1)
@@ -99,16 +101,19 @@ func _resize() -> void:
 	_lsub.size = Vector2i(maxi(1, get_window().size.x), maxi(1, get_window().size.y))
 
 
-## 카메라가 바라볼 위치·기울기(도)·크기를 정한다. 실제 카메라는 매 프레임 도트 격자에 맞춰진다
-func aim(pos: Vector3, pitch_deg: float, size: float) -> void:
+## 카메라가 바라볼 위치·기울기(도)·크기·좌우 회전(도)을 정한다. 실제 카메라는 매 프레임 도트 격자에 맞춰진다
+func aim(pos: Vector3, pitch_deg: float, size: float, yaw_deg: float) -> void:
 	_pos = pos
 	_pitch = pitch_deg
+	_yaw = yaw_deg
 	_size = size
 
 
 func _process(_delta: float) -> void:
-	var basis: Basis = Basis.from_euler(Vector3(deg_to_rad(-_pitch), 0.0, 0.0))
+	var basis: Basis = Basis.from_euler(Vector3(deg_to_rad(-_pitch), deg_to_rad(_yaw), 0.0))
 	var texel: float = _size / float(_sub.size.y - 2)
+	# 낮게 기울이면 땅의 도트 사이 깊이 차가 커지므로, 땅 전체가 외곽선이 되지 않게 기준을 올린다
+	_pm.set_shader_parameter("depth_threshold", maxf(0.12, texel / tan(deg_to_rad(_pitch)) * 1.5))
 	var x: float = _pos.dot(basis.x)
 	var y: float = _pos.dot(basis.y)
 	var sx: float = roundf(x / texel) * texel

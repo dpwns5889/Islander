@@ -125,12 +125,15 @@ const MILITARY: Dictionary = {
 const LV3_TECH: String = "ironwork" ## 병영·사격장 레벨 3 강화에 필요한 연구
 const WAVE_TIME_LIMIT: float = 300.0 ## 적이 막혀 끝나지 않을 때만 쓰는 안전장치(초). 이 시간이 지나면 남은 적을 정리하고 웨이브를 끝낸다
 const COMBAT_PITCH: float = 55.0
+const CAM_PITCH_MIN: float = 35.0 ## 전투 중 드래그로 기울일 수 있는 범위(도) (기획서 7.2)
+const CAM_PITCH_MAX: float = 90.0
+const CAM_ROTATE_SENS: float = 0.3 ## 우클릭 드래그 1픽셀당 회전 각도(도)
 const PIXEL_HEIGHT: int = 360 ## 도트 화면의 세로 픽셀 수. 1080p는 3배, 1440p는 4배로 정수 배 확대된다 (기획서 7.2)
 const SEA_TILE_WAVE: int = 10 ## 이 웨이브보다 뒤부터 바다 칸이 섞인 타일이 후보에 나온다 (기획서 4장)
 const SEA_TILE_CHANCE: float = 0.4 ## 그때 한 카드가 바다 섞인 타일일 확률
 const PREP_CAM_SIZE: float = 18.0 ## 준비 단계 카메라 크기(작을수록 확대)
-const ZOOM_MIN: float = 0.4 ## 준비 단계 휠 최대 확대 배율 (기획서 2장)
-const ZOOM_MAX: float = 1.3 ## 준비 단계 휠 최대 축소 배율
+const ZOOM_MIN: float = 0.4 ## 휠 최대 확대 배율 (기획서 2장)
+const ZOOM_MAX: float = 1.3 ## 휠 최대 축소 배율
 const ZOOM_STEP: float = 0.9 ## 휠 한 칸당 배율
 const COMBAT_CAM_SIZE: float = 13.5 ## 전투 카메라는 준비 단계보다 더 확대한다 (기획서 7.2)
 

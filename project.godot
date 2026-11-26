@@ -11,10 +11,12 @@ config_version=5
 [application]
 
 config/name="Islander"
-config/version="0.55"
+config/version="0.57"
 run/main_scene="res://assets/scenes/menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
+boot_splash/bg_color=Color(0, 0, 0, 1)
+boot_splash/show_image=false
 
 [autoload]
 
@@ -24,8 +26,12 @@ SaveManager="*res://assets/scripts/save_manager.gd"
 
 [display]
 
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/mode=3
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/stretch/scale=1.6666667
 
 [importer_defaults]
 
