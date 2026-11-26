@@ -250,7 +250,7 @@ func _build_ui() -> void:
 	layer.add_child(side_panel)
 	side_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 10)
 	side_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN # 글자가 늘어도 화면 아래로 잘리지 않게 위로 자란다
-	# 오른쪽 아래: 선택한 건물의 레벨업 패널
+	# 선택한 건물의 레벨업 패널: 위치는 _place_upgrade_panel이 정한다 (기획서 7.2)
 	var up: VBoxContainer = VBoxContainer.new()
 	upgrade_title = Label.new()
 	up.add_child(upgrade_title)
@@ -263,12 +263,13 @@ func _build_ui() -> void:
 	repair_button.pressed.connect(repair_selected)
 	up.add_child(repair_button)
 	upgrade_panel = PanelContainer.new()
+	var usb: StyleBoxFlat = StyleBoxFlat.new() # 필드 위에 뜨므로 뒤의 글자가 비치지 않게 불투명한 배경
+	usb.bg_color = Color(0.08, 0.1, 0.16, 0.97)
+	usb.set_content_margin_all(10)
+	upgrade_panel.add_theme_stylebox_override("panel", usb)
 	upgrade_panel.add_child(up)
 	upgrade_panel.visible = false
 	layer.add_child(upgrade_panel)
-	upgrade_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 54) # 건설 메뉴 위
-	upgrade_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	upgrade_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
 	# 가운데: 연구 패널 (4열 14개, 문명5식)
 	var rbox: VBoxContainer = VBoxContainer.new()
 	var rtitle: Label = Label.new()
@@ -1007,7 +1008,23 @@ func _hover_cell() -> Vector2i:
 	return field.world_to_cell(hit as Vector3)
 
 
+## 건물 패널을 고른 건물 바로 위에 붙인다. 위에 자리가 없으면 아래, 화면 밖으로는 나가지 않는다 (기획서 7.2)
+func _place_upgrade_panel() -> void:
+	upgrade_panel.reset_size() # 글자가 줄면 패널도 줄인다
+	var view: Vector2 = get_viewport().get_visible_rect().size
+	var at: Vector2 = pixel.unproject(field.cell_to_world(selected_cell) + Vector3(0, Field.BLOCK_H, 0))
+	var gap: float = 0.5 * view.y / _view_size() + 4.0 # 칸 절반(화면 크기) + 여백
+	var size: Vector2 = upgrade_panel.size
+	var top: float = res_bar.get_global_rect().end.y
+	var y: float = at.y - gap - size.y
+	if y < top:
+		y = at.y + gap
+	upgrade_panel.position = Vector2(clampf(at.x - size.x / 2.0, 0.0, view.x - size.x), clampf(y, top, view.y - size.y))
+
+
 func _process(_delta: float) -> void:
+	if upgrade_panel.visible:
+		_place_upgrade_panel() # 줌·창 크기가 바뀌어도 건물을 따라간다
 	cursor.visible = false
 	if battle != null:
 		_refresh_hud()
