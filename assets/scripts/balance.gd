@@ -30,14 +30,14 @@ const BUILDINGS: Dictionary = {
 	BARRACKS: {"name": "병영", "cost": 30, "hp": 100, "sand": false, "sea": false, "model": "barracks", "model_variants": 2, "color": Color(0.45, 0.45, 0.5)},
 	MARKET: {"name": "시장", "cost": 50, "hp": 70, "tech": "math", "sand": false, "sea": false, "color": Color(0.85, 0.65, 0.1)},
 	FARM: {"name": "밭", "cost": 25, "hp": 50, "sand": false, "sea": false, "evolves_to": FARMSTEAD, "model": "field", "model_variants": 4, "color": Color(0.35, 0.55, 0.2)},
-	FISHERY: {"name": "낚시터", "cost": 25, "hp": 50, "sand": true, "sea": false, "tech": "fishing", "on_water": true, "evolves_to": FISH_VILLAGE, "color": Color(0.2, 0.65, 0.75)},
+	FISHERY: {"name": "낚시터", "cost": 25, "hp": 50, "sand": true, "sea": false, "tech": "fishing", "on_water": true, "evolves_to": FISH_VILLAGE, "model": "fishery", "model_variants": 3, "color": Color(0.2, 0.65, 0.75)},
 	TRADING_POST: {"name": "교역소", "cost": 40, "hp": 70, "tech": "commerce", "sand": true, "sea": false, "on_water": true, "open_sea": true, "unique": true, "color": Color(0.7, 0.35, 0.75)},
-	LIBRARY: {"name": "도서관", "cost": 40, "hp": 60, "sand": true, "sea": false, "evolves_to": LAB, "color": Color(0.55, 0.35, 0.65)},
-	LAB: {"name": "대학", "cost": 80, "hp": 120, "tech": "astronomy", "sand": false, "sea": false, "color": Color(0.25, 0.7, 0.6)},
-	MINE: {"name": "광산", "cost": 60, "hp": 100, "tech": "mining", "sand": false, "sea": false, "mountain_only": true, "evolves_to": SMELTER, "color": Color(0.5, 0.45, 0.4)},
-	SHOOTING_RANGE: {"name": "사격장", "cost": 30, "hp": 100, "tech": "archery", "sand": false, "sea": false, "color": Color(0.3, 0.5, 0.35)},
-	OBSERVATORY: {"name": "천문대", "cost": 60, "hp": 100, "tech": "astronomy", "sand": false, "sea": false, "mountain_only": true, "color": Color(0.3, 0.3, 0.6)},
-	TOWER: {"name": "방어탑", "cost": 40, "hp": 200, "tech": "archery", "sand": true, "sea": false, "evolves_to": FORTRESS, "color": Color(0.35, 0.4, 0.55)},
+	LIBRARY: {"name": "도서관", "cost": 40, "hp": 60, "sand": true, "sea": false, "evolves_to": LAB, "model": "library", "model_variants": 3, "color": Color(0.55, 0.35, 0.65)},
+	LAB: {"name": "대학", "cost": 80, "hp": 120, "tech": "astronomy", "sand": false, "sea": false, "model": "university", "model_variants": 3, "color": Color(0.25, 0.7, 0.6)},
+	MINE: {"name": "광산", "cost": 60, "hp": 100, "tech": "mining", "sand": false, "sea": false, "mountain_only": true, "evolves_to": SMELTER, "model": "mine", "model_variants": 3, "color": Color(0.5, 0.45, 0.4)},
+	SHOOTING_RANGE: {"name": "사격장", "cost": 30, "hp": 100, "tech": "archery", "sand": false, "sea": false, "model": "archery_range", "model_variants": 3, "color": Color(0.3, 0.5, 0.35)},
+	OBSERVATORY: {"name": "천문대", "cost": 60, "hp": 100, "tech": "astronomy", "sand": false, "sea": false, "mountain_only": true, "model": "observatory", "model_variants": 3, "color": Color(0.3, 0.3, 0.6)},
+	TOWER: {"name": "방어탑", "cost": 40, "hp": 200, "tech": "archery", "sand": true, "sea": false, "evolves_to": FORTRESS, "model": "defense_tower", "model_variants": 3, "color": Color(0.35, 0.4, 0.55)},
 	MANSION: {"name": "저택", "cost": 40, "hp": 100, "tech": "currency", "sand": true, "sea": false, "color": Color(0.85, 0.6, 0.3)},
 	FARMSTEAD: {"name": "농장", "cost": 50, "hp": 100, "tech": "windmill", "sand": false, "sea": false, "color": Color(0.5, 0.75, 0.25)},
 	FISH_VILLAGE: {"name": "어촌", "cost": 50, "hp": 100, "tech": "waterwheel", "sand": true, "sea": false, "on_water": true, "color": Color(0.1, 0.45, 0.7)},
@@ -101,6 +101,8 @@ const TOWER_INTERVAL: float = 1.0
 const HQ_ATK: float = 3.0 ## 본부의 약한 자동 공격 (레벨과 무관) (기획서 6장)
 const HQ_RANGE: float = 2.5
 const HQ_HP: float = 300.0
+const HQ_MODEL: String = "castle" ## 본부 모델: 레벨 구분 없이 놓을 때 번호를 무작위로 고른다 (기획서 7.2)
+const HQ_MODEL_VARIANTS: int = 3
 const HQ_PIECE_WAVES: Array[int] = [10, 20] ## 이 웨이브(보스)를 이기면 본부 조각을 하나 더 놓아야 한다 (기획서 5.5)
 const HQ_LOSS_RATE: float = 0.3 ## 본부가 파괴될 때마다 줄어드는 골드·식량 비율
 const BUILDING_EDGE: float = 0.5 ## 건물 칸 중심에서 가장자리까지 (건물 공격 거리는 가장자리부터 잰다) (기획서 6장)
@@ -283,9 +285,9 @@ static func tower_range(id: int, level: int) -> float:
 	return (FORTRESS_RANGE_LV if id == FORTRESS else TOWER_RANGE_LV)[level - 1]
 
 
-## 모델 파일 경로: 종류별 폴더 안에 레벨·번호마다 한 폴더, 파손 단계는 _dmg1·_dmg2 (기획서 7.2)
+## 모델 파일 경로: 종류별 폴더 안에 레벨·번호마다 한 폴더, 파손 단계는 _dmg1·_dmg2. level 0은 레벨 구분 없는 모델(본부) (기획서 7.2)
 static func model_path(kind: String, level: int, variant: int, stage: int = 0) -> String:
-	var name: String = "%s_t%d_v%d" % [kind, level, variant]
+	var name: String = "%s_t%d_v%d" % [kind, level, variant] if level > 0 else "%s_v%d" % [kind, variant]
 	var suffix: String = "" if stage == 0 else "_dmg%d" % stage
 	return "res://assets/models/%s/%s/%s%s.glb" % [kind, name, name, suffix]
 

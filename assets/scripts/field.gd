@@ -8,7 +8,7 @@ const MAX_W: int = 40
 const MAX_H: int = 30
 const SEA: int = 0
 const BLOCK_H: float = 0.08 ## 땅 두께. 입체감 없이 평평한 땅 (기획서 3장)
-const HQ_COLOR: Color = Color(0.85, 0.15, 0.15)
+const HQ_COLOR: Color = Color(0.85, 0.15, 0.15) ## 조각 카드의 본부 칸 표시 색
 const M: int = 8 ## 필드 밖 자동 지형의 폭 (기획서 3장)
 const DIRS: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
 
@@ -29,6 +29,7 @@ var hq_lost: int = 0 ## 영구히 잃은 본부 수
 var buildings_lost: Dictionary = {} ## 이번 전투에서 무너진 건물 종류 → 개수(본부 제외). 전투를 시작할 때 비운다 (기획서 5.2)
 var hq_level: Dictionary = {} ## 본부 위치 → 그 본부의 레벨 (본부마다 따로) (기획서 5.3)
 const GRID_SHADER: Shader = preload("res://assets/shaders/grid.gdshader")
+const WATER_H: float = 0.06 ## 조각으로 놓은 물 타일의 두께
 const BAR_W: float = 0.95 ## 본부 레벨업 바 크기 (기획서 5.3)
 const BAR_H: float = 0.21
 var _hq_bars: Dictionary = {} ## 본부 위치 → 레벨업까지 식량 바 [배경, 채움, 글자] (기획서 5.3)
@@ -701,7 +702,7 @@ func build(id: int, c: Vector2i, level: int = 1, variant: int = 0) -> void:
 	var data: Dictionary = Balance.BUILDINGS[id]
 	hp[c] = max_hp(c)
 	var mi: MeshInstance3D = MeshInstance3D.new()
-	var base_y: float = BLOCK_H if cells.has(c) else 0.0 # 물 위 건물은 바다 면에 놓인다
+	var base_y: float = _base_y(c)
 	if data.has("model"): # 블렌더 모델: 지을 때 바리에이션을 무작위로 고르고 레벨이 올라도 같은 번호를 쓴다 (기획서 7.2)
 		variants[c] = variant if variant > 0 else 1 + randi() % int(data["model_variants"])
 	else:
@@ -725,25 +726,35 @@ func build(id: int, c: Vector2i, level: int = 1, variant: int = 0) -> void:
 	_tint(c)
 
 
-## 모델 건물의 모델을 레벨·바리에이션·파손 단계에 맞게 바꾼다 (기획서 7.2)
+## 건물이 놓이는 바닥 높이: 땅, 조각으로 놓은 물 타일, 맨 바다 순
+func _base_y(c: Vector2i) -> float:
+	if cells.has(c):
+		return BLOCK_H
+	return WATER_H if water.has(c) else 0.0
+
+
+## 모델 건물·본부의 모델을 레벨·바리에이션·파손 단계에 맞게 바꾼다 (기획서 7.2)
 func _set_model(c: Vector2i) -> void:
-	var data: Dictionary = Balance.BUILDINGS[buildings[c]]
-	var md: Dictionary = Toon.model(Balance.model_path(data["model"], mini(levels[c], Balance.MAX_LEVEL), variants[c], Balance.damage_stage(hp_ratio(c))))
+	var kind: String = Balance.HQ_MODEL
+	var level: int = 0 # 본부 모델은 레벨 구분이 없다
+	if not hqs.has(c):
+		kind = Balance.BUILDINGS[buildings[c]]["model"]
+		level = mini(levels[c], Balance.MAX_LEVEL)
+	var md: Dictionary = Toon.model(Balance.model_path(kind, level, variants[c], Balance.damage_stage(hp_ratio(c))))
 	var mi: MeshInstance3D = _nodes[c][0]
 	if mi.mesh == md["mesh"]:
 		return
-	var base_y: float = BLOCK_H if cells.has(c) else 0.0
 	mi.mesh = md["mesh"]
 	mi.material_override = Toon.material(Color.WHITE, md["tex"])
-	mi.position = cell_to_world(c) + Vector3(0, base_y, 0)
+	mi.position = cell_to_world(c) + Vector3(0, _base_y(c), 0)
 
 
-## 피해를 보여 준다: 모델 건물은 파손 모델, 상자 건물과 본부는 체력만큼 어둡게 (기획서 5.2.2)
+## 피해를 보여 준다: 모델 건물·본부는 파손 모델, 상자 건물은 체력만큼 어둡게 (기획서 5.2.2)
 func _tint(c: Vector2i) -> void:
 	if variants.has(c):
 		_set_model(c)
 		return
-	var base: Color = HQ_COLOR if hqs.has(c) else Balance.BUILDINGS[buildings[c]]["color"]
+	var base: Color = Balance.BUILDINGS[buildings[c]]["color"]
 	var mi: MeshInstance3D = _nodes[c][0]
 	Toon.set_color(mi.material_override, base.lerp(Color.BLACK, (1.0 - hp_ratio(c)) * 0.7))
 
@@ -811,6 +822,7 @@ func damage(c: Vector2i, amount: float) -> bool:
 			for n: Node in _nodes[c]:
 				n.queue_free()
 			_nodes.erase(c)
+			variants.erase(c)
 			return true
 		_tint(c)
 	elif buildings.has(c):
@@ -1042,10 +1054,10 @@ func place(p: Piece, origin: Vector2i) -> void:
 			water[cell] = true
 			var wt: MeshInstance3D = MeshInstance3D.new()
 			var wm: BoxMesh = BoxMesh.new()
-			wm.size = Vector3(1.0, 0.06, 1.0)
+			wm.size = Vector3(1.0, WATER_H, 1.0)
 			wt.mesh = wm
 			wt.material_override = _mat(color_of(Piece.SEA), false)
-			wt.position = cell_to_world(cell) + Vector3(0, 0.03, 0)
+			wt.position = cell_to_world(cell) + Vector3(0, WATER_H / 2.0, 0)
 			add_child(wt)
 			continue
 		cells[cell] = p.terrain[i]
@@ -1059,11 +1071,7 @@ func place(p: Piece, origin: Vector2i) -> void:
 			hqs[cell] = Balance.HQ_HP
 			claim_start(cell)
 			var marker: MeshInstance3D = MeshInstance3D.new()
-			var bm: BoxMesh = BoxMesh.new()
-			bm.size = Vector3(0.5, 0.6, 0.5)
-			marker.mesh = bm
-			marker.material_override = Toon.material(Color.WHITE)
-			marker.position = cell_to_world(cell) + Vector3(0, BLOCK_H + 0.3, 0)
+			variants[cell] = 1 + randi() % Balance.HQ_MODEL_VARIANTS
 			add_child(marker)
 			_nodes[cell] = [marker]
 			_tint(cell)
