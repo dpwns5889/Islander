@@ -124,6 +124,11 @@ func _process(_delta: float) -> void:
 	_lcam.size = _size
 
 
+## 3D 위치 → 논리 화면 좌표 (ray의 반대)
+func unproject(world: Vector3) -> Vector2:
+	return camera.unproject_position(world) * _k + _tex.position
+
+
 ## 논리 화면 좌표 → 3D 광선 [시작점, 방향]
 func ray(mouse: Vector2) -> Array[Vector3]:
 	var p: Vector2 = (mouse - _tex.position) / _k
