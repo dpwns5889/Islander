@@ -28,6 +28,7 @@ var _terr_nodes: Array[Node] = []
 var hq_lost: int = 0 ## 영구히 잃은 본부 수
 var buildings_lost: Dictionary = {} ## 이번 전투에서 무너진 건물 종류 → 개수(본부 제외). 전투를 시작할 때 비운다 (기획서 5.2)
 var hq_level: Dictionary = {} ## 본부 위치 → 그 본부의 레벨 (본부마다 따로) (기획서 5.3)
+const GRID_SHADER: Shader = preload("res://assets/shaders/grid.gdshader")
 const BAR_W: float = 0.95 ## 본부 레벨업 바 크기 (기획서 5.3)
 const BAR_H: float = 0.21
 var _hq_bars: Dictionary = {} ## 본부 위치 → 레벨업까지 식량 바 [배경, 채움, 글자] (기획서 5.3)
@@ -81,20 +82,18 @@ func _build_frame() -> void:
 	_add_plane(ext, 0.0, Color(0.06, 0.17, 0.34)) # 배치할 수 없는 바깥은 어둡게
 	_add_plane(bounds, 0.01, Color(0.2, 0.48, 0.82))
 	var o: Vector3 = cell_to_world(bounds.position) - Vector3(0.5, 0.0, 0.5) # 필드 왼쪽 위 모서리
-	var im: ImmediateMesh = ImmediateMesh.new()
-	im.surface_begin(Mesh.PRIMITIVE_LINES)
-	for x in bounds.size.x + 1:
-		im.surface_add_vertex(o + Vector3(x, 0.02, 0))
-		im.surface_add_vertex(o + Vector3(x, 0.02, bounds.size.y))
-	for y in bounds.size.y + 1:
-		im.surface_add_vertex(o + Vector3(0, 0.02, y))
-		im.surface_add_vertex(o + Vector3(bounds.size.x, 0.02, y))
-	im.surface_end()
-	var lines: MeshInstance3D = MeshInstance3D.new()
-	lines.mesh = im
-	lines.material_override = _mat(Color(1, 1, 1, 0.25), true)
-	add_child(lines)
-	_frame_nodes.append(lines)
+	var grid_mesh: PlaneMesh = PlaneMesh.new()
+	grid_mesh.size = Vector2(bounds.size)
+	var grid_mat: ShaderMaterial = ShaderMaterial.new()
+	grid_mat.shader = GRID_SHADER
+	grid_mat.set_shader_parameter("origin", Vector2(o.x, o.z))
+	grid_mat.render_priority = -1 # 다른 반투명 물체(미리보기·영역선)보다 먼저 그린다
+	var grid: MeshInstance3D = MeshInstance3D.new()
+	grid.mesh = grid_mesh
+	grid.material_override = grid_mat
+	grid.position = center_world() + Vector3(0.0, 0.02, 0.0)
+	add_child(grid)
+	_frame_nodes.append(grid)
 	# 배치할 수 있는 경계의 진한 테두리, 필드 바깥쪽 바닥에 붙인다
 	var t: float = 0.16
 	var sx: float = bounds.size.x
