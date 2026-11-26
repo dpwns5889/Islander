@@ -86,7 +86,6 @@ func _ready() -> void:
 func set_enabled(on: bool) -> void:
 	enabled = on
 	_post.visible = on
-	_tex.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST if on else CanvasItem.TEXTURE_FILTER_LINEAR
 	_resize()
 
 
