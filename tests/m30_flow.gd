@@ -17,16 +17,16 @@ func _initialize() -> void:
 	main.start_wave()
 	await create_timer(1.0).timeout
 	var base_size: float = pv._size
-	fails += _check(is_equal_approx(pv._pitch, Balance.COMBAT_PITCH) and is_equal_approx(pv._yaw, 0.0), "전투는 기본 시점에서 시작")
+	fails += _check(is_equal_approx(pv._pitch, Balance.COMBAT_PITCH) and is_equal_approx(pv._yaw, Balance.COMBAT_YAW), "전투는 기본 시점에서 시작")
 	_wheel(main, MOUSE_BUTTON_WHEEL_UP)
 	fails += _check(is_equal_approx(pv._size, base_size * Balance.ZOOM_STEP), "전투 중 휠 확대")
 	for _i in 40:
 		_wheel(main, MOUSE_BUTTON_WHEEL_DOWN)
 	fails += _check(is_equal_approx(pv._size, base_size * Balance.ZOOM_MAX), "축소 한계")
 	_drag(main, Vector2(-100, 0), 0)
-	fails += _check(is_equal_approx(pv._yaw, 0.0), "우클릭 없이 움직이면 돌지 않는다")
+	fails += _check(is_equal_approx(pv._yaw, Balance.COMBAT_YAW), "우클릭 없이 움직이면 돌지 않는다")
 	_drag(main, Vector2(-100, 0), MOUSE_BUTTON_MASK_RIGHT)
-	fails += _check(is_equal_approx(pv._yaw, 100.0 * Balance.CAM_ROTATE_SENS), "가로 드래그: 좌우 회전")
+	fails += _check(is_equal_approx(pv._yaw, Balance.COMBAT_YAW + 100.0 * Balance.CAM_ROTATE_SENS), "가로 드래그: 좌우 회전")
 	_drag(main, Vector2(0, 1000), MOUSE_BUTTON_MASK_RIGHT)
 	fails += _check(is_equal_approx(pv._pitch, Balance.CAM_PITCH_MAX), "기울기 위쪽 한계")
 	_drag(main, Vector2(0, -1000), MOUSE_BUTTON_MASK_RIGHT)
@@ -41,7 +41,7 @@ func _initialize() -> void:
 	main._hover_cell()
 	var land: Vector2i = main.field.cells.keys()[0]
 	var ground: Vector3 = main.field.cell_to_world(land)
-	main._drag_camera(Vector2(100, 0)) # 회전을 0으로 되돌린다
+	main._drag_camera(Vector2(100, 0)) # 회전을 기본값으로 되돌린다
 	main._battle_pan = Vector3(ground.x - center.x, 0.0, ground.z - center.z)
 	main._update_camera()
 	await process_frame
@@ -83,7 +83,7 @@ func _initialize() -> void:
 	main.tiles_required = 0
 	main.start_wave()
 	await create_timer(1.0).timeout
-	fails += _check(is_equal_approx(pv._size, base_size) and is_equal_approx(pv._yaw, 0.0) and is_equal_approx(pv._pitch, Balance.COMBAT_PITCH), "다음 전투도 기본 시점")
+	fails += _check(is_equal_approx(pv._size, base_size) and is_equal_approx(pv._yaw, Balance.COMBAT_YAW) and is_equal_approx(pv._pitch, Balance.COMBAT_PITCH), "다음 전투도 기본 시점")
 	print("M30 흐름 점검 실패 %d건" % fails)
 	quit(fails)
 
