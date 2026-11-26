@@ -60,7 +60,10 @@ func setup(f: Field, g: Node, w: int) -> void:
 	g.extra_guards = 0
 	# 병영은 웨이브 시작 때만 병사를 만든다. 병사 생산에는 골드·식량이 들지 않는다 (기획서 6장)
 	for entry: Dictionary in barracks_plan(f):
-		_spawn_unit(entry["kind"], entry["cell"])
+		var soldier: Unit = _spawn_unit(entry["kind"], entry["cell"])
+		var worn: float = Balance.soldier_damage_mult(f.hp_ratio(entry["cell"])) # 파손된 병영의 병사는 약하다 (기획서 5.2.2)
+		soldier.hp *= worn
+		soldier.atk *= worn
 	for c in f.buildings:
 		if f.buildings[c] == Balance.PORT:
 			var home: Vector2i = f.sea_neighbor(c)
@@ -191,7 +194,7 @@ func _spawn_unit(kind: int, cell: Vector2i) -> Unit:
 
 ## 보트 한 척에 탑승할 수 있는 병사 수: 항구 레벨로 정해진다
 func boat_capacity(b: Unit) -> int:
-	return Balance.PORT_CAPACITY_LV[field.levels[b.home_port] - 1]
+	return maxi(1, floori(Balance.PORT_CAPACITY_LV[field.levels[b.home_port] - 1] * field.performance(b.home_port)))
 
 
 func _prune(arr: Array[Unit]) -> void:
@@ -466,7 +469,7 @@ func _towers_turn(dt: float) -> void:
 	for c in field.buildings:
 		if Balance.is_tower(field.buildings[c]):
 			var lv: int = field.levels[c]
-			_shoot(c, Balance.tower_atk(field.buildings[c], lv), Balance.tower_range(field.buildings[c], lv), dt)
+			_shoot(c, Balance.tower_atk(field.buildings[c], lv) * field.performance(c), Balance.tower_range(field.buildings[c], lv), dt)
 	for c in field.hqs: # 본부도 약하게 쏜다 (기획서 6장)
 		_shoot(c, Balance.HQ_ATK, Balance.HQ_RANGE, dt)
 

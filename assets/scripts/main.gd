@@ -35,6 +35,8 @@ var upgrade_panel: PanelContainer
 var upgrade_title: Label
 var upgrade_effect: Label
 var upgrade_button: Button
+var repair_button: Button ## 고른 건물·본부 수리 (기획서 5.2.2)
+var repair_all_button: Button
 var research_panel: PanelContainer
 var research_buttons: Dictionary = {} ## 연구 id → 버튼
 var selected_tech: String = "" ## 연구 창에서 고른 연구 (오른쪽 상세 창에 표시) (기획서 5.4)
@@ -239,6 +241,9 @@ func _build_ui() -> void:
 	research_toggle = Button.new()
 	research_toggle.pressed.connect(_toggle_research)
 	side.add_child(research_toggle)
+	repair_all_button = Button.new()
+	repair_all_button.pressed.connect(repair_everything)
+	side.add_child(repair_all_button)
 	side_panel = PanelContainer.new()
 	side_panel.add_child(side)
 	side_panel.visible = false
@@ -254,6 +259,9 @@ func _build_ui() -> void:
 	upgrade_button = Button.new()
 	upgrade_button.pressed.connect(upgrade_selected)
 	up.add_child(upgrade_button)
+	repair_button = Button.new()
+	repair_button.pressed.connect(repair_selected)
+	up.add_child(repair_button)
 	upgrade_panel = PanelContainer.new()
 	upgrade_panel.add_child(up)
 	upgrade_panel.visible = false
@@ -654,9 +662,9 @@ func try_build(c: Vector2i) -> bool:
 	return true
 
 
-## 준비 단계에서 건물을 골라 레벨업 패널을 연다. 건물이 아니면 선택을 푼다 (기획서 5.2)
+## 준비 단계에서 건물·본부를 골라 패널을 연다. 둘 다 아니면 선택을 푼다 (기획서 5.2)
 func select_building(c: Vector2i) -> bool:
-	selected_cell = c if battle == null and field.buildings.has(c) else Vector2i(-1, -1)
+	selected_cell = c if battle == null and (field.buildings.has(c) or field.hqs.has(c)) else Vector2i(-1, -1)
 	_refresh_hud()
 	return selected_cell.x >= 0
 
@@ -697,7 +705,29 @@ func _can_evolve(c: Vector2i) -> bool:
 	return to > 0 and field.levels[c] >= Balance.MAX_LEVEL and GameState.has_tech(Balance.BUILDINGS[to].get("tech", ""))
 
 
+## 고른 건물·본부를 골드로 가득 고친다 (기획서 5.2.2)
+func repair_selected() -> bool:
+	var cost: int = field.repair_cost(selected_cell)
+	if battle != null or cost <= 0 or not GameState.spend(cost):
+		return false
+	field.repair(selected_cell)
+	_refresh_hud()
+	return true
+
+
+## 파손된 건물·본부를 한 번에 고친다 (기획서 5.2.2)
+func repair_everything() -> bool:
+	var cost: int = field.total_repair_cost()
+	if battle != null or cost <= 0 or not GameState.spend(cost):
+		return false
+	field.repair_all()
+	_refresh_hud()
+	return true
+
+
 func upgrade_selected() -> bool:
+	if not field.buildings.has(selected_cell) or field.hp_ratio(selected_cell) < 1.0: # 파손되면 먼저 수리한다 (기획서 5.2.2)
+		return false
 	if selected_cell.x >= 0 and not _blocked() and _can_evolve(selected_cell):
 		var to: int = Balance.evolve_to(field.buildings[selected_cell])
 		if not GameState.spend(GameState.upgrade_discounted(Balance.evolve_cost(to))):
@@ -812,7 +842,6 @@ func _on_battle_finished(victory: bool) -> void:
 	GameState.next_wave()
 	var ups: Dictionary = field.settle_levels(GameState.researched) # 본부마다 자기 영역 식량으로 레벨·영역 상승 (기획서 5.3)
 	var rp_gain: int = GameState.add_research_progress(field.research_income(GameState.researched)) # 도서관·연구소 (기획서 5.4)
-	field.repair_all()
 	_blend_camera(0.0)
 	build_panel.visible = true
 	side_panel.visible = true
@@ -1092,6 +1121,19 @@ func _tech_pos(id: String) -> Vector2:
 	return Vector2(int(Balance.TECHS[id]["col"]) * TECH_PITCH, int(Balance.TECHS[id]["row"]) * 74)
 
 
+## 건물 패널의 체력·파손 설명 (기획서 5.2.2)
+func _damage_text(c: Vector2i) -> String:
+	var text: String = "체력 %d / %d" % [ceili(field.hp[c]), ceili(field.max_hp(c))]
+	var stage: int = Balance.damage_stage(field.hp_ratio(c))
+	if stage > 0:
+		text += " · 파손 %d단계" % stage
+	if Balance.MILITARY.has(field.buildings[c]):
+		text += " · 병사 체력·공격 %d%%" % roundi(Balance.soldier_damage_mult(field.hp_ratio(c)) * 100.0)
+	elif stage > 0 and field.buildings[c] != Balance.TRADING_POST:
+		text += " · 성능 %d%%" % roundi(field.performance(c) * 100.0)
+	return text
+
+
 ## 선행 연구의 오른쪽에서 후속 연구의 왼쪽으로 선을 긋는다. 선행을 마친 선은 밝게 (기획서 5.4)
 func _draw_tech_lines() -> void:
 	for id in Balance.TECHS:
@@ -1197,12 +1239,26 @@ func _refresh_hud() -> void:
 	for h in _sorted_hqs():
 		var nxt: int = field.next_level_food(h)
 		lines.append("본부 %s Lv %d · 영역 %d칸 · 식량 %d/%d" % [_hq_name(h), field.hq_level[h], field.territory_of[h].size(), field.hq_food[h], nxt])
+		if field.hp_ratio(h) < 1.0:
+			lines[-1] += " · 체력 %d/%d" % [ceili(field.hqs[h]), Balance.HQ_HP]
 	town_label.text = "\n".join(lines)
+	var all_cost: int = field.total_repair_cost()
+	repair_all_button.visible = all_cost > 0
+	repair_all_button.text = "전체 수리 %dG" % all_cost
+	repair_all_button.disabled = GameState.gold < all_cost
 	field.refresh_hq_bars(battle == null) # 본부 옆 레벨업 바 (기획서 5.3)
-	if selected_cell.x >= 0 and not field.buildings.has(selected_cell):
+	if selected_cell.x >= 0 and not field.buildings.has(selected_cell) and not field.hqs.has(selected_cell):
 		selected_cell = Vector2i(-1, -1)
 	upgrade_panel.visible = selected_cell.x >= 0 and battle == null
-	if upgrade_panel.visible:
+	var fix: int = field.repair_cost(selected_cell)
+	repair_button.visible = fix > 0
+	repair_button.text = "수리 %dG" % fix
+	repair_button.disabled = GameState.gold < fix
+	upgrade_button.visible = not field.hqs.has(selected_cell)
+	if upgrade_panel.visible and field.hqs.has(selected_cell): # 본부는 강화하지 않고 수리만 한다 (기획서 5.3)
+		upgrade_title.text = "본부 %s Lv %d" % [_hq_name(selected_cell), field.hq_level[selected_cell]]
+		upgrade_effect.text = "체력 %d / %d" % [ceili(field.hqs[selected_cell]), Balance.HQ_HP]
+	elif upgrade_panel.visible:
 		var bid: int = field.buildings[selected_cell]
 		var lv: int = field.levels[selected_cell]
 		upgrade_title.text = "%s Lv %d%s" % [Balance.BUILDINGS[bid]["name"], lv, " · " + Balance.UNITS[Balance.MILITARY[bid]["units"][lv - 1]]["name"] if Balance.MILITARY.has(bid) else ""]
@@ -1229,6 +1285,10 @@ func _refresh_hud() -> void:
 		else:
 			upgrade_button.text = "최고 레벨"
 			upgrade_button.disabled = true
+		if field.hp_ratio(selected_cell) < 1.0:
+			upgrade_effect.text += "\n" + _damage_text(selected_cell)
+			upgrade_button.disabled = true
+			upgrade_button.tooltip_text = "수리해야 강화·진화할 수 있습니다"
 	var s: String
 	if battle != null:
 		s = battle.summary() + "\n휠 버튼으로 땅을 클릭하면 병사가 그곳으로 이동합니다\n좌클릭 드래그 이동 · 우클릭 드래그 회전 · 휠 확대/축소"
