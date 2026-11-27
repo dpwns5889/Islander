@@ -61,6 +61,7 @@
 ## 5. Pull Request
 
 - 작업이 끝나면 gh pr create로 PR을 연다. 대상 브랜치는 main이다.
+  - 예외: 실시간 개편 작업(R1~R6, M8, M9 등)은 사용자가 "개편이 끝났다"고 말하기 전까지 `docs/game-redesign`을 대상으로 연다. 개편이 끝나면 `docs/game-redesign` → main PR을 연다.
 - 아직 끝나지 않았으면 Draft PR로 연다.
 - PR 제목은 커밋 메시지와 같은 형식으로 쓴다.
 - PR 본문에는 다음을 적는다.
