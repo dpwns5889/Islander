@@ -1,6 +1,7 @@
 class_name Battle
 extends Node3D
-## 전투 단계: 해적선이 와서 상륙하고, 병사가 막는다. 섬 사이는 항구의 보트로만 건넌다 (기획서 6장)
+## 판 내내 도는 전투 시뮬레이션: 웨이브마다 해적선이 와서 상륙하고, 병사가 막는다. 섬 사이는 항구의 보트로만 건넌다 (기획서 2장, 6장)
+## 웨이브는 겹칠 수 있고 끝이라는 구분이 없다. 모든 도시가 무너지면 finished(false)
 
 signal finished(victory: bool)
 
@@ -10,7 +11,6 @@ const BOAT_BACK: int = 2
 
 var field: Field
 var gs: Node ## GameState (테스트에서 주입할 수 있도록 인자로 받는다)
-var wave: int = 1
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var ships: Array[Unit] = []
 var boats: Array[Unit] = []
@@ -38,46 +38,98 @@ var _pirates_left: int:
 var _ship_timer: float = 0.0
 var _ship_gap: float = 0.0 ## 해적선이 나오는 간격(초)
 var speed_scale: float = 1.0 ## 전투 배속
-var _mult: float = 1.0
+var _mult: float = 1.0 ## 다음에 나올 해적선이 태울 적의 배율
 
 
-func setup(f: Field, g: Node, w: int) -> void:
+## 첫 도시를 세운 뒤 한 번 부른다: 시작 경비병(첫 도시가 집)과 이미 있는 항구의 보트 (기획서 2장)
+func setup(f: Field, g: Node) -> void:
 	field = f
 	gs = g
-	wave = w
 	land_nav = f.nav(false)
 	enemy_nav = f.nav(false, true)
 	sea_nav = f.nav(true)
 	islands = f.island_map()
-	_ships_left = Balance.ship_count(w, g.run_seed)
-	_ship_gap = Balance.SHIP_SPAWN_TIME / maxi(_ships_left, 1)
-	_queue = Balance.enemy_queue(w, g.run_seed)
-	_mult = Balance.enemy_mult(f.hqs.size())
 	rng.randomize()
-	for hq_cell in f.hqs: # 본부마다 수비병 (기획서 5.5)
-		for i in Balance.HQ_GUARDS:
-			_spawn_unit(Balance.U_GUARD, hq_cell)
-	for i in g.extra_guards: # 교역 NPC에게 산 수비병 (1회성) (기획서 5.6)
-		_spawn_unit(Balance.U_GUARD, f.hq)
-	g.extra_guards = 0
-	# 병영은 웨이브 시작 때만 병사를 만든다. 병사 생산에는 골드·식량이 들지 않는다 (기획서 6장)
-	for entry: Dictionary in barracks_plan(f):
-		var soldier: Unit = _spawn_unit(entry["kind"], entry["cell"])
-		var worn: float = Balance.soldier_damage_mult(f.hp_ratio(entry["cell"])) # 파손된 병영의 병사는 약하다 (기획서 5.2.2)
-		soldier.hp *= worn
-		soldier.atk *= worn
+	if f.hq.x >= 0:
+		spawn_guards(Balance.HQ_GUARDS, f.hq)
 	for c in f.buildings:
 		if f.buildings[c] == Balance.PORT:
-			var home: Vector2i = f.sea_neighbor(c)
-			if home.x == -999:
-				continue
-			var b: Unit = _add_unit(Balance.U_BOAT, f.cell_to_world(home), 1.0)
-			b.home_port = c
-			b.home_sea = home
-			b.speed *= Balance.BOAT_SPEED_LV[f.levels[c] - 1]
+			add_port(c)
 
 
-## 병영·사격장이 이번 웨이브에 낼 병력(건물 위치·병종·건물 레벨). 준비 단계 미리보기와 전투 시작이 같은 계산을 쓴다 (기획서 6장)
+## 경비병 n명을 도시 cell에 낸다 (시작 경비병, 교역 NPC 거래)
+func spawn_guards(n: int, cell: Vector2i) -> void:
+	for i in n:
+		_spawn_unit(Balance.U_GUARD, cell)
+
+
+## 항구 c의 보트를 띄운다. 항구를 지을 때 부른다
+func add_port(c: Vector2i) -> void:
+	var home: Vector2i = field.sea_neighbor(c)
+	if home.x == -999:
+		return
+	var b: Unit = _add_unit(Balance.U_BOAT, field.cell_to_world(home), 1.0)
+	b.home_port = c
+	b.home_sea = home
+	b.speed *= Balance.BOAT_SPEED_LV[field.levels[c] - 1]
+
+
+## 웨이브 w가 온다: 적을 해적선에 태워 2초 안에 내보내고, 병영 정원을 채운다. 앞 웨이브가 남아 있어도 된다 (기획서 2장, 6장)
+func launch_wave(w: int) -> void:
+	_queue.append_array(Balance.enemy_queue(w, gs.run_seed))
+	_ships_left += Balance.ship_count(w, gs.run_seed)
+	_ship_gap = Balance.SHIP_SPAWN_TIME / maxi(_ships_left, 1)
+	_ship_timer = 0.0
+	_mult = Balance.enemy_mult(field.hqs.size())
+	refill_barracks()
+
+
+## 병영·사격장마다 정원(3명·2명)이 모자란 만큼 무료로 채운다. shortcut: R3 분대 생산으로 바꾸기 전까지의 임시 규칙
+func refill_barracks() -> void:
+	var alive: Dictionary = {}
+	for u in soldiers:
+		alive[u.src] = int(alive.get(u.src, 0)) + 1
+	for b in boats:
+		for r in b.cargo:
+			alive[r.src] = int(alive.get(r.src, 0)) + 1
+	for entry: Dictionary in barracks_plan(field):
+		var c: Vector2i = entry["cell"]
+		if int(alive.get(c, 0)) > 0:
+			alive[c] -= 1
+			continue
+		var soldier: Unit = _spawn_unit(entry["kind"], c)
+		soldier.src = c
+		var worn: float = Balance.soldier_damage_mult(field.hp_ratio(c)) # 파손된 병영의 병사는 약하다 (기획서 5.2.2)
+		soldier.hp *= worn
+		soldier.atk *= worn
+
+
+## 아직 남은 적: 나올 해적선 + 떠 있는 해적선 + 상륙한 해적
+func enemies_left() -> int:
+	return _ships_left + ships.size() + pirates.size()
+
+
+## c에서 r칸 안에 적이 있는지 (수리 조건) (기획서 5.2.2)
+func enemy_near(c: Vector2i, r: float) -> bool:
+	var at: Vector3 = field.cell_to_world(c)
+	for p in pirates:
+		if _dist(at, p.position) <= r:
+			return true
+	return false
+
+
+## 남은 적을 모두 지운다 (마지막 웨이브 뒤 안전장치)
+func clear_enemies() -> void:
+	for arr in [ships, pirates]:
+		for u: Unit in arr:
+			u.queue_free()
+	ships.clear()
+	pirates.clear()
+	_queue.clear()
+	_ships_left = 0
+
+
+## 병영·사격장의 정원(건물 위치·병종·건물 레벨) (기획서 6장)
 static func barracks_plan(f: Field) -> Array:
 	var plan: Array = []
 	for c in f.buildings:
@@ -133,8 +185,6 @@ func tick(dt: float) -> void:
 	_prune(pirates)
 	if field.hq_hp <= 0.0:
 		_finish(false)
-	elif time > Balance.WAVE_TIME_LIMIT or (_ships_left == 0 and ships.is_empty() and pirates.is_empty()):
-		_finish(true)
 
 
 ## 효과음. 검사 스크립트에서는 오토로드가 없을 수 있어 이름으로 찾는다 (기획서 9.1)
@@ -145,7 +195,7 @@ func _sfx(sfx_name: String) -> void:
 
 
 func summary() -> String:
-	return "전투 중 · %s · 병사 %d · 해적 %d · 해적선 %d" % [field.hq_status(), soldiers.size(), pirates.size(), ships.size() + _ships_left]
+	return "%s · 병사 %d · 해적 %d · 해적선 %d" % [field.hq_status(), soldiers.size(), pirates.size(), ships.size() + _ships_left]
 
 
 func _finish(victory: bool) -> void:
@@ -615,6 +665,7 @@ func _spawn_ship() -> void:
 	s.island = tgt["island"]
 	s.crew = load.size()
 	s.crew_kinds = load
+	s.crew_mult = _mult
 
 
 ## 맵 가장자리의 바다 칸 (기획서 6장)
@@ -678,7 +729,7 @@ func _ship_turn(s: Unit, dt: float) -> void:
 	if not _follow(s, dt):
 		return
 	for kind in s.crew_kinds: # 모래·평원 어느 해안이든 상륙한다 (기획서 6장)
-		var p: Unit = _add_unit(kind, s.landing + Vector3(rng.randf_range(-0.2, 0.2), 0.0, rng.randf_range(-0.2, 0.2)), _mult)
+		var p: Unit = _add_unit(kind, s.landing + Vector3(rng.randf_range(-0.2, 0.2), 0.0, rng.randf_range(-0.2, 0.2)), s.crew_mult)
 		p.island = s.island
 		p.crossing = s.crossing
 	_sfx("landing")

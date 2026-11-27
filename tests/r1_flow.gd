@@ -37,10 +37,9 @@ func _initialize() -> void:
 	var pan0: Vector3 = main._pan
 	main._pan_camera(Vector2(-50, 0))
 	fails += _check(main._pan != pan0, "카메라 이동")
-	# 전투: 경비병 2명, 도시는 공격하지 않는다, 우클릭 이동
-	main.start_wave()
+	# 경비병 2명, 도시는 공격하지 않는다, 우클릭 이동
 	var b: Battle = main.battle
-	fails += _check(b != null and b.soldiers.size() == Balance.HQ_GUARDS, "전투 시작: 경비병 %d명" % Balance.HQ_GUARDS)
+	fails += _check(b != null and b.soldiers.size() == Balance.HQ_GUARDS, "첫 도시를 세우면 경비병 %d명" % Balance.HQ_GUARDS)
 	var pirate: Unit = b._add_unit(Balance.U_PIRATE, f.cell_to_world(start) + Vector3(1.0, 0.0, 0.0), 1.0)
 	var hp0: float = pirate.hp
 	b._towers_turn(1.0)
