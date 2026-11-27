@@ -5,11 +5,11 @@ extends SceneTree
 func _initialize() -> void:
 	var fails: int = 0
 	var main: Node = load("res://assets/scenes/main.tscn").instantiate()
+	main.edge_pan = false # 마우스 위치로 카메라가 움직이지 않게
 	root.add_child(main)
 	await process_frame
 	var gs: Node = root.get_node("GameState")
-	main.place_current(Vector2i(9, 7))
-	main.tiles_required = 0 # 보상 타일 강제 규칙은 m14에서 따로 점검한다
+	main.found_start(preload("res://tests/coastal_start.gd").pick(main.field))
 	gs.gold = 1000
 	# 항구는 연구 없이 처음부터 짓는다
 	main.set_build(Balance.PORT)

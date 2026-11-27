@@ -1,24 +1,16 @@
 class_name Field
 extends Node3D
-## 필드: 지형 격자와 블록 표시. 비어 있는 칸은 바다다. 처음 15x15, 확장으로 최대 40x30 (기획서 3장)
+## 맵: 96x96 지형 격자와 블록 표시. 판마다 시드로 군도를 만든다. 땅이 아닌 칸은 바다다 (기획서 3장)
 
-const W: int = 15 ## 처음 필드 크기
-const H: int = 15
-const MAX_W: int = 40
-const MAX_H: int = 30
+const W: int = Balance.MAP_SIZE
+const H: int = Balance.MAP_SIZE
 const SEA: int = 0
 const BLOCK_H: float = 0.08 ## 땅 두께. 입체감 없이 평평한 땅 (기획서 3장)
-const HQ_COLOR: Color = Color(0.85, 0.15, 0.15) ## 조각 카드의 본부 칸 표시 색
-const M: int = 8 ## 필드 밖 자동 지형의 폭 (기획서 3장)
 const DIRS: Array[Vector2i] = [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]
 
-var bounds: Rect2i = Rect2i(0, 0, W, H) ## 배치할 수 있는 영역. 확장하면 커진다
-var expansions: int = 0 ## 확장 횟수 전체 (적 강도에 반영)
+var bounds: Rect2i = Rect2i(0, 0, W, H) ## 맵 전체
 var cells: Dictionary = {} ## 땅 칸 → 지형. 없는 칸은 바다
-var _land_nodes: Dictionary = {} ## 땅 칸 위치 → 블록 노드 (바다 칸이 땅을 깎을 때 지우려고 기억한다)
-var ruins: Dictionary = {} ## 아직 털지 않은 유적지 위치 → true (필드 밖 대륙) (기획서 3장)
-var looted: Dictionary = {} ## 이미 턴 유적지
-var water: Dictionary = {} ## 바다 칸이 섞인 타일로 차지된 물 타일 위치 (땅은 아니지만 조각을 놓을 수 없다) (기획서 4장)
+var _land_nodes: Array[Node] = [] ## 지형 종류별 땅 블록 묶음(MultiMesh)
 var hqs: Dictionary = {} ## 살아 있는 본부 위치 → 체력 (여러 개일 수 있다) (기획서 5.5)
 var territory_of: Dictionary = {} ## 본부 위치 → 그 본부 영역 칸 집합 (기획서 5.3)
 var territory: Dictionary = {} ## 모든 본부 영역의 합집합 (겹치면 하나로 이어진다)
@@ -29,7 +21,6 @@ var hq_lost: int = 0 ## 영구히 잃은 본부 수
 var buildings_lost: Dictionary = {} ## 이번 전투에서 무너진 건물 종류 → 개수(본부 제외). 전투를 시작할 때 비운다 (기획서 5.2)
 var hq_level: Dictionary = {} ## 본부 위치 → 그 본부의 레벨 (본부마다 따로) (기획서 5.3)
 const GRID_SHADER: Shader = preload("res://assets/shaders/grid.gdshader")
-const WATER_H: float = 0.06 ## 조각으로 놓은 물 타일의 두께
 const BAR_W: float = 0.95 ## 본부 레벨업 바 크기 (기획서 5.3)
 const BAR_H: float = 0.21
 var _hq_bars: Dictionary = {} ## 본부 위치 → 레벨업까지 식량 바 [배경, 채움, 글자] (기획서 5.3)
@@ -46,12 +37,13 @@ var hq_hp: float:
 			total += hqs[c]
 		return total
 var block_mesh: BoxMesh = BoxMesh.new()
-var _outer: Dictionary = {} ## 필드 밖 땅 칸 → 지형
-var _outer_nodes: Array[Node] = []
-var _outer_seed: int = 0
-var _ver: int = 0 ## 지형이 바뀔 때마다 올라가는 번호 (바깥 바다 계산 캐시용)
+var _ver: int = 0 ## 지형이 바뀔 때마다 올라가는 번호 (계산 캐시용)
 var _open_ver: int = -1
-var _open: Dictionary = {} ## 바깥 바다와 이어진 바다 칸
+var _open: Dictionary = {} ## 맵 가장자리 바다와 이어진 바다 칸
+var _blocked_ver: int = -1
+var _blocked: bool = false
+var _start_ver: int = -1
+var _start_ok: Dictionary = {} ## 첫 도시를 세울 수 있는 칸 (기획서 2장)
 var _frame_nodes: Array[Node] = []
 var _mats: Dictionary = {}
 
@@ -79,8 +71,6 @@ func _build_frame() -> void:
 	for n in _frame_nodes:
 		n.queue_free()
 	_frame_nodes.clear()
-	var ext: Rect2i = bounds.grow(M)
-	_add_plane(ext, 0.0, Color(0.06, 0.17, 0.34)) # 배치할 수 없는 바깥은 어둡게
 	_add_plane(bounds, 0.01, Color(0.2, 0.48, 0.82))
 	var o: Vector3 = cell_to_world(bounds.position) - Vector3(0.5, 0.0, 0.5) # 필드 왼쪽 위 모서리
 	var grid_mesh: PlaneMesh = PlaneMesh.new()
@@ -95,7 +85,7 @@ func _build_frame() -> void:
 	grid.position = center_world() + Vector3(0.0, 0.02, 0.0)
 	add_child(grid)
 	_frame_nodes.append(grid)
-	# 배치할 수 있는 경계의 진한 테두리, 필드 바깥쪽 바닥에 붙인다
+	# 맵 경계의 진한 테두리, 바깥쪽 바닥에 붙인다
 	var t: float = 0.16
 	var sx: float = bounds.size.x
 	var sy: float = bounds.size.y
@@ -135,7 +125,7 @@ func _mat(c: Color, unshaded: bool) -> Material:
 	return _mats[key]
 
 
-## 월드 좌표는 처음 15x15 필드의 중심이 원점이다. 확장해도 기존 칸의 위치는 변하지 않는다
+## 월드 좌표는 맵 중심이 원점이다
 func cell_to_world(c: Vector2i) -> Vector3:
 	return Vector3(c.x + 0.5 - W / 2.0, 0.0, c.y + 0.5 - H / 2.0)
 
@@ -144,7 +134,7 @@ func world_to_cell(v: Vector3) -> Vector2i:
 	return Vector2i(floori(v.x + W / 2.0), floori(v.z + H / 2.0))
 
 
-## 필드 영역의 중심 (카메라가 비추는 곳)
+## 맵의 중심
 func center_world() -> Vector3:
 	return cell_to_world(bounds.position) - Vector3(0.5, 0.0, 0.5) + Vector3(bounds.size.x / 2.0, 0.0, bounds.size.y / 2.0)
 
@@ -153,11 +143,9 @@ func in_bounds(c: Vector2i) -> bool:
 	return bounds.has_point(c)
 
 
-## 필드 안팎 모두의 지형. 필드 밖 8칸 너머는 바다
+## 칸의 지형. 맵 밖은 바다
 func terrain_at(c: Vector2i) -> int:
-	if bounds.has_point(c):
-		return cells.get(c, SEA)
-	return _outer.get(c, SEA)
+	return cells.get(c, SEA)
 
 
 ## 본부 영역 안인지. 건설과 생산은 영역 안에서만 된다 (기획서 5.3)
@@ -375,113 +363,144 @@ func speed_mult_at(pos: Vector3, crossing: bool = false) -> float:
 	return Balance.FOREST_SPEED if cells.get(c, -1) == Piece.FOREST else 1.0
 
 
-## 필드 밖에 시드 기반 랜덤 지형을 만든다. 필드에서 2칸 안쪽은 항상 바다라서 적이 걸어서 올 수 없다 (기획서 3장)
-func generate_outside(seed_v: int) -> void:
-	_outer_seed = seed_v
+## 판마다 시드로 군도를 만든다: 노이즈 상위 칸을 땅으로 삼고, 작은 섬은 지우고, 해안은 모래, 안쪽에 숲·산을 섞는다.
+## 첫 도시를 세울 섬이 없으면 시드를 바꿔 다시 만든다 (기획서 3장, 9.1)
+func generate_map(seed_v: int) -> void:
+	for attempt in 20:
+		_generate_once(seed_v + attempt)
+		if not start_cells().is_empty():
+			break
+	_draw_land()
+
+
+func _generate_once(seed_v: int) -> void:
+	cells.clear()
 	_ver += 1
-	for n in _outer_nodes:
-		n.queue_free()
-	_outer_nodes.clear()
-	_outer.clear()
-	ruins.clear()
+	var inner: Rect2i = bounds.grow(-Balance.MAP_EDGE_SEA)
+	for c in _top_share(_noise_values(seed_v, inner, true), Balance.MAP_LAND_RATIO):
+		cells[c] = Piece.PLAINS
+	for island: Array in _components(func(c: Vector2i) -> bool: return cells.has(c)):
+		if island.size() < Balance.MAP_MIN_ISLAND:
+			for c: Vector2i in island:
+				cells.erase(c)
+	var rough: Dictionary = {} # 해안이 아닌 땅 → 노이즈 값
+	var rv: Dictionary = _noise_values(seed_v * 7 + 13, inner, false)
+	for c: Vector2i in cells.keys():
+		if sea_neighbor(c).x != -999:
+			cells[c] = Piece.SAND # 바다와 닿은 땅은 모래
+		else:
+			rough[c] = rv[c]
+	var inland: int = rough.size()
+	for c in _top_share(rough, Balance.MAP_MOUNTAIN_RATIO):
+		cells[c] = Piece.MOUNTAIN
+		rough.erase(c)
+	var fv: Dictionary = _noise_values(seed_v * 31 + 5, inner, false)
+	for c in rough:
+		rough[c] = fv[c]
+	for c in _top_share(rough, Balance.MAP_FOREST_RATIO * inland / maxf(rough.size(), 1.0)):
+		cells[c] = Piece.FOREST
+	_ver += 1
+
+
+## rect 안 칸마다 노이즈 값. falloff면 가장자리로 갈수록 낮춰 땅이 맵 끝에 붙지 않게 한다
+func _noise_values(seed_v: int, rect: Rect2i, falloff: bool) -> Dictionary:
 	var noise: FastNoiseLite = FastNoiseLite.new()
 	noise.seed = seed_v
-	noise.frequency = Balance.CONTINENT_FREQ
-	var ring: Rect2i = bounds.grow(2)
-	var ext: Rect2i = bounds.grow(M)
-	for y in range(ext.position.y, ext.end.y):
-		for x in range(ext.position.x, ext.end.x):
-			var c: Vector2i = Vector2i(x, y)
-			if not ring.has_point(c) and noise.get_noise_2d(x, y) > Balance.CONTINENT_LEVEL:
-				_outer[c] = Piece.PLAINS
-	var shore: Array[Vector2i] = [] # 바다와 닿은 땅은 모래
-	for c in _outer:
-		if sea_neighbor(c).x != -999:
-			shore.append(c)
-	for c in shore:
-		_outer[c] = Piece.SAND
-	for c in _outer:
-		var mi: MeshInstance3D = MeshInstance3D.new()
-		mi.mesh = block_mesh
-		mi.material_override = _mat(color_of(_outer[c]).darkened(0.55), false)
-		mi.position = cell_to_world(c) + Vector3(0, BLOCK_H / 2.0, 0)
-		add_child(mi)
-		_outer_nodes.append(mi)
-		# 유적지: 좌표 해시로 정해서 필드를 넓혀도 같은 자리에 남는다 (기획서 3장)
-		if _outer[c] == Piece.PLAINS and not looted.has(c) and (hash([seed_v, c.x, c.y]) % 1000) / 1000.0 < Balance.RUIN_CHANCE:
-			ruins[c] = true
-			var rm: MeshInstance3D = MeshInstance3D.new()
-			var rb: BoxMesh = BoxMesh.new()
-			rb.size = Vector3(0.5, 0.7, 0.5)
-			rm.mesh = rb
-			var rmat: StandardMaterial3D = StandardMaterial3D.new()
-			rmat.albedo_color = Color(1.0, 0.85, 0.1)
-			rmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			rm.material_override = rmat
-			rm.position = cell_to_world(c) + Vector3(0, BLOCK_H + 0.35, 0)
-			add_child(rm)
-			_outer_nodes.append(rm)
+	noise.frequency = Balance.MAP_NOISE_FREQ
+	var out: Dictionary = {}
+	for y in range(rect.position.y, rect.end.y):
+		for x in range(rect.position.x, rect.end.x):
+			var v: float = noise.get_noise_2d(x, y)
+			if falloff:
+				var edge: int = mini(mini(x - rect.position.x, rect.end.x - 1 - x), mini(y - rect.position.y, rect.end.y - 1 - y))
+				v -= 0.5 * maxf(0.0, 1.0 - edge / 10.0)
+			out[Vector2i(x, y)] = v
+	return out
 
 
-## 유적지를 턴다: 다시 만들어도 나오지 않게 기억하고 표시를 지운다 (기획서 3장)
-func loot_ruin(c: Vector2i) -> void:
-	looted[c] = true
-	generate_outside(_outer_seed)
+## 값이 큰 쪽부터 share 비율만큼의 칸
+func _top_share(vals: Dictionary, share: float) -> Array[Vector2i]:
+	var keys: Array[Vector2i] = []
+	keys.assign(vals.keys())
+	keys.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return vals[a] > vals[b])
+	return keys.slice(0, roundi(keys.size() * clampf(share, 0.0, 1.0)))
 
 
-## 한 줄 확장할 수 있는지 (최대 40x30) (기획서 3장)
-func can_expand(dir: Vector2i) -> bool:
-	return bounds.size.x < MAX_W if dir.x != 0 else bounds.size.y < MAX_H
+## 땅 칸 중 inside를 만족하는 칸을 4방향으로 이은 덩어리들
+func _components(inside: Callable) -> Array:
+	var seen: Dictionary = {}
+	var out: Array = []
+	for s: Vector2i in cells.keys():
+		if seen.has(s) or not inside.call(s):
+			continue
+		var comp: Array[Vector2i] = [s]
+		seen[s] = true
+		var i: int = 0
+		while i < comp.size():
+			for d in DIRS:
+				var n: Vector2i = comp[i] + d
+				if not seen.has(n) and inside.call(n):
+					seen[n] = true
+					comp.append(n)
+			i += 1
+		out.append(comp)
+	return out
 
 
-## dir 방향으로 한 줄 넓힌다(경계만). 넓힌 칸은 바다로 비어 있다
-func _grow(dir: Vector2i) -> void:
-	var b: Rect2i = bounds
-	if dir == Vector2i.LEFT:
-		b.position.x -= 1
-		b.size.x += 1
-	elif dir == Vector2i.UP:
-		b.position.y -= 1
-		b.size.y += 1
-	elif dir == Vector2i.RIGHT:
-		b.size.x += 1
-	else:
-		b.size.y += 1
-	bounds = b
+## 첫 도시를 세울 수 있는 칸: 평원이 START_ISLAND_PLAINS 이상인 섬의 평원 칸 (기획서 2장, 9.1)
+func start_cells() -> Dictionary:
+	if _start_ver != _ver:
+		_start_ver = _ver
+		_start_ok.clear()
+		for island: Array in _components(is_walkable):
+			var plains: Array[Vector2i] = []
+			for c: Vector2i in island:
+				if cells[c] == Piece.PLAINS:
+					plains.append(c)
+			if plains.size() >= Balance.START_ISLAND_PLAINS:
+				for c in plains:
+					_start_ok[c] = true
+	return _start_ok
 
 
-func _regrow() -> void:
-	_ver += 1
-	expansions += 1
-	generate_outside(_outer_seed)
-	_build_frame()
+## 첫 도시 자리로 고를 수 있는지
+func can_start(c: Vector2i) -> bool:
+	return hqs.is_empty() and start_cells().has(c)
 
 
-## 한 방향으로 한 줄 넓힌다(놓을 자리가 없을 때의 자동 확장). 그 줄의 바깥 지형은 다시 만든다
-func expand(dir: Vector2i) -> void:
-	_grow(dir)
-	_regrow()
+## c에 도시를 세운다: 영역을 받고 성 모델을 놓는다 (기획서 2장, 5.3)
+func found_city(c: Vector2i) -> void:
+	hqs[c] = Balance.HQ_HP
+	claim_start(c)
+	var marker: MeshInstance3D = MeshInstance3D.new()
+	variants[c] = 1 + randi() % Balance.HQ_MODEL_VARIANTS
+	add_child(marker)
+	_nodes[c] = [marker]
+	_tint(c)
 
 
-## 4방향으로 한 줄씩 넓힌다. 확장 횟수는 한 번만 센다 (기획서 3장)
-func expand_all() -> void:
-	for d in DIRS:
-		if can_expand(d):
-			_grow(d)
-	_regrow()
-
-
-## 조각을 (회전해서라도) 놓을 자리가 필드 안에 있는지 (기획서 5.5)
-func has_room(p: Piece) -> bool:
-	var q: Piece = p
-	for _r in 4:
-		var sz: Vector2i = q.size()
-		for y in range(bounds.position.y, bounds.end.y - sz.y + 1):
-			for x in range(bounds.position.x, bounds.end.x - sz.x + 1):
-				if can_place(q, Vector2i(x, y)):
-					return true
-		q = q.rotated()
-	return false
+## 땅 블록을 지형 종류마다 MultiMesh 하나로 그린다 (칸이 수천 개라 노드를 따로 두지 않는다)
+func _draw_land() -> void:
+	for n in _land_nodes:
+		n.queue_free()
+	_land_nodes.clear()
+	var by_kind: Dictionary = {}
+	for c in cells:
+		if not by_kind.has(cells[c]):
+			by_kind[cells[c]] = []
+		by_kind[cells[c]].append(c)
+	for kind in by_kind:
+		var mm: MultiMesh = MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = block_mesh
+		mm.instance_count = by_kind[kind].size()
+		for i in mm.instance_count:
+			mm.set_instance_transform(i, Transform3D(Basis(), cell_to_world(by_kind[kind][i]) + Vector3(0, BLOCK_H / 2.0, 0)))
+		var mmi: MultiMeshInstance3D = MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		mmi.material_override = _mat(color_of(kind), false)
+		add_child(mmi)
+		_land_nodes.append(mmi)
 
 
 ## "본부 2/3 · 체력 300·120 · 영구 손실 1" (기획서 5.5)
@@ -489,30 +508,10 @@ func hq_status() -> String:
 	var hps: Array[String] = []
 	for c in hqs:
 		hps.append(str(ceili(hqs[c])))
-	var s: String = "본부 %d/%d · 체력 %s" % [hqs.size(), hqs.size() + hq_lost, "·".join(hps) if not hps.is_empty() else "-"]
+	var s: String = "도시 %d/%d · 체력 %s" % [hqs.size(), hqs.size() + hq_lost, "·".join(hps) if not hps.is_empty() else "-"]
 	if hq_lost > 0:
 		s += " · 영구 손실 %d" % hq_lost
 	return s
-
-
-## 모든 칸이 필드 안이고 빈 칸(바다)이어야 놓을 수 있다 (기획서 4장)
-func can_place(p: Piece, origin: Vector2i) -> bool:
-	for i in p.cells.size():
-		var cell: Vector2i = origin + p.cells[i]
-		if not bounds.has_point(cell) or water.has(cell) or buildings.has(cell) or hqs.has(cell): # 물 타일·건물·본부 칸에는 못 놓는다
-			return false
-		if p.terrain[i] != Piece.SEA and cells.has(cell): # 땅 칸은 빈 칸에만. 바다 칸은 기존 땅을 물로 깎을 수 있다 (기획서 4장)
-			return false
-	return true
-
-
-## 조각의 바다 칸이 깎게 될 기존 땅 칸 수 (기획서 4장)
-func carve_count(p: Piece, origin: Vector2i) -> int:
-	var n: int = 0
-	for i in p.cells.size():
-		if p.terrain[i] == Piece.SEA and cells.has(origin + p.cells[i]):
-			n += 1
-	return n
 
 
 ## 건물 위치 → 건물 종류 (본부는 hq에 따로 기록)
@@ -539,7 +538,7 @@ func can_build(id: int, c: Vector2i) -> bool:
 	var data: Dictionary = Balance.BUILDINGS[id]
 	if not in_territory(c): # 건설은 본부 영역 안에서만 (기획서 5.3)
 		return false
-	if data.get("on_water", false): # 낚시터·교역소: 필드 안의 물 위, 땅과 닿은 칸 (교역소는 열린 바다, 1개만) (기획서 5.1, 5.6)
+	if data.get("on_water", false): # 낚시터·교역소: 물 위, 땅과 닿은 칸 (교역소는 열린 바다, 1개만) (기획서 5.1, 5.6)
 		if not (bounds.has_point(c) and not cells.has(c) and not buildings.has(c) and _next_to_land(c)):
 			return false
 		if data.get("unique", false) and buildings.values().has(id):
@@ -562,12 +561,12 @@ func can_build(id: int, c: Vector2i) -> bool:
 	return not data["sea"] or _next_to_sea(c)
 
 
-## 필드 밖으로 이어진 바다(섬 안에 갇힌 호수 제외)인지 (기획서 5.1)
+## 맵 가장자리 바다와 이어진 바다(섬 안에 갇힌 호수 제외)인지 (기획서 5.1)
 func is_open_sea(c: Vector2i) -> bool:
 	if _open_ver != _ver:
 		_open_ver = _ver
 		_open.clear()
-		var ext: Rect2i = bounds.grow(M)
+		var ext: Rect2i = bounds
 		var stack: Array[Vector2i] = []
 		for y in range(ext.position.y, ext.end.y):
 			for x in range(ext.position.x, ext.end.x):
@@ -594,29 +593,6 @@ func is_post_open(c: Vector2i) -> bool:
 ## 물 위 교역소는 자기 칸이, 땅 위라면 이웃 바다가 열린 바다인지
 func _post_open(c: Vector2i) -> bool:
 	return is_open_sea(c) if not cells.has(c) else _next_to_open_sea(c)
-
-
-## 조각 p를 origin에 놓으면 교역소(c)가 열린 바다와 끊기는지 미리 계산한다. 끊기면 false (기획서 5.6)
-func post_open_after(c: Vector2i, p: Piece, origin: Vector2i) -> bool:
-	var added: Array[Vector2i] = []
-	var carved: Dictionary = {}
-	for i in p.cells.size():
-		var cell: Vector2i = origin + p.cells[i]
-		if p.terrain[i] == Piece.SEA:
-			if cells.has(cell): # 바다 칸이 땅을 깎으면 그만큼 바다가 열린다
-				carved[cell] = cells[cell]
-				cells.erase(cell)
-		elif not cells.has(cell):
-			cells[cell] = p.terrain[i]
-			added.append(cell)
-	_ver += 1
-	var open: bool = _post_open(c)
-	for cell in added:
-		cells.erase(cell)
-	for cell in carved:
-		cells[cell] = carved[cell]
-	_ver += 1
-	return open
 
 
 func _next_to_open_sea(c: Vector2i) -> bool:
@@ -674,12 +650,6 @@ func upgrade(c: Vector2i) -> void:
 	_tint(c)
 
 
-## 건물 이름 글자를 보이거나 숨긴다: 전투 중에는 숨긴다 (기획서 7.2)
-func show_labels(on: bool) -> void:
-	for c in buildings:
-		(_nodes[c][1] as Label3D).visible = on
-
-
 ## 레벨 3 건물을 진화 건물 to로 바꾼다: 새 건물 레벨 1에서 시작한다 (기획서 5.2.1)
 func evolve(c: Vector2i, to: int) -> void:
 	variants.erase(c)
@@ -726,11 +696,9 @@ func build(id: int, c: Vector2i, level: int = 1, variant: int = 0) -> void:
 	_tint(c)
 
 
-## 건물이 놓이는 바닥 높이: 땅, 조각으로 놓은 물 타일, 맨 바다 순
+## 건물이 놓이는 바닥 높이: 땅 또는 바다
 func _base_y(c: Vector2i) -> float:
-	if cells.has(c):
-		return BLOCK_H
-	return WATER_H if water.has(c) else 0.0
+	return BLOCK_H if cells.has(c) else 0.0
 
 
 ## 모델 건물·본부의 모델을 레벨·바리에이션·파손 단계에 맞게 바꾼다 (기획서 7.2)
@@ -851,7 +819,7 @@ func land_count() -> int:
 	return cells.size()
 
 
-## c의 4방향 이웃 중 바다인 칸(필드 밖 포함), 없으면 (-999, -999)
+## c의 4방향 이웃 중 바다인 칸, 없으면 (-999, -999)
 func sea_neighbor(c: Vector2i) -> Vector2i:
 	for d in DIRS:
 		if terrain_at(c + d) == SEA and not buildings.has(c + d): # 수상 건물(낚시터)이 있는 칸은 뱃길로 안 친다
@@ -859,9 +827,17 @@ func sea_neighbor(c: Vector2i) -> Vector2i:
 	return Vector2i(-999, -999)
 
 
-## 바깥 가장자리 바다에서 필드 땅(산 제외)의 해안까지 바닷길이 하나도 없으면 true — 해적이 바다를 걸어 건넌다 (기획서 6장)
+## 맵 가장자리 바다에서 땅(산 제외)의 해안까지 바닷길이 하나도 없으면 true — 해적이 바다를 걸어 건넌다 (기획서 6장)
+## 지형이 바뀔 때만 다시 센다 (화면 갱신마다 부른다)
 func sea_blocked() -> bool:
-	var ext: Rect2i = bounds.grow(M)
+	if _blocked_ver != _ver:
+		_blocked_ver = _ver
+		_blocked = _sea_blocked_now()
+	return _blocked
+
+
+func _sea_blocked_now() -> bool:
+	var ext: Rect2i = bounds
 	var seen: Dictionary = {}
 	var q: Array[Vector2i] = []
 	for y in range(ext.position.y, ext.end.y):
@@ -905,9 +881,9 @@ func island_map() -> Dictionary:
 	return m
 
 
-## 길찾기 격자: sea=true면 바다만, false면 필드 안의 땅만 지나갈 수 있다 (기획서 7.3)
+## 길찾기 격자: sea=true면 바다만, false면 땅만 지나갈 수 있다 (기획서 7.3)
 func nav(sea: bool, enemy: bool = false) -> AStarGrid2D:
-	var ext: Rect2i = bounds.grow(M)
+	var ext: Rect2i = bounds
 	var a: AStarGrid2D = AStarGrid2D.new()
 	a.region = Rect2i(0, 0, ext.size.x, ext.size.y)
 	a.cell_size = Vector2.ONE
@@ -923,7 +899,7 @@ func nav(sea: bool, enemy: bool = false) -> AStarGrid2D:
 
 ## 바다를 건너는 해적용 길찾기 격자: 산 말고는 어디든 가고, 바다 칸은 느린 만큼 비용이 높아 땅길이 있으면 땅길을 쓴다 (기획서 6장)
 func nav_cross() -> AStarGrid2D:
-	var ext: Rect2i = bounds.grow(M)
+	var ext: Rect2i = bounds
 	var a: AStarGrid2D = AStarGrid2D.new()
 	a.region = Rect2i(0, 0, ext.size.x, ext.size.y)
 	a.cell_size = Vector2.ONE
@@ -942,7 +918,7 @@ func nav_cross() -> AStarGrid2D:
 ## from -> to 칸 경로 (시작 칸 제외). 길이 없으면 빈 배열
 func path(nav_grid: AStarGrid2D, from: Vector2i, to: Vector2i) -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
-	var ext: Rect2i = bounds.grow(M)
+	var ext: Rect2i = bounds
 	var off: Vector2i = -ext.position
 	var region: Rect2i = Rect2i(0, 0, ext.size.x, ext.size.y)
 	if not region.has_point(from + off) or not region.has_point(to + off):
@@ -1041,37 +1017,16 @@ func _counts(c: Vector2i, owner: Vector2i) -> bool:
 	return territory_of.has(owner) and territory_of[owner].has(c)
 
 
+## 땅 묶음을 깐다 (테스트가 작은 섬을 만들 때 쓴다). 바다 칸은 땅을 지운다. hq_index 칸에는 도시를 세운다
 func place(p: Piece, origin: Vector2i) -> void:
 	_ver += 1
 	for i in p.cells.size():
 		var cell: Vector2i = origin + p.cells[i]
-		if p.terrain[i] == Piece.SEA: # 바다 칸: 땅이 되지 않고 물 타일로 남는다. 기존 땅(건물·본부 없는 칸)은 물로 깎인다
-			if cells.has(cell):
-				cells.erase(cell)
-				if _land_nodes.has(cell):
-					_land_nodes[cell].queue_free()
-					_land_nodes.erase(cell)
-			water[cell] = true
-			var wt: MeshInstance3D = MeshInstance3D.new()
-			var wm: BoxMesh = BoxMesh.new()
-			wm.size = Vector3(1.0, WATER_H, 1.0)
-			wt.mesh = wm
-			wt.material_override = _mat(color_of(Piece.SEA), false)
-			wt.position = cell_to_world(cell) + Vector3(0, WATER_H / 2.0, 0)
-			add_child(wt)
-			continue
-		cells[cell] = p.terrain[i]
-		var mi: MeshInstance3D = MeshInstance3D.new()
-		mi.mesh = block_mesh
-		mi.material_override = _mat(color_of(p.terrain[i]), false)
-		mi.position = cell_to_world(cell) + Vector3(0, BLOCK_H / 2.0, 0)
-		add_child(mi)
-		_land_nodes[cell] = mi
-		if i == p.hq_index:
-			hqs[cell] = Balance.HQ_HP
-			claim_start(cell)
-			var marker: MeshInstance3D = MeshInstance3D.new()
-			variants[cell] = 1 + randi() % Balance.HQ_MODEL_VARIANTS
-			add_child(marker)
-			_nodes[cell] = [marker]
-			_tint(cell)
+		if p.terrain[i] == Piece.SEA:
+			cells.erase(cell)
+		else:
+			cells[cell] = p.terrain[i]
+	_ver += 1
+	_draw_land()
+	if p.hq_index >= 0:
+		found_city(origin + p.cells[p.hq_index])

@@ -14,7 +14,7 @@ func _initialize() -> void:
 	fails += _check(gs.add_research_progress(4) == 0 and gs.research_progress == 4, "연구수치 4: 연구포인트 없음")
 	fails += _check(gs.add_research_progress(3) == 1 and gs.research_progress == 2 and gs.research_points == 1, "누적 7: 첫 포인트(기준 5), 2 이월")
 	fails += _check(gs.add_research_progress(20) == 3 and gs.research_progress == 1 and gs.research_points == 4 and Balance.research_threshold(gs.research_gained) == 9, "기준 6·7·8을 차례로 넘어 +3, 다음 기준 9")
-	var rf: Field = Field.new()
+	var rf: Field = preload("res://tests/small_field.gd").make()
 	var rp: Piece = Piece.new()
 	for i in 4:
 		rp.cells.append(Vector2i(i, 0))

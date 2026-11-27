@@ -52,7 +52,7 @@ func setup(f: Field, g: Node, w: int) -> void:
 	_ships_left = Balance.ship_count(w, g.run_seed)
 	_ship_gap = Balance.SHIP_SPAWN_TIME / maxi(_ships_left, 1)
 	_queue = Balance.enemy_queue(w, g.run_seed)
-	_mult = Balance.enemy_mult(f.land_count(), f.expansions)
+	_mult = Balance.enemy_mult(f.hqs.size())
 	rng.randomize()
 	for hq_cell in f.hqs: # 본부마다 수비병 (기획서 5.5)
 		for i in Balance.HQ_GUARDS:
@@ -472,11 +472,9 @@ func _towers_turn(dt: float) -> void:
 		if Balance.is_tower(field.buildings[c]):
 			var lv: int = field.levels[c]
 			_shoot(c, Balance.tower_atk(field.buildings[c], lv) * field.performance(c), Balance.tower_range(field.buildings[c], lv), dt)
-	for c in field.hqs: # 본부도 약하게 쏜다 (기획서 6장)
-		_shoot(c, Balance.HQ_ATK, Balance.HQ_RANGE, dt)
 
 
-## c 칸의 방어탑·본부가 사거리 안 가장 가까운 해적을 쏜다
+## c 칸의 방어탑이 사거리 안 가장 가까운 해적을 쏜다
 func _shoot(c: Vector2i, atk: float, rng_: float, dt: float) -> void:
 	_tower_cd[c] = maxf(0.0, float(_tower_cd.get(c, 0.0)) - dt)
 	if _tower_cd[c] > 0.0:
@@ -496,7 +494,7 @@ func _shoot(c: Vector2i, atk: float, rng_: float, dt: float) -> void:
 		_sfx("tower")
 
 
-## 방어탑·본부 공격 선 표시를 정리한다
+## 방어탑 공격 선 표시를 정리한다
 func _fx_tick(dt: float) -> void:
 	for i in range(_fx.size() - 1, -1, -1):
 		_fx[i]["t"] -= dt
@@ -595,7 +593,7 @@ func _spawn_ship() -> void:
 	if tgt.is_empty():
 		return
 	var route: Array[Vector2i] = field.path(sea_nav, from, tgt["stop"])
-	# 대륙에 막혀 길이 없으면 다른 가장자리를 시도하고, 끝내 없으면 상륙 지점 바로 앞 바다에서 출발한다 (전투 없이 끝나는 것을 막는다)
+	# 섬에 막혀 길이 없으면 다른 가장자리를 시도하고, 끝내 없으면 상륙 지점 바로 앞 바다에서 출발한다 (전투 없이 끝나는 것을 막는다)
 	for _try in 40:
 		if not route.is_empty():
 			break
@@ -619,9 +617,9 @@ func _spawn_ship() -> void:
 	s.crew_kinds = load
 
 
-## 필드 밖 지형 가장자리의 바다 칸 (기획서 3장)
+## 맵 가장자리의 바다 칸 (기획서 6장)
 func _edge_cell() -> Vector2i:
-	var ext: Rect2i = field.bounds.grow(Field.M)
+	var ext: Rect2i = field.bounds
 	for _i in 100:
 		var x: int = rng.randi_range(ext.position.x, ext.end.x - 1)
 		var y: int = rng.randi_range(ext.position.y, ext.end.y - 1)
@@ -636,9 +634,9 @@ func _edge_cell() -> Vector2i:
 	return ext.position
 
 
-## 바닷길이 막혔을 때: from에서 바다로 갈 수 있는 가장 가까운 땅(필드·바깥 대륙, 산 제외)의 해안. 없으면 빈 Dictionary (기획서 6장)
+## 바닷길이 막혔을 때: from에서 바다로 갈 수 있는 가장 가까운 땅(산 제외)의 해안. 없으면 빈 Dictionary (기획서 6장)
 func _blocked_landing(from: Vector2i) -> Dictionary:
-	var ext: Rect2i = field.bounds.grow(Field.M)
+	var ext: Rect2i = field.bounds
 	var cands: Array[Vector2i] = []
 	for y in range(ext.position.y, ext.end.y):
 		for x in range(ext.position.x, ext.end.x):

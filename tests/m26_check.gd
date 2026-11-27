@@ -6,7 +6,7 @@ extends SceneTree
 func _initialize() -> void:
 	var fails: int = 0
 	# 가로로 긴 섬 (본부는 왼쪽 끝 근처)
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var a: Piece = Piece.new()
 	for y in 3:
 		for x in 16:

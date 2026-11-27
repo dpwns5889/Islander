@@ -4,31 +4,6 @@ extends SceneTree
 
 func _initialize() -> void:
 	var fails: int = 0
-	# 필드 밖 지형: 필드에서 2칸 안쪽은 항상 바다, 바깥에는 땅이 생긴다
-	var land_seeds: int = 0
-	for sd in 20:
-		var f: Field = Field.new()
-		f.generate_outside(sd)
-		var ring_ok: bool = true
-		var outer_land: int = 0
-		for y in range(-Field.M, Field.H + Field.M):
-			for x in range(-Field.M, Field.W + Field.M):
-				var c: Vector2i = Vector2i(x, y)
-				if f.in_bounds(c):
-					continue
-				var near: bool = x > -3 and x < Field.W + 2 and y > -3 and y < Field.H + 2
-				if f.terrain_at(c) != Field.SEA:
-					outer_land += 1
-					ring_ok = ring_ok and not near
-		fails += _check(ring_ok, "필드 가까이는 바다 (시드 %d)" % sd)
-		land_seeds += 1 if outer_land > 0 else 0
-	var ruin_seeds: int = 0
-	for sd in 20:
-		var fr: Field = Field.new()
-		fr.generate_outside(sd)
-		ruin_seeds += 1 if not fr.ruins.is_empty() else 0
-	fails += _check(ruin_seeds >= 10, "대륙에 유적지가 생긴다 (%d/20)" % ruin_seeds)
-	fails += _check(land_seeds >= 15, "대부분의 시드에서 바깥 땅이 생긴다 (%d/20)" % land_seeds)
 	# 길찾기와 섬
 	var f2: Field = _two_islands(true)
 	var land: AStarGrid2D = f2.nav(false)
@@ -50,7 +25,7 @@ func _initialize() -> void:
 
 ## 왼쪽 섬 A(본부, 5x5 평원)와 오른쪽 섬 B(집 3채, 오른쪽 한 줄은 모래). 사이는 바다
 func _two_islands(with_port: bool) -> Field:
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var a: Piece = Piece.new()
 	for y in 5:
 		for x in 5:

@@ -11,7 +11,7 @@ func _initialize() -> void:
 			p.cells.append(Vector2i(x, y))
 	for _c in p.cells:
 		p.terrain.append(Piece.PLAINS)
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	f.place(p, Vector2i(5, 5))
 	fails += _check(f.can_build(Balance.HOUSE, Vector2i(6, 6)), "평원에 집")
 	fails += _check(f.can_build(Balance.BARRACKS, Vector2i(6, 6)), "평원에 병영")

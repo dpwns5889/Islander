@@ -30,7 +30,8 @@ func _initialize() -> void:
 		var d: Dictionary = _duel(seed_i)
 		wins += 1 if d["pirates"] == 0 and d["soldiers"] >= 1 else 0
 	print("아군 2 vs 적 3 승률 %d/40" % wins)
-	fails += _check(wins >= 32, "아군 2 vs 적 3: 40번 중 32번 이상 승리 (%d)" % wins)
+	# 0.2.02에서 도시 자동 공격을 없애 승률이 약 70%로 내려갔다. 기준은 R6 밸런스에서 다시 정한다 (기획서 9.2)
+	fails += _check(wins >= 20, "아군 2 vs 적 3: 40번 중 20번 이상 승리 (%d)" % wins)
 	# 병영 + 식량 → 막는지 (밸런스 참고용 출력)
 	# 시작 자원(골드 100 - 병영 60 = 40)으로 1웨이브를 막을 수 있어야 한다 (밸런스 확인)
 	for food in [0, 20, 30, 50]:
@@ -38,7 +39,7 @@ func _initialize() -> void:
 		print("병영 1개, 골드 40, 식량 %d → 승리 %s, 본부 체력 %d" % [food, r3["victory"], r3["hq"]])
 	# 병영 없이 본부 병사만으로 시작 자원(골드 100, 식량 20)에 1웨이브를 이긴다
 	var r4: Dictionary = _sim(_island(true), 0, Balance.START_FOOD, Balance.START_GOLD)
-	fails += _check(r4["victory"], "본부 병사만으로 1웨이브 승리")
+	print("경비병만으로 1웨이브 → 승리 %s (도시 자동 공격 삭제 뒤 참고용, R6에서 기준을 다시 정함)" % r4["victory"])
 	print("본부만, 시작 자원 → 승리 %s, 본부 체력 %d" % [r4["victory"], r4["hq"]])
 	# 시작 조각의 본부는 평원 칸
 	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
@@ -52,7 +53,7 @@ func _initialize() -> void:
 
 ## 5x5 평원 섬 (+ 오른쪽에 모래 해안 한 줄)
 func _island(with_sand: bool) -> Field:
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var p: Piece = Piece.new()
 	for y in 5:
 		for x in 5:

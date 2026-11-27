@@ -5,8 +5,10 @@ extends SceneTree
 func _initialize() -> void:
 	var fails: int = 0
 	var main: Node = load("res://assets/scenes/main.tscn").instantiate()
+	main.edge_pan = false # 마우스 위치로 카메라가 움직이지 않게
 	root.add_child(main)
 	await process_frame
+	main.found_start(preload("res://tests/coastal_start.gd").pick(main.field)) # 배율 1에서 본다 (시작 화면은 3배라 도트 하나가 크다)
 	var pv: PixelView = main.pixel
 	fails += _check(pv.enabled and pv._sub.size.y == Balance.PIXEL_HEIGHT + 2, "시작은 도트 화면")
 	_press(main, false)

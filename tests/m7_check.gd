@@ -64,7 +64,7 @@ func _initialize() -> void:
 
 ## 5x5 평원 섬(4..8, 4..8) 오른쪽에 모래 한 줄(9, 4..8)이 이어진다
 func _island() -> Field:
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var p: Piece = Piece.new()
 	for y in 5:
 		for x in 6:

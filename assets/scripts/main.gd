@@ -1,29 +1,13 @@
 extends Node3D
-## 준비 단계(조각 배치·건설·시장·확장)와 전투 단계 진행 (기획서 2장, 3장, 5장)
-
-const CARD_COUNT: int = 3
-const GHOST_Y: float = 0.45
+## 시작 위치 고르기, 건설·연구(준비 단계)와 전투 단계 진행 (기획서 2장, 3장, 5장)
+## 준비·전투 단계 구분은 R2에서 실시간으로 바꾼다 (기획서 9장)
 
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var field: Field
 var pixel: PixelView
-var ghost: Node3D
-var cursor: MeshInstance3D ## 건물 건설 위치 표시
-var current: Piece = null ## 배치 중인 조각
+var cursor: MeshInstance3D ## 건설·시작 위치 표시
 var build_id: int = 0 ## 건설 모드의 건물 종류, 0이면 건설 모드 아님
-var pieces_left: int = 0 ## 이번 준비 단계에 더 놓을 수 있는 조각 수
-var explored: bool = false ## 이번 준비 단계에 유적지 원정을 보냈는지
-var tiles_required: int = 0 ## 이번 준비 단계에 반드시 놓아야 하는 보상 타일 수 (기획서 2장)
-var pending_hq: bool = false ## 10·20웨이브를 이긴 뒤 아직 못 놓은 본부 조각이 있는지 (기획서 5.5)
-var hq_piece: Piece = null
-var placing_hq: bool = false ## 지금 손에 든 조각이 본부 조각인지
-var hq_card: PieceCard
-var hq_title: Label
-var choice_title: Label
-var choices: Array[Piece] = []
-var cards: Array[PieceCard] = []
-var placed_count: int = 0
-var panel: PanelContainer
+var started: bool = false ## 첫 도시를 세웠는지 (기획서 2장)
 var top_panel: PanelContainer
 var res_bar: PanelContainer ## 최상단 고정 자원바 (기획서 7.2)
 var build_panel: PanelContainer
@@ -54,9 +38,6 @@ var category_buttons: Array[Button] = [] ## 건설 메뉴 카테고리 버튼
 var dropdown_panel: PanelContainer ## 카테고리를 누르면 위로 펼쳐지는 목록
 var dropdown_lists: Array[VBoxContainer] = []
 var open_category: int = -1
-var _warn: bool = false ## 지금 들고 있는 타일이 교역소를 바다와 끊는지 (미리보기 경고) (기획서 5.6)
-var _warn_key: String = ""
-var _carve_n: int = 0 ## 지금 들고 있는 타일의 바다 칸이 물로 깎을 땅 칸 수
 var npc_next_wave: int = -1 ## 교역 NPC가 다음에 방문할 웨이브, 교역소가 없으면 -1 (기획서 5.6)
 var npc_present: bool = false ## 교역 NPC가 와 있는지 (기획서 5.6)
 var npc_node: MeshInstance3D = null
@@ -71,12 +52,15 @@ var wave_info: Label ## 준비 단계의 이번 웨이브 적 예고
 var battle_speed_index: int = 0
 var layer: CanvasLayer
 var battle: Battle = null
-var _blend: float = 0.0 ## 카메라 전환 정도: 0이면 준비 시점, 1이면 전투 시점
-var _zoom: float = 1.0 ## 준비 단계 휠 줌 배율(작을수록 확대)
-var _battle_zoom: float = 1.0 ## 전투 중 휠 줌 배율
-var _battle_pitch: float = Balance.COMBAT_PITCH ## 전투 카메라 기울기(도)
-var _battle_yaw: float = Balance.COMBAT_YAW ## 전투 카메라 좌우 회전(도)
-var _battle_pan: Vector3 = Vector3.ZERO ## 전투 중 화면 중앙이 필드 중심에서 옮겨 간 거리
+## 카메라는 쿼터뷰 하나다 (기획서 7.2)
+var _zoom: float = Balance.ZOOM_START ## 휠 줌 배율(작을수록 확대)
+var _pitch: float = Balance.COMBAT_PITCH ## 기울기(도)
+var _yaw: float = Balance.COMBAT_YAW ## 좌우 회전(도)
+var _pan: Vector3 = Vector3.ZERO ## 화면 중앙이 맵 중심에서 옮겨 간 거리
+var _press: Vector2 = Vector2.ZERO ## 좌클릭을 누른 자리
+var _pressing: bool = false
+var _rotating: bool = false ## 좌클릭을 끌어 회전하는 중 (놓아도 클릭으로 치지 않는다)
+var edge_pan: bool = true ## 화면 가장자리 카메라 이동. 테스트·캡처는 끈다
 var _note: String = ""
 var _gmats: Dictionary = {}
 
@@ -85,11 +69,10 @@ func _ready() -> void:
 	rng.randomize()
 	GameState.reset()
 	_build_world()
-	field.generate_outside(rng.randi())
+	field.generate_map(rng.randi())
 	_build_ui()
 	GameState.changed.connect(_refresh_hud)
-	current = Piece.start_piece(rng)
-	_rebuild_ghost()
+	_update_camera()
 	_refresh_hud()
 
 
@@ -106,14 +89,11 @@ func _build_world() -> void:
 	var sun: DirectionalLight3D = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-70, -30, 0)
 	add_child(sun)
-	# 준비 단계는 완전 탑다운 (기획서 2장)
 	pixel = PixelView.new() # 3D를 낮은 해상도로 그려 도트처럼 보이게 한다 (기획서 7.2)
 	add_child(pixel)
 	field = Field.new()
 	field.territory_enabled = true
 	add_child(field)
-	ghost = Node3D.new()
-	add_child(ghost)
 	cursor = MeshInstance3D.new()
 	var cm: BoxMesh = BoxMesh.new()
 	cm.size = Vector3(0.9, 0.1, 0.9)
@@ -126,37 +106,6 @@ func _build_world() -> void:
 func _build_ui() -> void:
 	layer = CanvasLayer.new()
 	add_child(layer)
-	# 조각 카드 (하단, 건물 메뉴 위): 본부 조각 + 전투 보상 타일 선택지
-	var hq_box: VBoxContainer = VBoxContainer.new()
-	hq_title = Label.new()
-	hq_title.text = "본부 조각 (반드시 놓기)"
-	hq_title.visible = false
-	hq_box.add_child(hq_title)
-	hq_card = PieceCard.new()
-	hq_card.picked.connect(_on_card_picked)
-	hq_card.visible = false
-	hq_box.add_child(hq_card)
-	var choice_box: VBoxContainer = VBoxContainer.new()
-	choice_title = Label.new()
-	choice_box.add_child(choice_title)
-	var card_row: HBoxContainer = HBoxContainer.new()
-	for i in CARD_COUNT:
-		var card: PieceCard = PieceCard.new()
-		card.picked.connect(_on_card_picked)
-		cards.append(card)
-		card_row.add_child(card)
-	choice_box.add_child(card_row)
-	var row_box: HBoxContainer = HBoxContainer.new()
-	row_box.add_theme_constant_override("separation", 18)
-	row_box.add_child(hq_box)
-	row_box.add_child(choice_box)
-	panel = PanelContainer.new()
-	panel.add_child(row_box)
-	panel.visible = false
-	layer.add_child(panel)
-	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 10)
-	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN # 본부 카드가 늘어도 화면 밖으로 잘리지 않게
 	# 상단: 자원·웨이브·웨이브 시작, 그 아래 안내 문구
 	var top: VBoxContainer = VBoxContainer.new()
 	var row: HBoxContainer = HBoxContainer.new()
@@ -186,7 +135,6 @@ func _build_ui() -> void:
 	top.add_child(status)
 	top_panel = PanelContainer.new()
 	top_panel.add_child(top)
-	top_panel.visible = false
 	layer.add_child(top_panel)
 	top_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT, Control.PRESET_MODE_MINSIZE, 10)
 	top_panel.position.y = 44 # 고정바 아래
@@ -344,46 +292,10 @@ func _build_ui() -> void:
 
 func _over_ui() -> bool:
 	var mp: Vector2 = get_viewport().get_mouse_position()
-	for c: Control in [panel, top_panel, res_bar, wave_panel, build_panel, side_panel, upgrade_panel, research_panel, dropdown_panel, trade_panel]:
+	for c: Control in [top_panel, res_bar, wave_panel, build_panel, side_panel, upgrade_panel, research_panel, dropdown_panel, trade_panel]:
 		if c.visible and c.get_global_rect().has_point(mp):
 			return true
 	return false
-
-
-func _on_card_picked(card: PieceCard) -> void:
-	if card == hq_card:
-		select_hq()
-	else:
-		pick(cards.find(card))
-
-
-## 본부 조각을 집는다 (기획서 5.5)
-func select_hq() -> void:
-	if not pending_hq:
-		return
-	set_build(0)
-	current = hq_piece
-	placing_hq = true
-	for card in cards:
-		card.selected = false
-	hq_card.selected = true
-	_note = ""
-	_rebuild_ghost()
-	_refresh_hud()
-
-
-func pick(i: int) -> void:
-	if pieces_left <= 0:
-		return
-	set_build(0)
-	current = choices[i]
-	placing_hq = false
-	hq_card.selected = false
-	for j in cards.size():
-		cards[j].selected = j == i
-	_note = ""
-	_rebuild_ghost()
-	_refresh_hud()
 
 
 func _on_build_button(id: int) -> void:
@@ -391,18 +303,7 @@ func _on_build_button(id: int) -> void:
 
 
 func set_build(id: int) -> void:
-	if id != 0 and _blocked(): # 타일을 먼저 놓아야 한다
-		_note = "전투 보상 타일을 먼저 놓아야 건물을 지을 수 있습니다"
-		_refresh_hud()
-		return
 	build_id = id
-	if id != 0:
-		current = null
-		placing_hq = false
-		hq_card.selected = false
-		for card in cards:
-			card.selected = false
-		_rebuild_ghost()
 	open_category = -1 # 건물을 고르거나 설치 모드가 끝나면 목록을 닫는다
 	_update_dropdown()
 	_note = ""
@@ -411,7 +312,7 @@ func set_build(id: int) -> void:
 
 ## 건설 메뉴 카테고리를 열고 닫는다 (기획서 7.2)
 func _toggle_category(i: int) -> void:
-	if _blocked() or battle != null:
+	if battle != null:
 		return
 	open_category = -1 if open_category == i else i
 	_update_dropdown()
@@ -436,63 +337,6 @@ func _place_dropdown() -> void:
 	var btn: Button = category_buttons[open_category]
 	var x: float = clampf(btn.global_position.x, 0.0, get_viewport().get_visible_rect().size.x - dropdown_panel.size.x)
 	dropdown_panel.position = Vector2(x, btn.global_position.y - dropdown_panel.size.y - 4.0)
-
-
-## 준비 단계 시작: 조각 선택지를 새로 뽑고, 놓을 수 있는 조각은 1개 (기획서 2장)
-func _begin_prep() -> void:
-	_note = ""
-	pieces_left = 1
-	tiles_required = 1 # 전투 보상 타일: 놓기 전에는 건설·강화·웨이브 시작이 막힌다
-	if GameState.wave > 1 and (GameState.wave - 1) % Balance.GROW_EVERY == 0: # 2라운드마다 4방으로 확장 (기획서 3장)
-		field.expand_all()
-		_update_camera()
-		_note = "필드가 사방으로 넓어졌습니다 (%dx%d)" % [field.bounds.size.x, field.bounds.size.y]
-	explored = false
-	_roll_choices()
-
-
-## 타일(본부 조각 포함)을 놓기 전에는 건물 건설·레벨업·웨이브 시작을 할 수 없다 (기획서 2장)
-func _blocked() -> bool:
-	return pending_hq or tiles_required > 0
-
-
-## 주어진 조각 중 하나도 들어갈 자리가 없으면 무료로 한 줄씩 확장한다. 늘린 줄 수를 돌려 준다 (기획서 5.5)
-func _make_room(pieces: Array[Piece]) -> int:
-	var dirs: Array[Vector2i] = [Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT, Vector2i.UP]
-	var grown: int = 0
-	for attempt in 200:
-		var fits: bool = false
-		for p in pieces:
-			fits = fits or field.has_room(p)
-		if fits:
-			break
-		var d: Vector2i = dirs[attempt % 4]
-		if field.can_expand(d):
-			field.expand(d)
-			grown += 1
-	if grown > 0:
-		_update_camera()
-	return grown
-
-
-func _roll_choices() -> void:
-	choices.clear()
-	for i in CARD_COUNT:
-		choices.append(Piece.random_piece(rng, GameState.wave > Balance.SEA_TILE_WAVE)) # 10라운드 이후엔 바다 섞인 타일도 나온다
-		cards[i].set_piece(choices[i])
-	panel.visible = true
-	if tiles_required > 0 and _make_room(choices) > 0:
-		_note = "놓을 자리가 없어 필드를 무료로 넓혔습니다 (%dx%d)" % [field.bounds.size.x, field.bounds.size.y]
-
-
-## 놓을 수 있는 조각을 1개 늘리고 선택지를 새로 뽑는다 (NPC 거래) (기획서 5장, 5.6)
-func _grant_piece() -> void:
-	pieces_left += 1
-	current = null
-	_rebuild_ghost()
-	_roll_choices()
-	_note = "조각을 샀습니다 (놓을 수 있는 조각 %d개)" % pieces_left
-	_refresh_hud()
 
 
 ## 교역 NPC (기획서 5.6)
@@ -575,79 +419,25 @@ func do_trade(id: String) -> bool:
 	trade_sold[id] = true
 	if id == "gold_rp":
 		GameState.add_research(1)
-	elif id == "gold_piece":
-		_grant_piece()
 	elif id == "gold_guards":
 		GameState.extra_guards += 2
 	_refresh_hud()
 	return true
 
 
-## 유적지 원정: 항구가 있어야 한다. 준비 단계당 1회 (기획서 3장)
-func explore(c: Vector2i) -> bool:
-	if battle != null or not field.ruins.has(c) or explored:
+## 시작 위치를 골라 첫 도시를 세운다: 평원이 넉넉한 섬의 평원 칸만 된다 (기획서 2장)
+func found_start(c: Vector2i) -> bool:
+	if started or not field.can_start(c):
 		return false
-	if not field.buildings.values().has(Balance.PORT):
-		_note = "유적지 원정에는 항구가 필요합니다"
-		_refresh_hud()
-		return false
-	if not GameState.spend(Balance.EXPLORE_COST):
-		_note = "원정 비용 %d골드가 모자랍니다" % Balance.EXPLORE_COST
-		_refresh_hud()
-		return false
-	explored = true
-	if rng.randf() < Balance.EXPLORE_RP_CHANCE:
-		GameState.add_research(1)
-		_note = "원정 성공: 연구포인트 +1"
-	else:
-		var g: int = rng.randi_range(Balance.EXPLORE_GOLD_MIN, Balance.EXPLORE_GOLD_MAX)
-		GameState.add(g, 0)
-		_note = "원정 성공: 골드 +%d" % g
-	field.loot_ruin(c)
-	_refresh_hud()
-	return true
-
-
-func _rotate() -> void:
-	current = current.rotated()
-	_rebuild_ghost()
-
-
-func place_current(hover: Vector2i) -> bool:
-	if current == null:
-		return false
-	var origin: Vector2i = current.origin_for(hover)
-	if not field.can_place(current, origin):
-		return false
-	var piece_hq: bool = current.hq_index >= 0
-	field.place(current, origin)
-	var was_start: bool = placed_count == 0
-	placed_count += 1
-	var was_hq: bool = placing_hq
-	current = null # 고르지 않은 조각은 버려진다 (기획서 2장)
-	placing_hq = false
-	hq_card.selected = false
-	_rebuild_ghost()
+	field.found_city(c)
+	started = true
+	res_bar.visible = true
+	build_panel.visible = true
+	side_panel.visible = true
+	_zoom = 1.0 # 첫 도시를 비춘다
+	_pan = field.cell_to_world(c) - field.center_world()
+	_update_camera()
 	_note = ""
-	if was_start:
-		top_panel.visible = true
-		res_bar.visible = true
-		build_panel.visible = true
-		side_panel.visible = true
-		_begin_prep()
-		pieces_left = 0 # 시작 조각 뒤 첫 준비 단계에는 보상 타일이 없다 (기획서 2장)
-		tiles_required = 0
-		panel.visible = false
-	elif was_hq: # 본부 조각은 일반 조각 배치 횟수를 쓰지 않는다 (기획서 5.5)
-		pending_hq = false
-		_note = "본부를 하나 더 세웠습니다 (본부 %d개)" % field.hqs.size()
-	else:
-		tiles_required = maxi(0, tiles_required - 1)
-		pieces_left -= 1
-		if pieces_left > 0:
-			_roll_choices()
-		else:
-			panel.visible = false
 	_refresh_hud()
 	return true
 
@@ -729,7 +519,7 @@ func repair_everything() -> bool:
 func upgrade_selected() -> bool:
 	if not field.buildings.has(selected_cell) or field.hp_ratio(selected_cell) < 1.0: # 파손되면 먼저 수리한다 (기획서 5.2.2)
 		return false
-	if selected_cell.x >= 0 and not _blocked() and _can_evolve(selected_cell):
+	if selected_cell.x >= 0 and _can_evolve(selected_cell):
 		var to: int = Balance.evolve_to(field.buildings[selected_cell])
 		if not GameState.spend(GameState.upgrade_discounted(Balance.evolve_cost(to))):
 			return false
@@ -737,7 +527,7 @@ func upgrade_selected() -> bool:
 		_note = ""
 		_refresh_hud()
 		return true
-	if selected_cell.x < 0 or _blocked() or not field.can_upgrade(selected_cell) or _upgrade_locked(selected_cell):
+	if selected_cell.x < 0 or not field.can_upgrade(selected_cell) or _upgrade_locked(selected_cell):
 		return false
 	var cost: int = GameState.upgrade_discounted(Balance.upgrade_cost(field.buildings[selected_cell], field.levels[selected_cell] + 1))
 	if not GameState.spend(cost):
@@ -753,32 +543,23 @@ func _cost_of(id: int) -> int:
 
 
 func _build_ok(c: Vector2i) -> bool:
-	if build_id == 0 or _blocked() or not _unlocked(build_id) or GameState.gold < _cost_of(build_id):
+	if build_id == 0 or not _unlocked(build_id) or GameState.gold < _cost_of(build_id):
 		return false
 	return field.can_build(build_id, c)
 
 
 ## 준비 단계를 끝내고 전투를 시작한다. 카메라가 대각선으로 기운다 (기획서 2장)
 func start_wave() -> void:
-	if battle != null or placed_count == 0 or _blocked(): # 타일(본부 조각 포함)을 놓기 전에는 시작할 수 없다
+	if battle != null or not started:
 		return
-	current = null
-	_rebuild_ghost()
 	set_build(0)
 	selected_cell = Vector2i(-1, -1)
 	_npc_leave() # 전투가 시작되면 NPC가 떠난다 (기획서 5.6)
 	research_panel.visible = false
-	panel.visible = false
 	build_panel.visible = false
 	side_panel.visible = false
 	wave_button.disabled = true
-	_battle_zoom = 1.0 # 전투는 항상 기본 시점에서 시작한다 (기획서 2장)
-	_battle_pitch = Balance.COMBAT_PITCH
-	_battle_yaw = Balance.COMBAT_YAW
-	_battle_pan = Vector3.ZERO
-	_blend_camera(1.0)
 	field.buildings_lost.clear()
-	field.show_labels(false) # 전투 중에는 건물 이름을 숨긴다 (기획서 7.2)
 	battle = Battle.new()
 	add_child(battle)
 	battle.setup(field, GameState, GameState.wave)
@@ -797,7 +578,7 @@ func cycle_speed() -> void:
 		battle.speed_scale = Balance.BATTLE_SPEEDS[battle_speed_index]
 
 
-## 전투 중 클릭한 땅으로 병사들이 이동한다 (깃발 없이 한 번의 명령) (기획서 6장)
+## 전투 중 우클릭한 땅으로 병사들이 이동한다 (분대 지휘는 R3) (기획서 6장)
 func command_move(c: Vector2i) -> bool:
 	if battle == null or not field.is_walkable(c):
 		return false
@@ -831,7 +612,6 @@ func _ping(c: Vector2i) -> void:
 func _on_battle_finished(victory: bool) -> void:
 	battle.queue_free()
 	battle = null
-	field.show_labels(true)
 	speed_button.visible = false
 	if not victory:
 		SaveManager.record(GameState.wave) # 졌어도 도달한 웨이브는 기록한다
@@ -843,46 +623,33 @@ func _on_battle_finished(victory: bool) -> void:
 	GameState.next_wave()
 	var ups: Dictionary = field.settle_levels(GameState.researched) # 본부마다 자기 영역 식량으로 레벨·영역 상승 (기획서 5.3)
 	var rp_gain: int = GameState.add_research_progress(field.research_income(GameState.researched)) # 도서관·연구소 (기획서 5.4)
-	_blend_camera(0.0)
 	build_panel.visible = true
 	side_panel.visible = true
-	_begin_prep()
-	_note = "웨이브 %d 승리: 골드 +%d · 식량 +%d" % [cleared, inc.x, inc.y] + ("\n" + _note if _note != "" else "")
+	_note = "웨이브 %d 승리: 골드 +%d · 식량 +%d" % [cleared, inc.x, inc.y]
 	if not field.buildings_lost.is_empty():
 		var parts: Array[String] = []
 		for k in field.buildings_lost:
 			parts.append("%s %d" % [Balance.BUILDINGS[k]["name"], field.buildings_lost[k]])
 		_note += "\n무너진 건물: " + ", ".join(parts)
 	for h in ups:
-		_note += "\n본부 %s 레벨 %d!" % [_hq_name(h), field.hq_level[h]]
+		_note += "\n도시 %s 레벨 %d!" % [_hq_name(h), field.hq_level[h]]
 	if rp_gain > 0:
 		_note += "\n연구포인트 +%d" % rp_gain
-	_maybe_visit_npc() # 3·6·9… 웨이브의 준비 단계에 교역 NPC가 온다 (기획서 5.6)
-	if Balance.HQ_PIECE_WAVES.has(cleared): # 보스 라운드를 이기면 본부 조각을 하나 더 받는다 (기획서 5.5)
-		_grant_hq_piece()
+	_maybe_visit_npc() # 교역 NPC (시간 기준 방문은 R2) (기획서 5.6)
 	_refresh_hud()
 	SaveManager.record(GameState.wave) # 무한 모드까지 포함한 최고 웨이브 (기획서 9.1)
 	if cleared == Balance.WIN_WAVE:
 		_show_victory()
 
 
-func _grant_hq_piece() -> void:
-	pending_hq = true
-	hq_piece = Piece.start_piece(rng)
-	if _make_room([hq_piece]) > 0: # 자리가 없으면 무료로 한 줄씩 확장한다
-		_note += "\n본부를 놓을 자리가 없어 필드를 무료로 넓혔습니다 (%dx%d)" % [field.bounds.size.x, field.bounds.size.y]
-	_note += "\n본부 조각을 먼저 놓아야 웨이브를 시작할 수 있습니다"
-	select_hq()
-
-
 func _show_defeat() -> void:
-	_result_panel("패배 — 웨이브 %d에서 본부가 무너졌습니다" % GameState.wave, [["다시 시작", get_tree().reload_current_scene], ["처음으로", _to_menu]])
+	_result_panel("패배 — 웨이브 %d에서 도시가 무너졌습니다" % GameState.wave, [["다시 시작", get_tree().reload_current_scene], ["처음으로", _to_menu]])
 	status.text = ""
 
 
 ## 30웨이브 승리: 결과를 보여 주고 무한 모드로 계속하거나 처음으로 (기획서 9.1)
 func _show_victory() -> void:
-	var pc: PanelContainer = _result_panel("승리! %d웨이브를 지켜 냈습니다\n땅 칸 %d · 본부 %d개 · 최고 웨이브 %d" % [Balance.WIN_WAVE, field.land_count(), field.hqs.size(), SaveManager.best_wave], [["계속하기 (무한 모드)", Callable()], ["처음으로", _to_menu]])
+	var pc: PanelContainer = _result_panel("승리! %d웨이브를 지켜 냈습니다\n도시 %d개 · 최고 웨이브 %d" % [Balance.WIN_WAVE, field.hqs.size(), SaveManager.best_wave], [["계속하기 (무한 모드)", Callable()], ["처음으로", _to_menu]])
 	(pc.get_child(0).get_child(1) as Button).pressed.connect(pc.queue_free)
 
 
@@ -908,85 +675,63 @@ func _result_panel(text: String, buttons: Array) -> PanelContainer:
 	return pc
 
 
-func _blend_camera(to: float) -> void:
-	create_tween().tween_method(_set_blend, _blend, to, 0.8)
-
-
-func _set_blend(t: float) -> void:
-	_blend = t
-	_update_camera()
-
-
-## 준비 시점(90도, 회전 0)과 전투 시점을 전환 정도만큼 섞어 카메라를 놓는다 (기획서 2장, 7.2)
+## 쿼터뷰 카메라를 놓는다 (기획서 7.2)
 func _update_camera() -> void:
-	var pitch: float = lerpf(90.0, _battle_pitch, _blend)
-	var yaw: float = _battle_yaw * _blend
-	var r: float = deg_to_rad(pitch)
+	var r: float = deg_to_rad(_pitch)
 	# 직교 카메라라 거리는 화면 크기와 무관하다. 낮게 기울여도 땅이 잘리지 않게 멀리 둔다
-	var offset: Vector3 = Vector3(0, sin(r), cos(r)).rotated(Vector3.UP, deg_to_rad(yaw)) * 100.0
-	pixel.aim(field.center_world() + _battle_pan * _blend + offset, pitch, _view_size(), yaw)
+	var offset: Vector3 = Vector3(0, sin(r), cos(r)).rotated(Vector3.UP, deg_to_rad(_yaw)) * 100.0
+	pixel.aim(field.center_world() + _pan + offset, _pitch, _view_size(), _yaw)
 
 
-## 카메라에 세로로 담기는 크기: 넓어진 필드에 맞춰 줌아웃한다
+## 카메라에 세로로 담기는 크기
 func _view_size() -> float:
-	var scale: float = maxf(field.bounds.size.x / float(Field.W), field.bounds.size.y / float(Field.H))
-	return lerpf(Balance.PREP_CAM_SIZE * _zoom, Balance.COMBAT_CAM_SIZE * _battle_zoom, _blend) * scale
+	return Balance.COMBAT_CAM_SIZE * _zoom
 
 
-## 휠 확대/축소: 준비 단계와 전투가 배율을 따로 가진다 (기획서 2장)
 func _wheel_zoom(f: float) -> void:
-	if battle == null:
-		_zoom = clampf(_zoom * f, Balance.ZOOM_MIN, Balance.ZOOM_MAX)
-	else:
-		_battle_zoom = clampf(_battle_zoom * f, Balance.ZOOM_MIN, Balance.ZOOM_MAX)
+	_zoom = clampf(_zoom * f, Balance.ZOOM_MIN, Balance.ZOOM_MAX)
 	_update_camera()
 
 
-## 전투 중 좌클릭 드래그: 땅이 마우스를 따라오게 옮긴다. 화면 중앙은 필드 안에 둔다 (기획서 7.2)
+## 화면 기준 motion(논리 픽셀)만큼 땅을 옮긴다. 화면 중앙은 맵 안에 둔다 (기획서 7.2)
 func _pan_camera(motion: Vector2) -> void:
 	var per_pixel: float = _view_size() / get_viewport().get_visible_rect().size.y
-	var ground: Vector3 = Vector3(-motion.x, 0.0, -motion.y / sin(deg_to_rad(_battle_pitch))) * per_pixel
-	_battle_pan += ground.rotated(Vector3.UP, deg_to_rad(_battle_yaw))
+	var ground: Vector3 = Vector3(-motion.x, 0.0, -motion.y / sin(deg_to_rad(_pitch))) * per_pixel
+	_pan += ground.rotated(Vector3.UP, deg_to_rad(_yaw))
 	var half: Vector2 = Vector2(field.bounds.size) / 2.0
-	_battle_pan.x = clampf(_battle_pan.x, -half.x, half.x)
-	_battle_pan.z = clampf(_battle_pan.z, -half.y, half.y)
+	_pan.x = clampf(_pan.x, -half.x, half.x)
+	_pan.z = clampf(_pan.z, -half.y, half.y)
 	_update_camera()
 
 
-## 전투 중 우클릭 드래그: 가로는 좌우 회전, 세로는 기울기 (기획서 7.2)
-func _drag_camera(motion: Vector2) -> void:
-	_battle_yaw = wrapf(_battle_yaw - motion.x * Balance.CAM_ROTATE_SENS, -180.0, 180.0)
-	_battle_pitch = clampf(_battle_pitch + motion.y * Balance.CAM_ROTATE_SENS, Balance.CAM_PITCH_MIN, Balance.CAM_PITCH_MAX)
-	_update_camera()
-
-
-func _rebuild_ghost() -> void:
-	_warn = false # 들고 있는 조각이 바뀌면 경고도 다시 계산한다
-	_warn_key = ""
-	_carve_n = 0
-	for c in ghost.get_children():
-		ghost.remove_child(c)
-		c.queue_free()
-	ghost.visible = current != null
-	if current == null:
+## 마우스가 화면 가장자리에 있으면 그 방향으로 카메라를 옮긴다 (기획서 7.2)
+func _edge_pan(delta: float) -> void:
+	if not edge_pan or not get_window().has_focus():
 		return
-	for _c in current.cells:
-		var m: MeshInstance3D = MeshInstance3D.new()
-		m.mesh = field.block_mesh
-		ghost.add_child(m)
+	var view: Vector2 = get_viewport().get_visible_rect().size
+	var mp: Vector2 = get_viewport().get_mouse_position()
+	if not Rect2(Vector2.ZERO, view).has_point(mp):
+		return
+	var dir: Vector2 = Vector2.ZERO
+	var m: float = Balance.EDGE_PAN_MARGIN
+	dir.x = -1.0 if mp.x < m else (1.0 if mp.x > view.x - m else 0.0)
+	dir.y = -1.0 if mp.y < m else (1.0 if mp.y > view.y - m else 0.0)
+	if dir != Vector2.ZERO:
+		_pan_camera(-dir.normalized() * view.y * Balance.EDGE_PAN_SPEED * delta)
 
 
-func _ghost_mat(t: int, ok: bool, warn: bool = false) -> StandardMaterial3D:
-	var key: int = t * 4 + int(ok) + (2 if warn else 0)
+## 좌클릭 드래그: 가로는 좌우 회전, 세로는 기울기 (기획서 7.2)
+func _drag_camera(motion: Vector2) -> void:
+	_yaw = wrapf(_yaw - motion.x * Balance.CAM_ROTATE_SENS, -180.0, 180.0)
+	_pitch = clampf(_pitch + motion.y * Balance.CAM_ROTATE_SENS, Balance.CAM_PITCH_MIN, Balance.CAM_PITCH_MAX)
+	_update_camera()
+
+
+func _ghost_mat(ok: bool) -> StandardMaterial3D:
+	var key: int = int(ok)
 	if not _gmats.has(key):
 		var m: StandardMaterial3D = StandardMaterial3D.new()
-		var c: Color = Field.color_of(t) if ok else Color(0.9, 0.2, 0.2)
-		if t == -1 and ok:
-			c = Color(0.1, 0.85, 1.0)
-		if t == -2 and ok:
-			c = Color(0.05, 0.4, 0.85)
-		if warn and ok: # 놓을 수는 있지만 교역소가 바다와 끊긴다
-			c = Color(1.0, 0.55, 0.1)
+		var c: Color = Color(0.1, 0.85, 1.0) if ok else Color(0.9, 0.2, 0.2)
 		c.a = 0.75
 		m.albedo_color = c
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -996,7 +741,7 @@ func _ghost_mat(t: int, ok: bool, warn: bool = false) -> StandardMaterial3D:
 
 ## 건설 위치 표시: 평원(초록)과 구분되도록 하늘색 / 불가는 빨강
 func _cursor_mat(ok: bool) -> StandardMaterial3D:
-	return _ghost_mat(-1, true) if ok else _ghost_mat(-1, false)
+	return _ghost_mat(ok)
 
 
 func _hover_cell() -> Vector2i:
@@ -1022,49 +767,25 @@ func _place_upgrade_panel() -> void:
 	upgrade_panel.position = Vector2(clampf(at.x - size.x / 2.0, 0.0, view.x - size.x), clampf(y, top, view.y - size.y))
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_edge_pan(delta)
 	if upgrade_panel.visible:
 		_place_upgrade_panel() # 줌·창 크기가 바뀌어도 건물을 따라간다
 	cursor.visible = false
 	if battle != null:
 		_refresh_hud()
-	if current == null and build_id == 0:
+	if (started and build_id == 0) or _over_ui():
 		return
-	if _over_ui():
-		ghost.visible = false
-		return
-	if current != null:
-		ghost.visible = true
-		var origin: Vector2i = current.origin_for(_hover_cell())
-		var ok: bool = field.can_place(current, origin)
-		_update_warn(origin, ok)
-		for i in current.cells.size():
-			var m: MeshInstance3D = ghost.get_child(i) as MeshInstance3D
-			m.position = field.cell_to_world(origin + current.cells[i]) + Vector3(0, GHOST_Y, 0)
-			var gt: int = current.terrain[i]
-			if gt == Piece.SEA and field.cells.has(origin + current.cells[i]):
-				gt = -2 # 땅을 물로 깎는 칸은 진한 파랑
-			m.material_override = _ghost_mat(gt, ok, _warn)
-	else:
+	if not started: # 시작 위치 고르기: 세울 수 있는 평원이면 하늘색
+		var hc: Vector2i = _hover_cell()
+		cursor.visible = field.bounds.has_point(hc)
+		cursor.position = field.cell_to_world(hc) + Vector3(0, Field.BLOCK_H + 0.05, 0)
+		cursor.material_override = _cursor_mat(field.can_start(hc))
+	elif build_id != 0:
 		var c: Vector2i = _hover_cell()
 		cursor.visible = true
 		cursor.position = field.cell_to_world(c) + Vector3(0, (0.05 if Balance.BUILDINGS.get(build_id, {}).get("on_water", false) else Field.BLOCK_H + 0.05), 0)
 		cursor.material_override = _cursor_mat(_build_ok(c))
-
-
-## 들고 있는 타일을 origin에 놓으면 교역소가 바다와 끊기는지 계산해 경고를 켠다. 위치가 바뀔 때만 계산한다 (기획서 5.6)
-func _update_warn(origin: Vector2i, ok: bool) -> void:
-	var post: Vector2i = field.trading_post()
-	var key: String = "%s|%s|%d" % [str(origin), str(current.cells), post.x * 1000 + post.y] if current != null else ""
-	if key == _warn_key:
-		return
-	_warn_key = key
-	var warn: bool = ok and post.x >= 0 and field.is_post_open(post) and not field.post_open_after(post, current, origin)
-	var carve: int = field.carve_count(current, origin) if ok else 0
-	if warn != _warn or carve != _carve_n:
-		_warn = warn
-		_carve_n = carve
-		_refresh_hud()
 
 
 ## 건물 패널이 열린 채로 다른 UI를 누르면 건물 선택을 푼다 (기획서 5.2)
@@ -1077,46 +798,60 @@ func _input(event: InputEvent) -> void:
 		_refresh_hud()
 
 
+## 좌클릭은 놓을 때 클릭으로 친다: 누른 채 CAM_DRAG_THRESHOLD 넘게 끌면 회전이다 (기획서 7.2)
 func _unhandled_input(event: InputEvent) -> void:
-	var left: bool = event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT
-	var right: bool = event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT
+	var mb: InputEventMouseButton = event as InputEventMouseButton
 	var key: int = (event as InputEventKey).keycode if event is InputEventKey and event.pressed else 0
 	if key == KEY_P and not event.is_echo(): # 도트 화면 켜고 끄기 (기획서 7.2)
 		pixel.set_enabled(not pixel.enabled)
 		return
-	if event is InputEventMouseButton and event.pressed and (event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN):
-		_wheel_zoom(Balance.ZOOM_STEP if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / Balance.ZOOM_STEP)
+	if mb != null and mb.pressed and (mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN):
+		_wheel_zoom(Balance.ZOOM_STEP if mb.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / Balance.ZOOM_STEP)
 		return
-	if open_category >= 0 and (left or right or key == KEY_ESCAPE): # 목록 바깥을 누르면 닫는다
+	if event is InputEventMouseMotion and _pressing:
+		if not _rotating and (event as InputEventMouseMotion).position.distance_to(_press) > Balance.CAM_DRAG_THRESHOLD:
+			_rotating = true
+		if _rotating:
+			_drag_camera((event as InputEventMouseMotion).relative)
+		return
+	if mb != null and mb.button_index == MOUSE_BUTTON_LEFT:
+		if mb.pressed:
+			_pressing = true
+			_rotating = false
+			_press = mb.position
+			return
+		var was_drag: bool = _rotating
+		_pressing = false
+		_rotating = false
+		if not was_drag:
+			click()
+		return
+	var right: bool = mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT
+	if open_category >= 0 and (right or key == KEY_ESCAPE): # 목록 바깥을 누르면 닫는다
 		open_category = -1
 		_update_dropdown()
 		return
-	if build_id != 0:
-		if left:
-			try_build(_hover_cell())
-		elif right or key == KEY_ESCAPE:
-			set_build(0)
-	elif current != null:
-		if left:
-			place_current(_hover_cell())
-		elif right or key == KEY_R:
-			_rotate()
-	elif battle == null: # 아무것도 들고 있지 않으면 건물을 골라 레벨업 패널을 연다
-		if left:
-			var hc: Vector2i = _hover_cell()
-			if field.ruins.has(hc):
-				explore(hc)
-			else:
-				select_building(hc)
-		elif right or key == KEY_ESCAPE:
-			select_building(Vector2i(-1, -1))
-	else: # 전투 중: 휠 버튼 클릭은 병사 이동, 좌클릭 드래그는 카메라 이동, 우클릭 드래그는 회전
-		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_MIDDLE:
-			command_move(_hover_cell())
-		elif event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
-			_pan_camera((event as InputEventMouseMotion).relative)
-		elif event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_RIGHT:
-			_drag_camera((event as InputEventMouseMotion).relative)
+	if build_id != 0 and (right or key == KEY_ESCAPE):
+		set_build(0)
+	elif battle != null and right: # 전투 중 우클릭: 병사 이동 (기획서 6장)
+		command_move(_hover_cell())
+	elif right or key == KEY_ESCAPE:
+		select_building(Vector2i(-1, -1))
+
+
+## 좌클릭 한 번: 시작 위치 고르기, 건설, 건물 고르기 순 (기획서 2장, 5장)
+func click() -> void:
+	if open_category >= 0: # 목록 바깥을 누르면 닫는다
+		open_category = -1
+		_update_dropdown()
+		return
+	var hc: Vector2i = _hover_cell()
+	if not started:
+		found_start(hc)
+	elif build_id != 0:
+		try_build(hc)
+	elif battle == null:
+		select_building(hc)
 
 
 ## 본부를 위치 순서로 정렬한 목록 (왼쪽 패널 표시용)
@@ -1196,37 +931,28 @@ func _refresh_hud() -> void:
 		bb.text = "%s %dG · %s" % [Balance.BUILDINGS[id]["name"], _cost_of(id), Balance.effect_text(id, 1, GameState.researched)]
 		var need: String = Balance.BUILDINGS[id].get("tech", "")
 		bb.tooltip_text = "" if _unlocked(id) or need == "" or GameState.has_tech(need) else "필요 연구: " + Balance.TECHS[need]["name"]
-		if _blocked():
-			bb.tooltip_text = "전투 보상 타일을 먼저 놓으세요"
-		bb.disabled = _blocked() or not _unlocked(id) or GameState.gold < _cost_of(id)
+		bb.disabled = not _unlocked(id) or GameState.gold < _cost_of(id)
 	for cbtn in category_buttons:
-		cbtn.disabled = _blocked() or battle != null
-	if _blocked() and open_category >= 0:
-		open_category = -1
-		_update_dropdown()
+		cbtn.disabled = battle != null
 	trade_button.visible = npc_present and battle == null
 	for tid in trade_buttons:
 		var tbtn: Button = trade_buttons[tid]
 		tbtn.text = ("✓ 거래 완료 — " if trade_sold.has(tid) else "") + _trade_def(tid)["name"]
 		tbtn.disabled = not _trade_ok(tid)
 	research_toggle.text = "연구 (연구포인트 %d)" % GameState.research_points
-	# 이번 웨이브의 적을 미리 알려 준다. 해적의 세기는 땅 칸 수·확장 횟수에 따라 바뀐다 (기획서 6장)
+	# 이번 웨이브의 적을 미리 알려 준다. 해적의 세기는 도시 수에 따라 바뀐다 (기획서 6장)
 	wave_info.visible = battle == null
-	wave_panel.visible = top_panel.visible and battle == null
+	wave_panel.visible = started and battle == null
 	var comp: Dictionary = Balance.enemy_composition(GameState.wave, GameState.run_seed)
 	var comp_parts: Array[String] = []
 	for kind in comp:
 		comp_parts.append("%s %d명" % [Balance.UNITS[kind]["name"], comp[kind]])
-	wave_info.text = "웨이브 %d 예고: %s (전투력 %d · 해적선 %d척) · 체력·공격 ×%.2f" % [GameState.wave, " · ".join(comp_parts), Balance.wave_power(GameState.wave, GameState.run_seed), Balance.ship_count(GameState.wave, GameState.run_seed), Balance.enemy_mult(field.land_count(), field.expansions)]
+	wave_info.text = "웨이브 %d 예고: %s (전투력 %d · 해적선 %d척) · 체력·공격 ×%.2f" % [GameState.wave, " · ".join(comp_parts), Balance.wave_power(GameState.wave, GameState.run_seed), Balance.ship_count(GameState.wave, GameState.run_seed), Balance.enemy_mult(field.hqs.size())]
 	if field.sea_blocked():
 		wave_info.text += "\n바닷길이 막혀 해적이 걸어서 바다를 건넙니다"
 	for nk in Balance.new_enemy_kinds(GameState.wave): # 새 종류가 처음 나오는 웨이브 안내
 		var info: Dictionary = Balance.UNITS[nk]
 		wave_info.text += "\n새 적: %s (체력 %d · 공격 %d%s)" % [info["name"], info["hp"], info["atk"], (" · 사거리 %.1f칸" % info["reach"]) if info.get("ranged", false) else ""]
-	if pending_hq:
-		wave_info.text += "\n본부 조각을 먼저 놓으세요 (아래 '본부 조각' 카드)"
-	if tiles_required > 0:
-		wave_info.text += "\n전투 보상 타일을 먼저 놓으세요 (건설·강화·웨이브 시작은 그다음)"
 	var plan: Array = Battle.barracks_plan(field)
 	if not plan.is_empty(): # 병영이 웨이브 시작 때 내보낼 병력(병사 생산은 무료)
 		var counts: Dictionary = {}
@@ -1237,25 +963,14 @@ func _refresh_hud() -> void:
 		for unit_name in counts:
 			parts.append("%s %d" % [unit_name, counts[unit_name]])
 		wave_info.text += "\n병영 병력 %d명 (%s)" % [plan.size(), ", ".join(parts)]
-	wave_button.disabled = battle != null or _blocked() or placed_count == 0
-	wave_button.tooltip_text = "먼저 타일을 놓아야 합니다" if _blocked() else ""
-	# 조각 선택 패널: 일반 조각을 놓을 수 있거나 본부 조각이 남아 있을 때만 보인다
-	hq_title.visible = pending_hq
-	hq_card.visible = pending_hq
-	choice_title.visible = pieces_left > 0
-	choice_title.text = "전투 보상: 타일 1개를 골라 놓기" if tiles_required > 0 else "조각 선택 (구매한 조각)"
-	if pending_hq:
-		hq_card.set_piece(hq_piece)
-		hq_card.selected = placing_hq
-	for card in cards:
-		card.visible = pieces_left > 0
-	panel.visible = battle == null and placed_count > 0 and (pieces_left > 0 or pending_hq)
+	wave_button.visible = started
+	wave_button.disabled = battle != null or not started
 	if research_panel.visible:
 		_refresh_research()
 	var lines: Array[String] = []
 	for h in _sorted_hqs():
 		var nxt: int = field.next_level_food(h)
-		lines.append("본부 %s Lv %d · 영역 %d칸 · 식량 %d/%d" % [_hq_name(h), field.hq_level[h], field.territory_of[h].size(), field.hq_food[h], nxt])
+		lines.append("도시 %s Lv %d · 영역 %d칸 · 식량 %d/%d" % [_hq_name(h), field.hq_level[h], field.territory_of[h].size(), field.hq_food[h], nxt])
 		if field.hp_ratio(h) < 1.0:
 			lines[-1] += " · 체력 %d/%d" % [ceili(field.hqs[h]), Balance.HQ_HP]
 	town_label.text = "\n".join(lines)
@@ -1263,7 +978,7 @@ func _refresh_hud() -> void:
 	repair_all_button.visible = all_cost > 0
 	repair_all_button.text = "전체 수리 %dG" % all_cost
 	repair_all_button.disabled = GameState.gold < all_cost
-	field.refresh_hq_bars(battle == null) # 본부 옆 레벨업 바 (기획서 5.3)
+	field.refresh_hq_bars() # 도시 옆 레벨업 바 (기획서 5.3)
 	if selected_cell.x >= 0 and not field.buildings.has(selected_cell) and not field.hqs.has(selected_cell):
 		selected_cell = Vector2i(-1, -1)
 	upgrade_panel.visible = selected_cell.x >= 0 and battle == null
@@ -1273,7 +988,7 @@ func _refresh_hud() -> void:
 	repair_button.disabled = GameState.gold < fix
 	upgrade_button.visible = not field.hqs.has(selected_cell)
 	if upgrade_panel.visible and field.hqs.has(selected_cell): # 본부는 강화하지 않고 수리만 한다 (기획서 5.3)
-		upgrade_title.text = "본부 %s Lv %d" % [_hq_name(selected_cell), field.hq_level[selected_cell]]
+		upgrade_title.text = "도시 %s Lv %d" % [_hq_name(selected_cell), field.hq_level[selected_cell]]
 		upgrade_effect.text = "체력 %d / %d" % [ceili(field.hqs[selected_cell]), Balance.HQ_HP]
 	elif upgrade_panel.visible:
 		var bid: int = field.buildings[selected_cell]
@@ -1288,7 +1003,7 @@ func _refresh_hud() -> void:
 			var cost: int = GameState.upgrade_discounted(Balance.upgrade_cost(bid, lv + 1))
 			upgrade_button.text = "레벨 %d로 강화 %dG" % [lv + 1, cost]
 			upgrade_button.tooltip_text = "다음 레벨: " + Balance.effect_text(bid, lv + 1, GameState.researched)
-			upgrade_button.disabled = _blocked() or GameState.gold < cost or _upgrade_locked(selected_cell)
+			upgrade_button.disabled = GameState.gold < cost or _upgrade_locked(selected_cell)
 			if _upgrade_locked(selected_cell):
 				upgrade_button.tooltip_text = "필요 연구: " + Balance.TECHS[Balance.LV3_TECH]["name"]
 		elif Balance.evolve_to(bid) > 0: # 레벨 3 기본 건물: 진화 (기획서 5.2.1)
@@ -1296,7 +1011,7 @@ func _refresh_hud() -> void:
 			var ecost: int = GameState.upgrade_discounted(Balance.evolve_cost(to))
 			upgrade_button.text = "진화: %s %dG" % [Balance.BUILDINGS[to]["name"], ecost]
 			upgrade_button.tooltip_text = "진화 후 레벨 1: " + Balance.effect_text(to, 1, GameState.researched)
-			upgrade_button.disabled = _blocked() or GameState.gold < ecost or not _can_evolve(selected_cell)
+			upgrade_button.disabled = GameState.gold < ecost or not _can_evolve(selected_cell)
 			if not _can_evolve(selected_cell):
 				upgrade_button.tooltip_text = "필요 연구: " + Balance.TECHS[Balance.BUILDINGS[to]["tech"]]["name"]
 		else:
@@ -1308,25 +1023,11 @@ func _refresh_hud() -> void:
 			upgrade_button.tooltip_text = "수리해야 강화·진화할 수 있습니다"
 	var s: String
 	if battle != null:
-		s = battle.summary() + "\n휠 버튼으로 땅을 클릭하면 병사가 그곳으로 이동합니다\n좌클릭 드래그 이동 · 우클릭 드래그 회전 · 휠 확대/축소"
-	elif placed_count == 0:
-		s = "시작 조각을 놓으세요 (본부 성이 함께 놓입니다) · 좌클릭 배치 · R/우클릭 회전"
-	elif current != null and placing_hq:
-		s = "본부 조각: 좌클릭 배치 · R/우클릭 회전 (놓아야 웨이브를 시작할 수 있습니다)"
-	elif current != null:
-		s = "조각: 좌클릭 배치 · R/우클릭 회전 · 고르지 않은 조각은 버려집니다"
-		if _carve_n > 0:
-			s += "\n땅 %d칸이 물로 바뀝니다 (진한 파랑, 되돌릴 수 없음)" % _carve_n
-		if _warn:
-			s += "\n⚠ 이 자리에 놓으면 교역소가 바다와 끊겨 교역 NPC가 오지 못합니다 (주황색)"
-	elif pending_hq:
-		s = "아래 '본부 조각' 카드를 골라 먼저 놓으세요"
-	elif tiles_required > 0:
-		s = "아래 카드에서 타일을 1개 골라 놓으세요"
+		s = battle.summary() + "\n우클릭한 땅으로 병사가 이동합니다\n화면 가장자리 이동 · 좌클릭 드래그 회전 · 휠 확대/축소"
+	elif not started:
+		s = "첫 도시를 세울 평원을 클릭하세요 (평원 %d칸 이상인 섬, 하늘색) · 화면 가장자리 이동 · 좌클릭 드래그 회전 · 휠 확대/축소" % Balance.START_ISLAND_PLAINS
 	elif build_id != 0:
 		s = "%s 건설: 좌클릭 배치 · 우클릭/Esc 취소" % Balance.BUILDINGS[build_id]["name"]
-	elif pieces_left > 0:
-		s = "아래 카드에서 조각 1개를 고르거나 건설 메뉴에서 건물을 고르세요"
 	else:
-		s = "이번 준비 단계의 조각은 다 썼습니다. 건물을 짓거나 웨이브를 시작하세요"
+		s = "건물을 짓거나 웨이브를 시작하세요"
 	status.text = (_note + "\n" if _note != "" else "") + s

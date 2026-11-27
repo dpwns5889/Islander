@@ -25,7 +25,7 @@ func _initialize() -> void:
 	fails += _check(world_off.x > Balance.LUNGE_DIST * 0.9 and absf(world_off.z) < 0.01, "회전한 유닛도 월드 기준 목표 쪽으로 약진")
 	soldier.animate(1.0)
 	# 전투에서 공격하면 약진이 일어났다가 끝나면 제자리
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var p: Piece = Piece.new()
 	for y in 5:
 		for x in 5:

@@ -29,7 +29,7 @@ func _initialize() -> void:
 	fails += _check(Balance.fishing_food(40, 1, Balance.FISH_VILLAGE) == 25 and Balance.fishing_food(40, 3, Balance.FISH_VILLAGE) == 36, "어촌 식량 배율 ×2.8/×4.0")
 	fails += _check(Balance.tower_atk(Balance.FORTRESS, 1) == 11.0 and Balance.tower_range(Balance.FORTRESS, 3) == 5.0 and Balance.tower_atk(Balance.TOWER, 3) == 8.0, "요새·방어탑 공격·사거리")
 	# 필드: 진화하면 새 건물 레벨 1, 수입이 바뀐다
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var p: Piece = Piece.new()
 	for i in 6:
 		p.cells.append(Vector2i(i, 0))

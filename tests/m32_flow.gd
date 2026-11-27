@@ -5,10 +5,10 @@ extends SceneTree
 func _initialize() -> void:
 	var fails: int = 0
 	var main: Node = load("res://assets/scenes/main.tscn").instantiate()
+	main.edge_pan = false # 마우스 위치로 카메라가 움직이지 않게
 	root.add_child(main)
 	await process_frame
-	main.place_current(Vector2i(7, 7))
-	main.tiles_required = 0
+	main.found_start(preload("res://tests/coastal_start.gd").pick(main.field))
 	var f: Field = main.field
 	var hq: Vector2i = f.hq
 	main.select_building(hq)

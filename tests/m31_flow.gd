@@ -27,11 +27,11 @@ func _initialize() -> void:
 	fails += _check(missing.is_empty() and Balance.BUILDINGS[Balance.BARRACKS].has("model"), "모델 파일 (없는 것 %s)" % [missing])
 
 	var main: Node = load("res://assets/scenes/main.tscn").instantiate()
+	main.edge_pan = false # 마우스 위치로 카메라가 움직이지 않게
 	root.add_child(main)
 	await process_frame
 	var gs: Node = root.get_node("GameState")
-	main.place_current(Vector2i(9, 7))
-	main.tiles_required = 0
+	main.found_start(preload("res://tests/coastal_start.gd").pick(main.field))
 	gs.gold = 1000
 	var f: Field = main.field
 	# 시작 조각 모양이 무작위라 지형 제한을 거치지 않고 영역 안 땅 두 칸에 바로 짓는다
@@ -40,7 +40,6 @@ func _initialize() -> void:
 	var barracks: Vector2i = free[1]
 	f.build(Balance.HOUSE, house)
 	f.build(Balance.BARRACKS, barracks)
-	main.placed_count = maxi(main.placed_count, 1)
 	var mi: MeshInstance3D = f._nodes[house][0]
 	var meshes: Array[Mesh] = [mi.mesh]
 	var full_gold: int = f.income().x
@@ -79,7 +78,6 @@ func _initialize() -> void:
 	main.battle.tick(0.1)
 	fails += _check(main.battle == null and f.hp[house] == left and f.hq_hp == 150.0, "웨이브 뒤에도 건물·본부 피해가 남는다")
 	# 본부 선택과 수리
-	main.tiles_required = 0
 	gs.gold = 1000
 	fails += _check(main.select_building(f.hq) and main.repair_button.text == "수리 25G" and not main.upgrade_button.visible, "본부 패널: 수리 25G")
 	fails += _check(main.repair_selected() and gs.gold == 975 and f.hq_hp == Balance.HQ_HP, "본부 수리")

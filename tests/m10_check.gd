@@ -91,7 +91,7 @@ func _battle(f: Field, gold: int, food: int) -> Battle:
 
 ## 가로 w칸, 세로 5칸 평원 섬 (4,4)부터. 본부는 (5,6)
 func _island(w: int) -> Field:
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var p: Piece = Piece.new()
 	for y in 5:
 		for x in w:
@@ -104,7 +104,7 @@ func _island(w: int) -> Field:
 
 ## 왼쪽 섬 A(본부, 항구)와 오른쪽 섬 B. 사이는 바다
 func _two_islands() -> Field:
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var a: Piece = Piece.new()
 	for y in 5:
 		for x in 5:

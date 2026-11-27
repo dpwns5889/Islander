@@ -24,7 +24,7 @@ func _initialize() -> void:
 
 ## 배가 모두 나올 때까지 돌려서 각 배의 해적 수를 모은다
 func _crews(wave: int) -> Array[int]:
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var p: Piece = Piece.new()
 	for y in 5:
 		for x in 5:
