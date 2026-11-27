@@ -24,10 +24,10 @@ func _initialize() -> void:
 	fails += _check(not main.field.sea_blocked(), "기본 필드는 바닷길이 열려 있다")
 	gs.wave = Balance.WIN_WAVE - 1
 	_win(main)
-	fails += _check(_result_btns(main).is_empty(), "29웨이브 승리에는 승리 화면 없음")
+	fails += _check(_result_btns(main).is_empty(), "29웨이브를 막아도 승리 화면 없음")
 	_win(main)
 	var btns: Array[Button] = _result_btns(main)
-	fails += _check(gs.wave == Balance.WIN_WAVE + 1 and sm.best_wave == Balance.WIN_WAVE + 1 and btns.size() == 2, "30웨이브 승리: 승리 화면(계속하기·처음으로), 최고 웨이브 저장")
+	fails += _check(gs.wave == Balance.WIN_WAVE + 1 and sm.best_wave == Balance.WIN_WAVE and btns.size() == 2, "30웨이브를 막으면 승리 화면(계속하기·처음으로), 최고 웨이브 저장")
 	if btns.size() == 2:
 		btns[0].pressed.emit()
 		await process_frame
@@ -46,10 +46,9 @@ func _result_btns(main: Node) -> Array[Button]:
 
 
 func _win(main: Node) -> void:
-	main.start_wave()
-	main.battle._ships_left = 0
-	main.battle._pirates_left = 0
-	main.battle.tick(0.1)
+	main.call_wave()
+	main.battle.clear_enemies() # 웨이브를 바로 막은 것으로 친다
+	main.advance(0.1)
 
 
 func _check(ok: bool, msg: String) -> int:

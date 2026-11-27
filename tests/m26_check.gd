@@ -17,7 +17,8 @@ func _initialize() -> void:
 	var hq: Vector2i = f.hq
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
 	var bt: Battle = Battle.new()
-	bt.setup(f, gs, 3)
+	bt.setup(f, gs)
+	bt.launch_wave(3)
 	for s in bt.ships:
 		s.hp = 0.0
 	bt._prune(bt.ships)
@@ -64,6 +65,18 @@ func _initialize() -> void:
 	for _i in 40:
 		bt.tick(0.1)
 	fails += _check(_d(guard, decoy) < before - 2.0, "남은 해적선이 없으면 범위 밖의 가장 가까운 적에게 간다")
+	# 같은 칸 안에서 사거리 밖으로 떨어진 병사와 해적도 서로 다가가 싸운다 (경로가 비어 멈추던 문제)
+	var bt2: Battle = Battle.new()
+	bt2.setup(f, gs)
+	var spot: Vector2i = hq + Vector2i(5, 0)
+	var g2: Unit = bt2.soldiers[0]
+	g2.home = spot
+	g2.position = f.cell_to_world(spot) + Vector3(-0.45, 0.0, -0.45)
+	var p2: Unit = bt2._add_unit(Balance.U_PIRATE, f.cell_to_world(spot) + Vector3(0.45, 0.0, 0.45), 1.0)
+	var p2_hp: float = p2.hp
+	for _i in 20:
+		bt2.tick(0.1)
+	fails += _check(p2.hp < p2_hp or g2.hp < Balance.UNITS[Balance.U_GUARD]["hp"], "같은 칸에서 떨어져 있어도 싸운다 (해적 체력 %.1f)" % p2.hp)
 	print("M26 점검 실패 %d건" % fails)
 	quit(fails)
 

@@ -1,5 +1,5 @@
 extends SceneTree
-## 준비 단계 적 예고 화면 점검: godot --headless --script tests/m11_flow.gd
+## 다음 웨이브 적 예고 화면 점검: godot --headless --script tests/m11_flow.gd
 
 
 func _initialize() -> void:
@@ -23,8 +23,9 @@ func _initialize() -> void:
 	main._refresh_hud()
 	fails += _check("전투력 4 · 해적선 2척" in main.wave_info.text and "석궁수" in main.wave_info.text, "5웨이브 예고: " + main.wave_info.text)
 	gs.wave = 1
-	main.start_wave()
-	fails += _check(not main.wave_info.visible, "전투 중에는 예고를 숨긴다")
+	main.call_wave()
+	main._refresh_hud()
+	fails += _check(main.wave_info.visible and "웨이브 2 예고" in main.wave_info.text, "웨이브가 오면 예고는 다음 웨이브로 바뀐다: " + main.wave_info.text)
 	print("적 예고 흐름 점검 실패 %d건" % fails)
 	quit(fails)
 

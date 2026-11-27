@@ -46,12 +46,12 @@ func _initialize() -> void:
 	fails += _check(not main.research_panel.visible, "연구 패널이 닫힌다")
 	# 전투를 돌리면 연구 효과(단련, 상업)가 적용된 채로 끝난다
 	main.research("archery") # 이미 했으므로 무시되어야 한다
-	main.start_wave()
-	for _i in 3000:
-		if main.battle == null:
+	main.call_wave()
+	for _i in 6000: # 넓은 맵이라 먼 곳에 내린 해적까지 잡는 데 오래 걸릴 수 있다
+		if main.battle.enemies_left() == 0 or main.over: # 실시간이라 웨이브를 다 막아도 전투는 이어진다 (기획서 2장)
 			break
 		main.battle.tick(0.1)
-	fails += _check(main.battle == null and gs.wave == 2, "연구를 한 상태로 웨이브 승리")
+	fails += _check(main.battle.enemies_left() == 0 and gs.wave == 2, "연구를 한 상태로 웨이브 승리")
 	print("M9 흐름 점검 실패 %d건" % fails)
 	quit(fails)
 

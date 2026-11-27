@@ -70,7 +70,8 @@ func _initialize() -> void:
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
 	gs.run_seed = 0
 	var b: Battle = Battle.new()
-	b.setup(island, gs, 12)
+	b.setup(island, gs)
+	b.launch_wave(12)
 	b.rng.seed = 3
 	var kinds: Dictionary = {}
 	var first_ship_first: int = -1
@@ -89,7 +90,8 @@ func _initialize() -> void:
 	fails += _check(counted == Balance.enemy_composition(12, 0) and first_ship_first == Balance.U_SHIELD, "12웨이브 배에 실린 적 = 구성, 첫 배 맨 앞은 방패병 (%s)" % str(counted))
 	# 석궁수는 3.5칸 거리에서 쏜다
 	var cb: Battle = Battle.new()
-	cb.setup(_island(5, 5), load("res://assets/scripts/game_state.gd").new(), 1)
+	cb.setup(_island(5, 5), load("res://assets/scripts/game_state.gd").new())
+	cb.launch_wave(1)
 	cb._ships_left = 1
 	cb._ship_timer = 9999.0
 	var xbow: Unit = cb._add_unit(Balance.U_CROSSBOW, cb.soldiers[0].position + Vector3(1.5, 0.0, 0.0), 1.0)
@@ -113,7 +115,8 @@ func _initialize() -> void:
 		for _u in lv - 1:
 			tf.upgrade(Vector2i(8, 6))
 		var tb: Battle = Battle.new()
-		tb.setup(tf, load("res://assets/scripts/game_state.gd").new(), 1)
+		tb.setup(tf, load("res://assets/scripts/game_state.gd").new())
+		tb.launch_wave(1)
 		tb._ships_left = 1
 		tb._ship_timer = 9999.0
 		var tpos: Vector3 = tf.cell_to_world(Vector2i(8, 6))
@@ -138,7 +141,8 @@ func _initialize() -> void:
 	var sf: Field = _island(9, 5)
 	sf.build(Balance.TOWER, Vector2i(8, 6))
 	var sb: Battle = Battle.new()
-	sb.setup(sf, load("res://assets/scripts/game_state.gd").new(), 1)
+	sb.setup(sf, load("res://assets/scripts/game_state.gd").new())
+	sb.launch_wave(1)
 	sb._ships_left = 1
 	sb._ship_timer = 9999.0
 	var ship: Unit = sb._add_unit(Balance.U_SHIP, sf.cell_to_world(Vector2i(8, 6)) + Vector3(1.0, 0.0, 0.0), 1.0)
@@ -148,7 +152,8 @@ func _initialize() -> void:
 	# 11. 바다 길이 완전히 막혀도 해적선은 상륙 지점 앞에서 나와 전투가 벌어진다 (전투 없이 끝나지 않는다)
 	var bf: Field = _island(5, 5)
 	var bb: Battle = Battle.new()
-	bb.setup(bf, load("res://assets/scripts/game_state.gd").new(), 3)
+	bb.setup(bf, load("res://assets/scripts/game_state.gd").new())
+	bb.launch_wave(3)
 	var blocked: AStarGrid2D = bf.nav(true)
 	for y in blocked.region.size.y:
 		for x in blocked.region.size.x:
@@ -158,7 +163,7 @@ func _initialize() -> void:
 	for _i in 300:
 		bb.tick(0.1)
 		seen = seen or not bb.ships.is_empty() or not bb.pirates.is_empty()
-		if bb.done:
+		if bb.done or bb.enemies_left() == 0: # 실시간이라 적을 다 잡아도 전투는 끝나지 않는다 (기획서 2장)
 			break
 	fails += _check(seen, "길이 막혀도 해적이 나타난다")
 	print("적·방어탑 점검 실패 %d건" % fails)

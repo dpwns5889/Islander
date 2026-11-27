@@ -30,12 +30,14 @@ func _initialize() -> void:
 	gs.gold = 0
 	gs.food = 0
 	var b: Battle = Battle.new()
-	b.setup(f2, gs, 1)
+	b.setup(f2, gs)
+	b.launch_wave(1)
 	fails += _check(b.soldiers.size() == Balance.HQ_GUARDS + 5, "자원이 없어도 병사 %d명 (수비병 %d + 병영 3 + 사격장 2)" % [b.soldiers.size(), Balance.HQ_GUARDS])
 	fails += _check(gs.gold == 0 and gs.food == 0, "병사 생산에 자원이 들지 않는다")
 	# 매 웨이브마다 똑같이 나온다
 	var b2: Battle = Battle.new()
-	b2.setup(f2, gs, 2)
+	b2.setup(f2, gs)
+	b2.launch_wave(2)
 	fails += _check(b2.soldiers.size() == b.soldiers.size(), "다음 웨이브에도 같은 수가 나온다")
 	print("병영 병력 점검 실패 %d건" % fails)
 	quit(fails)

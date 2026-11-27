@@ -313,7 +313,13 @@ func _engage(u: Unit, tpos: Vector3, dt: float, stand: Vector2i = NO_CELL, edge:
 	u.cooldown = maxf(0.0, u.cooldown - dt)
 	var reach: float = u.reach if stand == NO_CELL else maxf(u.reach, 1.3)
 	if _dist(u.position, tpos) - edge > reach: # 건물은 가장자리부터 잰다 (기획서 6장)
-		_walk(u, field.world_to_cell(tpos) if stand == NO_CELL else stand, dt)
+		var goal: Vector2i = field.world_to_cell(tpos) if stand == NO_CELL else stand
+		if goal == field.world_to_cell(u.position): # 같은 칸 안이면 길찾기 경로가 비어 서로 멈추므로 곧장 다가간다
+			var to: Vector3 = Vector3(tpos.x - u.position.x, 0.0, tpos.z - u.position.z)
+			u.path.clear()
+			u.position += to.normalized() * minf(to.length(), u.speed * dt * field.speed_mult_at(u.position, u.crossing))
+		else:
+			_walk(u, goal, dt)
 		return false
 	return u.cooldown <= 0.0
 

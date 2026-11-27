@@ -45,12 +45,12 @@ func _initialize() -> void:
 	fails += _check("방패병" in main.wave_info.text and "전투력 %d" % Balance.wave_budget(12) in main.wave_info.text and "새 적: 방패병" in main.wave_info.text, "12웨이브 예고: " + main.wave_info.text)
 	# 전투에서 방어탑이 적을 공격하고 웨이브가 끝까지 돈다 (방어탑 포함)
 	gs.wave = 3
-	main.start_wave()
-	for _i in 3000:
-		if main.battle == null:
+	main.call_wave()
+	for _i in 6000: # 넓은 맵이라 먼 곳에 내린 해적까지 잡는 데 오래 걸릴 수 있다
+		if main.battle.enemies_left() == 0 or main.over: # 실시간이라 웨이브를 다 막아도 전투는 이어진다 (기획서 2장)
 			break
 		main.battle.tick(0.1)
-	fails += _check(main.battle == null, "방어탑이 있는 필드에서 웨이브가 끝났다")
+	fails += _check(main.battle.enemies_left() == 0, "방어탑이 있는 필드에서 웨이브가 끝났다 (%s, 패배 %s)" % [main.battle.summary(), main.over])
 	print("방어탑 흐름 점검 실패 %d건" % fails)
 	quit(fails)
 

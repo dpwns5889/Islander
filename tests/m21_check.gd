@@ -55,7 +55,8 @@ func _sim(ring: bool) -> Dictionary:
 	var f: Field = _field(ring)
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
 	var b: Battle = Battle.new()
-	b.setup(f, gs, 3)
+	b.setup(f, gs)
+	b.launch_wave(3)
 	b.rng.seed = 5
 	var crossing: bool = false
 	var in_sea: bool = false
@@ -66,13 +67,13 @@ func _sim(ring: bool) -> Dictionary:
 				crossing = true
 				if f.terrain_at(f.world_to_cell(p.position)) == Field.SEA:
 					in_sea = true
-		if b.done:
+		if b.done or b.enemies_left() == 0: # 실시간이라 적을 다 잡아도 전투는 끝나지 않는다 (기획서 2장)
 			break
 	var houses: int = 0
 	for c in f.buildings:
 		if f.buildings[c] == Balance.HOUSE:
 			houses += 1
-	return {"crossing": crossing, "in_sea": in_sea, "done": b.done, "houses": houses}
+	return {"crossing": crossing, "in_sea": in_sea, "done": b.done or b.enemies_left() == 0, "houses": houses}
 
 
 func _check(ok: bool, msg: String) -> int:

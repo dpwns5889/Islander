@@ -8,13 +8,11 @@ func _initialize() -> void:
 	main.edge_pan = false # 마우스 위치로 카메라가 움직이지 않게
 	root.add_child(main)
 	await process_frame
+	fails += _check(not main.command_move(main.field.start_cells().keys()[0]), "도시를 세우기 전에는 이동 명령을 못 내린다")
 	main.found_start(preload("res://tests/coastal_start.gd").pick(main.field))
 	var land: Vector2i = main.field.hq
-	fails += _check(not main.command_move(land), "준비 단계에서는 이동 명령을 못 내린다")
-	fails += _check(not main.build_buttons.has(99), "준비 단계의 집결지 버튼은 없다")
-	fails += _check(not main.speed_button.visible, "배속 버튼은 전투 때만 보인다")
-	main.start_wave()
-	fails += _check(main.speed_button.visible and main.battle.speed_scale == 1.0 and main.speed_button.text == "배속 x1", "전투 시작: 배속 x1")
+	fails += _check(not main.build_buttons.has(99), "집결지 버튼은 없다")
+	fails += _check(main.speed_button.visible and main.battle.speed_scale == 1.0 and main.speed_button.text == "배속 x1", "도시를 세우면 배속 x1 버튼")
 	main.cycle_speed()
 	fails += _check(main.battle.speed_scale == 2.0 and main.speed_button.text == "배속 x2", "배속 x2")
 	main.cycle_speed()
@@ -22,13 +20,14 @@ func _initialize() -> void:
 	main.cycle_speed()
 	fails += _check(main.battle.speed_scale == 1.0, "다시 x1")
 	fails += _check(not main.command_move(Vector2i(0, 0)), "바다 칸은 이동 목표가 될 수 없다")
-	fails += _check(main.command_move(land) and main.battle.soldiers[0].order == land, "전투 중 땅을 클릭하면 병사가 그곳으로 이동")
-	for _i in 3000:
-		if main.battle == null:
+	fails += _check(main.command_move(land) and main.battle.soldiers[0].order == land, "땅을 클릭하면 병사가 그곳으로 이동")
+	main.call_wave()
+	for _i in 6000: # 넓은 맵이라 먼 곳에 내린 해적까지 잡는 데 오래 걸릴 수 있다
+		if main.battle.enemies_left() == 0 or main.over:
 			break
 		main.battle.tick(0.1)
-	fails += _check(main.battle == null, "전투가 끝났다")
-	fails += _check(not main.speed_button.visible, "전투가 끝나면 배속 버튼이 사라진다")
+	main._refresh_hud()
+	fails += _check(main.battle.enemies_left() == 0 and main.speed_button.visible, "웨이브를 막아도 전투와 배속 버튼은 이어진다 (실시간, 기획서 2장)")
 	print("전투 개선 흐름 점검 실패 %d건" % fails)
 	quit(fails)
 
