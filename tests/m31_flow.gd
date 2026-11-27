@@ -62,7 +62,7 @@ func _initialize() -> void:
 	f.damage(barracks, 70.0)
 	var b: Battle = Battle.new()
 	b.setup(f, gs)
-	b.launch_wave(1)
+	b._new_squad("melee", Balance.U_GUARD, 3, barracks)
 	var worn: Array = b.soldiers.filter(func(u: Unit) -> bool: return u.home == barracks)
 	fails += _check(worn.size() == 3 and is_equal_approx(worn[0].hp, 30.0 * 0.65) and is_equal_approx(worn[0].atk, 5.0 * 0.65), "병영 30%: 병사 3명, 체력·공격 65%")
 	b.free()

@@ -12,7 +12,7 @@ func _initialize() -> void:
 	main.found_start(preload("res://tests/coastal_start.gd").pick(main.field))
 	gs.gold = 1000
 	# 군사·해상 카테고리에 방어탑이 있다
-	fails += _check(main.dropdown_lists[1].get_child_count() == 4 and main.build_buttons.has(Balance.TOWER) and main.build_buttons.has(Balance.SHOOTING_RANGE), "군사·해상 목록: 병영·사격장·항구·방어탑")
+	fails += _check(main.dropdown_lists[1].get_child_count() == 3 and main.build_buttons.has(Balance.TOWER) and not main.build_buttons.has(Balance.SHOOTING_RANGE), "군사·해상 목록: 병영·항구·방어탑 (사격장 보류)")
 	main._toggle_category(1)
 	var wall: Vector2i = Vector2i(-1, -1) # 방어탑을 지을 땅 칸
 	for c in main.field.cells:

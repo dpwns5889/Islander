@@ -20,7 +20,8 @@ func _initialize() -> void:
 	main.cycle_speed()
 	fails += _check(main.battle.speed_scale == 1.0, "다시 x1")
 	fails += _check(not main.command_move(Vector2i(0, 0)), "바다 칸은 이동 목표가 될 수 없다")
-	fails += _check(main.command_move(land) and main.battle.soldiers[0].order == land, "땅을 클릭하면 병사가 그곳으로 이동")
+	main.select_squad(1)
+	fails += _check(main.command_move(land) and main.battle.soldiers[0].order == land, "분대를 고르고 땅을 클릭하면 그곳으로 이동")
 	main.call_wave()
 	for _i in 6000: # 넓은 맵이라 먼 곳에 내린 해적까지 잡는 데 오래 걸릴 수 있다
 		if main.battle.enemies_left() == 0 or main.over:

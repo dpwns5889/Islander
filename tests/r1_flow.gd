@@ -51,7 +51,8 @@ func _initialize() -> void:
 	for c: Vector2i in f.territory_of[start]:
 		if f.is_walkable(c) and c != start:
 			walk = c
-	fails += _check(main.command_move(walk) and b.soldiers[0].order == walk, "전투 중 이동 명령")
+	main.select_squad(1)
+	fails += _check(main.command_move(walk) and b.soldiers[0].order == walk, "1번 분대를 고르고 이동 명령")
 	print("R1 흐름 점검 실패 %d건" % fails)
 	quit(fails)
 

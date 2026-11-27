@@ -41,7 +41,7 @@ func _initialize() -> void:
 	main.advance(Balance.TRADE_FIRST_DELAY + 0.1)
 	main._refresh_hud()
 	fails += _check(main.npc_present and main.trade_button.visible and main.npc_node != null, "2분 뒤 NPC 방문, 버튼 표시")
-	fails += _check(main.trade_offers.size() == 2, "교역소 레벨 1: 거래 2개")
+	fails += _check(main.trade_offers.size() == 1, "교역소 레벨 1: 거래 1개")
 	fails += _check(is_equal_approx(main.npc_next_time - main.game_time, Balance.TRADE_INTERVAL - 0.1), "다음 방문은 6분 뒤")
 	# 3. 거래 창을 닫아도 버튼으로 다시 열 수 있다
 	main._toggle_trade()
@@ -57,23 +57,20 @@ func _initialize() -> void:
 		gs.food = 100
 		var g0: int = gs.gold
 		var rp0: int = gs.research_points
-		var n0: int = main.battle.soldiers.size()
 		fails += _check(main.do_trade(id), "거래 성공: " + id)
 		fails += _check(not main.do_trade(id), "같은 거래는 한 번뿐: " + id)
 		if id == "gold_rp":
 			fails += _check(gs.gold == g0 - 60 and gs.research_points == rp0 + 1, "골드 60 → 연구포인트 1")
-		elif id == "gold_guards":
-			fails += _check(gs.gold == g0 - 30 and main.battle.soldiers.size() == n0 + 2, "골드 30 → 경비병 2명이 바로 나온다")
 	# 5. 60초 머물고 떠난다
 	main.advance(Balance.TRADE_STAY)
 	main._refresh_hud()
 	fails += _check(not main.npc_present and not main.trade_button.visible and not main.trade_panel.visible and main.npc_node == null, "60초 뒤 NPC가 떠난다")
-	# 6. 교역소 레벨 2도 거래 2개, 6분 뒤 다시 방문
+	# 6. 교역소 레벨 2도 거래 1개, 6분 뒤 다시 방문
 	gs.gold = 1000
 	main.select_building(post)
 	fails += _check(main.upgrade_selected() and main.field.levels[post] == 2, "교역소 레벨 2")
 	main.advance(main.npc_next_time - main.game_time + 0.1)
-	fails += _check(main.npc_present and main.trade_offers.size() == 2, "6분 뒤 NPC 다시 방문, 거래 2개")
+	fails += _check(main.npc_present and main.trade_offers.size() == 1, "6분 뒤 NPC 다시 방문, 거래 1개")
 	# 7. 교역소가 없으면 방문하지 않는다
 	main.field.damage(post, 9999.0)
 	fails += _check(main.field.trading_post() == Vector2i(-1, -1), "교역소 파괴")
