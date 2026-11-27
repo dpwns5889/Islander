@@ -39,6 +39,8 @@ var _ship_timer: float = 0.0
 var _ship_gap: float = 0.0 ## 해적선이 나오는 간격(초)
 var speed_scale: float = 1.0 ## 전투 배속
 var _mult: float = 1.0 ## 다음에 나올 해적선이 태울 적의 배율
+var squads: Dictionary = {} ## 분대 번호(1~9) → {"type": "melee"/"ranged", "kind": 병종, "size": 정원} (기획서 6장)
+var queues: Dictionary = {} ## 병영 칸 → 대기열 [{"type", "kind", "left": 남은 생산 시간}], 맨 앞만 만든다
 
 
 ## 첫 도시를 세운 뒤 한 번 부른다: 시작 경비병(첫 도시가 집)과 이미 있는 항구의 보트 (기획서 2장)
@@ -50,17 +52,11 @@ func setup(f: Field, g: Node) -> void:
 	sea_nav = f.nav(true)
 	islands = f.island_map()
 	rng.randomize()
-	if f.hq.x >= 0:
-		spawn_guards(Balance.HQ_GUARDS, f.hq)
+	if f.hq.x >= 0: # 시작 경비병 2명이 1번 분대, 집은 도시 (기획서 2장, 6장)
+		_new_squad("melee", Balance.U_GUARD, Balance.HQ_GUARDS, f.hq)
 	for c in f.buildings:
 		if f.buildings[c] == Balance.PORT:
 			add_port(c)
-
-
-## 경비병 n명을 도시 cell에 낸다 (시작 경비병, 교역 NPC 거래)
-func spawn_guards(n: int, cell: Vector2i) -> void:
-	for i in n:
-		_spawn_unit(Balance.U_GUARD, cell)
 
 
 ## 항구 c의 보트를 띄운다. 항구를 지을 때 부른다
@@ -81,27 +77,6 @@ func launch_wave(w: int) -> void:
 	_ship_gap = Balance.SHIP_SPAWN_TIME / maxi(_ships_left, 1)
 	_ship_timer = 0.0
 	_mult = Balance.enemy_mult(field.hqs.size())
-	refill_barracks()
-
-
-## 병영·사격장마다 정원(3명·2명)이 모자란 만큼 무료로 채운다. shortcut: R3 분대 생산으로 바꾸기 전까지의 임시 규칙
-func refill_barracks() -> void:
-	var alive: Dictionary = {}
-	for u in soldiers:
-		alive[u.src] = int(alive.get(u.src, 0)) + 1
-	for b in boats:
-		for r in b.cargo:
-			alive[r.src] = int(alive.get(r.src, 0)) + 1
-	for entry: Dictionary in barracks_plan(field):
-		var c: Vector2i = entry["cell"]
-		if int(alive.get(c, 0)) > 0:
-			alive[c] -= 1
-			continue
-		var soldier: Unit = _spawn_unit(entry["kind"], c)
-		soldier.src = c
-		var worn: float = Balance.soldier_damage_mult(field.hp_ratio(c)) # 파손된 병영의 병사는 약하다 (기획서 5.2.2)
-		soldier.hp *= worn
-		soldier.atk *= worn
 
 
 ## 아직 남은 적: 나올 해적선 + 떠 있는 해적선 + 상륙한 해적
@@ -129,26 +104,157 @@ func clear_enemies() -> void:
 	_ships_left = 0
 
 
-## 병영·사격장의 정원(건물 위치·병종·건물 레벨) (기획서 6장)
-static func barracks_plan(f: Field) -> Array:
-	var plan: Array = []
-	for c in f.buildings:
-		var m: Dictionary = Balance.MILITARY.get(f.buildings[c], {})
-		if m.is_empty():
-			continue
-		var lv: int = f.levels[c]
-		for i in m["count"]:
-			plan.append({"cell": c, "kind": m["units"][lv - 1], "lv": lv})
-	return plan
+## 분대 수 상한과 지금 분대 수(대기열 포함) (기획서 6장)
+func squad_cap() -> int:
+	return Balance.squad_cap(field.hqs.size())
 
 
-## 플레이어가 클릭한 칸으로 모든 병사가 이동한다(보트에 탄 병사 포함). 깃발 없이 한 번의 명령이다 (기획서 6장)
-func command_move(cell: Vector2i) -> void:
+func squad_count() -> int:
+	var n: int = squads.size()
+	for c in queues:
+		n += (queues[c] as Array).size()
+	return n
+
+
+## 분대 n의 살아 있는 병사 (보트에 탄 병사 포함)
+func squad_units(n: int) -> Array[Unit]:
+	var out: Array[Unit] = []
 	for u in soldiers:
-		u.order = cell
+		if u.squad == n:
+			out.append(u)
+	for b in boats:
+		for r: Unit in b.cargo:
+			if r.squad == n:
+				out.append(r)
+	return out
+
+
+## 병영 c에 분대 생산을 넣는다: 대기열 3칸, 상한, 연구, 비용 (기획서 6장)
+func can_queue(c: Vector2i, type: String) -> bool:
+	var sq: Dictionary = Balance.SQUADS[type]
+	return field.buildings.get(c, 0) == Balance.BARRACKS and (queues.get(c, []) as Array).size() < Balance.SQUAD_QUEUE 		and squad_count() < squad_cap() and (not sq.has("tech") or gs.has_tech(sq["tech"])) 		and gs.gold >= sq["gold"] and gs.food >= sq["food"]
+
+
+func queue_squad(c: Vector2i, type: String) -> bool:
+	if not can_queue(c, type):
+		return false
+	var sq: Dictionary = Balance.SQUADS[type]
+	gs.spend(sq["gold"], sq["food"])
+	if not queues.has(c):
+		queues[c] = []
+	(queues[c] as Array).append({"type": type, "kind": sq["units"][field.levels[c] - 1], "left": Balance.SQUAD_TIME})
+	return true
+
+
+## 대기열 i번째를 취소하고 비용을 모두 돌려준다
+func cancel_squad(c: Vector2i, i: int) -> bool:
+	var q: Array = queues.get(c, [])
+	if i < 0 or i >= q.size():
+		return false
+	var sq: Dictionary = Balance.SQUADS[q[i]["type"]]
+	gs.add(sq["gold"], sq["food"])
+	q.remove_at(i)
+	if q.is_empty():
+		queues.erase(c)
+	return true
+
+
+## 맨 앞 분대의 생산 시간을 줄이고, 다 되면 병영 옆에 낸다. 병영이 무너지면 대기열을 환불한다 (기획서 5.2, 6장)
+func _queue_tick(dt: float) -> void:
+	for c: Vector2i in queues.keys():
+		if field.buildings.get(c, 0) != Balance.BARRACKS:
+			while queues.has(c):
+				cancel_squad(c, 0)
+			continue
+		var item: Dictionary = queues[c][0]
+		item["left"] -= dt
+		if item["left"] <= 0.0:
+			queues[c].pop_front()
+			if (queues[c] as Array).is_empty():
+				queues.erase(c)
+			_new_squad(item["type"], item["kind"], Balance.SQUADS[item["type"]]["count"], c)
+
+
+## 비어 있는 가장 작은 번호로 분대를 만들고 병사를 cell에 낸다. 병영에서 나온 병사는 병영 체력에 비례해 약하다 (기획서 5.2.2, 6장)
+func _new_squad(type: String, kind: int, size: int, cell: Vector2i) -> int:
+	var n: int = 1
+	while squads.has(n):
+		n += 1
+	squads[n] = {"type": type, "kind": kind, "size": size}
+	for i in size:
+		_squad_soldier(n, cell)
+	return n
+
+
+func _squad_soldier(n: int, cell: Vector2i) -> Unit:
+	var u: Unit = _spawn_unit(squads[n]["kind"], cell)
+	u.squad = n
+	if field.buildings.get(cell, 0) == Balance.BARRACKS:
+		var worn: float = Balance.soldier_damage_mult(field.hp_ratio(cell))
+		u.hp *= worn
+		u.atk *= worn
+	return u
+
+
+## 분대원이 모두 죽은 분대의 번호를 비운다
+func _prune_squads() -> void:
+	var alive: Dictionary = {}
+	for u in soldiers:
+		alive[u.squad] = true
+	for b in boats:
+		for r: Unit in b.cargo:
+			alive[r.squad] = true
+	for n: int in squads.keys():
+		if not alive.has(n):
+			squads.erase(n)
+
+
+## 충원할 병영: 빠진 인원이 있고 분대원 하나가 병영 2칸 안에 있으면 그 병영, 아니면 NO_CELL (기획서 6장)
+func reinforce_site(n: int) -> Vector2i:
+	var units: Array[Unit] = squad_units(n)
+	if not squads.has(n) or units.size() >= squads[n]["size"]:
+		return NO_CELL
+	for c in field.buildings:
+		if field.buildings[c] != Balance.BARRACKS:
+			continue
+		for u in units:
+			if soldiers.has(u) and _dist(u.position, field.cell_to_world(c)) <= Balance.REINFORCE_RANGE:
+				return c
+	return NO_CELL
+
+
+## 충원 비용 [골드, 식량]: 빠진 인원 × 1명당 비용
+func reinforce_cost(n: int) -> Vector2i:
+	if not squads.has(n):
+		return Vector2i.ZERO
+	var miss: int = squads[n]["size"] - squad_units(n).size()
+	var per: Array = Balance.SQUADS[squads[n]["type"]]["reinforce"]
+	return Vector2i(per[0], per[1]) * miss
+
+
+## 빠진 인원을 병영에서 바로 채운다. 새 병사는 분대의 집과 명령을 이어받는다
+func reinforce(n: int) -> bool:
+	var site: Vector2i = reinforce_site(n)
+	var cost: Vector2i = reinforce_cost(n)
+	if site == NO_CELL or not gs.spend(cost.x, cost.y):
+		return false
+	var lead: Unit = squad_units(n)[0]
+	for i in squads[n]["size"] - squad_units(n).size():
+		var u: Unit = _squad_soldier(n, site)
+		u.home = lead.home
+		u.order = lead.order
+	return true
+
+
+## 고른 분대(nums, 비면 모든 병사)가 클릭한 칸으로 이동한다(보트에 탄 병사 포함). 깃발 없이 한 번의 명령이다 (기획서 6장)
+func command_move(cell: Vector2i, nums: Array = []) -> void:
+	for u in soldiers:
+		if nums.is_empty() or nums.has(u.squad):
+			u.order = cell
 	for b in boats:
 		for r in b.cargo:
-			r.order = cell
+			if nums.is_empty() or nums.has(r.squad):
+				r.order = cell
 
 
 func _process(delta: float) -> void:
@@ -163,6 +269,7 @@ func tick(dt: float) -> void:
 	if done:
 		return
 	time += dt
+	_queue_tick(dt)
 	_spawn_ships(dt)
 	for s in ships.duplicate():
 		_ship_turn(s, dt)
@@ -183,6 +290,7 @@ func tick(dt: float) -> void:
 	_prune(boats)
 	_prune(soldiers)
 	_prune(pirates)
+	_prune_squads()
 	if field.hq_hp <= 0.0:
 		_finish(false)
 

@@ -61,6 +61,14 @@ var over: bool = false ## 패배해 판이 끝났는지
 var repairing: Dictionary = {} ## 수리 중인 건물·도시 칸 → true (5초에 걸쳐 찬다) (기획서 5.2.2)
 var layer: CanvasLayer
 var battle: Battle = null ## 첫 도시를 세우면 만들어져 판 내내 돈다
+var selected_squads: Array[int] = [] ## 숫자키·분대 줄로 고른 분대 번호 (기획서 6장)
+var squad_panel: PanelContainer ## 하단 가운데 분대 줄 (기획서 7.2)
+var squad_buttons: Array[Button] = [] ## 1~9번 분대 아이콘
+var reinforce_button: Button
+var squad_prod_buttons: Dictionary = {} ## "melee"/"ranged" → 병영 패널의 분대 생산 버튼
+var queue_buttons: Array[Button] = [] ## 병영 패널의 대기열(누르면 취소)
+var _tap_n: int = 0 ## 숫자키 두 번 누르기 판정
+var _tap_time: float = -10.0
 ## 카메라는 쿼터뷰 하나다 (기획서 7.2)
 var _zoom: float = Balance.ZOOM_START ## 휠 줌 배율(작을수록 확대)
 var _pitch: float = Balance.COMBAT_PITCH ## 기울기(도)
@@ -210,6 +218,24 @@ func _build_ui() -> void:
 	layer.add_child(side_panel)
 	side_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT, Control.PRESET_MODE_MINSIZE, 10)
 	side_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN # 글자가 늘어도 화면 아래로 잘리지 않게 위로 자란다
+	# 하단 가운데: 분대 줄. 아이콘을 누르면 고르고, Shift를 누른 채면 더한다 (기획서 6장, 7.2)
+	var sbar: HBoxContainer = HBoxContainer.new()
+	for n in range(1, Balance.SQUAD_CAP_MAX + 1):
+		var sbtn: Button = Button.new()
+		sbtn.pressed.connect(func() -> void: select_squad(n, Input.is_key_pressed(KEY_SHIFT)))
+		squad_buttons.append(sbtn)
+		sbar.add_child(sbtn)
+	reinforce_button = Button.new()
+	reinforce_button.pressed.connect(reinforce_selected)
+	sbar.add_child(reinforce_button)
+	squad_panel = PanelContainer.new()
+	squad_panel.add_child(sbar)
+	squad_panel.visible = false
+	layer.add_child(squad_panel)
+	squad_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM, Control.PRESET_MODE_MINSIZE, 10)
+	squad_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	squad_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	squad_panel.offset_bottom -= 56 # 분대가 9개로 늘어도 하단 건설 메뉴와 겹치지 않게 한 줄 위에 둔다
 	# 선택한 건물의 레벨업 패널: 위치는 _place_upgrade_panel이 정한다 (기획서 7.2)
 	var up: VBoxContainer = VBoxContainer.new()
 	upgrade_title = Label.new()
@@ -222,6 +248,18 @@ func _build_ui() -> void:
 	repair_button = Button.new()
 	repair_button.pressed.connect(repair_selected)
 	up.add_child(repair_button)
+	var prod: HBoxContainer = HBoxContainer.new() # 병영: 분대 생산과 대기열 (기획서 6장)
+	for type: String in Balance.SQUADS:
+		var pb: Button = Button.new()
+		pb.pressed.connect(queue_selected.bind(type))
+		squad_prod_buttons[type] = pb
+		prod.add_child(pb)
+	up.add_child(prod)
+	for i in Balance.SQUAD_QUEUE:
+		var qb: Button = Button.new()
+		qb.pressed.connect(cancel_queued.bind(i))
+		queue_buttons.append(qb)
+		up.add_child(qb)
 	upgrade_panel = PanelContainer.new()
 	var usb: StyleBoxFlat = StyleBoxFlat.new() # 필드 위에 뜨므로 뒤의 글자가 비치지 않게 불투명한 배경
 	usb.bg_color = Color(0.08, 0.1, 0.16, 0.97)
@@ -304,7 +342,7 @@ func _build_ui() -> void:
 
 func _over_ui() -> bool:
 	var mp: Vector2 = get_viewport().get_mouse_position()
-	for c: Control in [top_panel, res_bar, wave_panel, build_panel, side_panel, upgrade_panel, research_panel, dropdown_panel, trade_panel]:
+	for c: Control in [top_panel, res_bar, wave_panel, build_panel, side_panel, upgrade_panel, research_panel, dropdown_panel, trade_panel, squad_panel]:
 		if c.visible and c.get_global_rect().has_point(mp):
 			return true
 	return false
@@ -432,8 +470,6 @@ func do_trade(id: String) -> bool:
 	trade_sold[id] = true
 	if id == "gold_rp":
 		GameState.add_research(1)
-	elif id == "gold_guards" and battle != null:
-		battle.spawn_guards(2, field.hq)
 	_refresh_hud()
 	return true
 
@@ -454,6 +490,7 @@ func found_start(c: Vector2i) -> bool:
 	res_bar.visible = true
 	build_panel.visible = true
 	side_panel.visible = true
+	squad_panel.visible = true
 	_zoom = 1.0 # 첫 도시를 비춘다
 	_pan = field.cell_to_world(c) - field.center_world()
 	_update_camera()
@@ -469,11 +506,8 @@ func try_build(c: Vector2i) -> bool:
 	field.build(build_id, c)
 	if build_id == Balance.TRADING_POST: # 지은 지 2분 뒤 첫 방문 (기획서 5.6)
 		npc_next_time = game_time + Balance.TRADE_FIRST_DELAY
-	if battle != null:
-		if build_id == Balance.PORT:
-			battle.add_port(c)
-		if Balance.MILITARY.has(build_id):
-			battle.refill_barracks()
+	if battle != null and build_id == Balance.PORT:
+		battle.add_port(c)
 	set_build(0) # 건물을 하나 지으면 설치 모드가 끝난다
 	return true
 
@@ -512,7 +546,7 @@ func _unlocked(id: int) -> bool:
 
 ## 병영·사격장 레벨 3 강화는 철기 제작이 필요하다 (기획서 5.2)
 func _upgrade_locked(c: Vector2i) -> bool:
-	return Balance.MILITARY.has(field.buildings[c]) and field.levels[c] + 1 == Balance.MAX_LEVEL and not GameState.has_tech(Balance.LV3_TECH)
+	return [Balance.BARRACKS, Balance.SHOOTING_RANGE].has(field.buildings[c]) and field.levels[c] + 1 == Balance.MAX_LEVEL and not GameState.has_tech(Balance.LV3_TECH)
 
 
 ## 레벨 3 기본 건물이 진화할 수 있는지: 진화 건물이 있고 해금 연구를 마쳤는지 (기획서 5.2.1)
@@ -683,11 +717,77 @@ func toggle_pause() -> void:
 
 
 ## 우클릭한 땅으로 병사들이 이동한다 (분대 지휘는 R3) (기획서 6장)
+## 고른 분대를 클릭한 칸으로 보낸다. 고른 분대가 없으면 아무 일도 없다 (기획서 6장)
 func command_move(c: Vector2i) -> bool:
-	if battle == null or not field.is_walkable(c):
+	if battle == null or selected_squads.is_empty() or not field.is_walkable(c):
 		return false
-	battle.command_move(c)
+	battle.command_move(c, selected_squads)
 	_ping(c)
+	return true
+
+
+## 분대 n을 고른다. add면 고른 분대에 더하고(이미 있으면 뺀다). 0.4초 안에 같은 분대를 다시 고르면 카메라가 그 분대로 간다 (기획서 6장)
+func select_squad(n: int, add: bool = false) -> bool:
+	if battle == null or not battle.squads.has(n):
+		return false
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if n == _tap_n and now - _tap_time <= Balance.SQUAD_DOUBLE_TAP:
+		focus_squad(n)
+	_tap_n = n
+	_tap_time = now
+	if not add:
+		selected_squads = [n]
+	elif not selected_squads.has(n):
+		selected_squads.append(n)
+	elif selected_squads.size() > 1:
+		selected_squads.erase(n)
+	_refresh_hud()
+	return true
+
+
+## 카메라를 분대 병사들의 가운데로 옮긴다
+func focus_squad(n: int) -> void:
+	var units: Array[Unit] = battle.squad_units(n)
+	if units.is_empty():
+		return
+	var at: Vector3 = Vector3.ZERO
+	for u in units:
+		at += u.position
+	at /= units.size()
+	_pan = Vector3(at.x, 0.0, at.z) - field.center_world()
+	_update_camera()
+
+
+## 고른 분대 중 충원할 수 있는 첫 분대를 충원한다 (기획서 6장)
+func reinforce_selected() -> bool:
+	var n: int = _reinforce_target()
+	if n == 0 or not battle.reinforce(n):
+		return false
+	_refresh_hud()
+	return true
+
+
+## 고른 분대 중 병영 2칸 안에서 충원할 수 있는 첫 분대, 없으면 0
+func _reinforce_target() -> int:
+	for n in selected_squads:
+		if battle.reinforce_site(n) != Battle.NO_CELL:
+			return n
+	return 0
+
+
+## 고른 병영에 분대 생산을 넣는다 (기획서 6장)
+func queue_selected(type: String) -> bool:
+	if battle == null or not battle.queue_squad(selected_cell, type):
+		return false
+	_refresh_hud()
+	return true
+
+
+## 고른 병영의 대기열 i번째를 취소한다(비용 환불)
+func cancel_queued(i: int) -> bool:
+	if battle == null or not battle.cancel_squad(selected_cell, i):
+		return false
+	_refresh_hud()
 	return true
 
 
@@ -891,6 +991,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key == KEY_SPACE and not event.is_echo() and started: # 일시정지 (기획서 2장)
 		toggle_pause()
 		return
+	if key >= KEY_1 and key <= KEY_9 and not event.is_echo() and started: # 숫자키: 분대 고르기, Shift면 더하기 (기획서 6장)
+		select_squad(key - KEY_0, (event as InputEventKey).shift_pressed)
+		return
 	if mb != null and mb.pressed and (mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN):
 		_wheel_zoom(Balance.ZOOM_STEP if mb.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / Balance.ZOOM_STEP)
 		return
@@ -919,7 +1022,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if build_id != 0 and (right or key == KEY_ESCAPE):
 		set_build(0)
-	elif battle != null and right and build_id == 0: # 우클릭: 병사 이동 (기획서 6장)
+	elif battle != null and right and build_id == 0 and not selected_squads.is_empty(): # 우클릭: 고른 분대 이동 (기획서 6장)
 		command_move(_hover_cell())
 	elif right or key == KEY_ESCAPE:
 		select_building(Vector2i(-1, -1))
@@ -965,7 +1068,7 @@ func _damage_text(c: Vector2i) -> String:
 	var stage: int = Balance.damage_stage(field.hp_ratio(c))
 	if stage > 0:
 		text += " · 파손 %d단계" % stage
-	if Balance.MILITARY.has(field.buildings[c]):
+	if field.buildings[c] == Balance.BARRACKS:
 		text += " · 병사 체력·공격 %d%%" % roundi(Balance.soldier_damage_mult(field.hp_ratio(c)) * 100.0)
 	elif stage > 0 and field.buildings[c] != Balance.TRADING_POST:
 		text += " · 성능 %d%%" % roundi(field.performance(c) * 100.0)
@@ -1007,6 +1110,48 @@ func _refresh_research() -> void:
 	else:
 		tech_do_button.text = "연구하기 (%d점)" % cost
 	tech_do_button.disabled = GameState.has_tech(selected_tech) or not can
+
+
+## 분대 줄과 병영 패널의 생산·대기열 (기획서 6장, 7.2)
+func _refresh_squads() -> void:
+	if battle == null:
+		return
+	selected_squads = selected_squads.filter(func(n: int) -> bool: return battle.squads.has(n))
+	for i in squad_buttons.size():
+		var n: int = i + 1
+		var sbtn: Button = squad_buttons[i]
+		sbtn.visible = battle.squads.has(n)
+		if sbtn.visible:
+			var sq: Dictionary = battle.squads[n]
+			sbtn.text = "%d %s %d/%d" % [n, Balance.UNITS[sq["kind"]]["name"], battle.squad_units(n).size(), sq["size"]]
+			sbtn.modulate = Color(1.0, 1.0, 0.55) if selected_squads.has(n) else Color(0.75, 0.75, 0.75)
+	var target: int = _reinforce_target()
+	reinforce_button.visible = target > 0
+	if target > 0:
+		var rc: Vector2i = battle.reinforce_cost(target)
+		reinforce_button.text = "충원 %dG · 식량 %d" % [rc.x, rc.y]
+		reinforce_button.disabled = GameState.gold < rc.x or GameState.food < rc.y
+	var barracks: bool = upgrade_panel.visible and field.buildings.get(selected_cell, 0) == Balance.BARRACKS
+	for type: String in squad_prod_buttons:
+		var pb: Button = squad_prod_buttons[type]
+		var sq: Dictionary = Balance.SQUADS[type]
+		pb.visible = barracks
+		if not barracks:
+			continue
+		var kind: int = sq["units"][field.levels[selected_cell] - 1]
+		pb.text = "%s(%s %d명) %dG · 식량 %d" % [sq["name"], Balance.UNITS[kind]["name"], sq["count"], sq["gold"], sq["food"]]
+		pb.disabled = not battle.can_queue(selected_cell, type)
+		pb.tooltip_text = ""
+		if sq.has("tech") and not GameState.has_tech(sq["tech"]):
+			pb.tooltip_text = "필요 연구: " + Balance.TECHS[sq["tech"]]["name"]
+		elif battle.squad_count() >= battle.squad_cap():
+			pb.tooltip_text = "분대 수 상한 %d (대기열 포함)" % battle.squad_cap()
+	var q: Array = battle.queues.get(selected_cell, []) if barracks else []
+	for i in queue_buttons.size():
+		var qb: Button = queue_buttons[i]
+		qb.visible = i < q.size()
+		if qb.visible:
+			qb.text = "✕ %s %s" % [Balance.UNITS[q[i]["kind"]]["name"], ("%d초" % ceili(q[i]["left"])) if i == 0 else "대기"]
 
 
 func _refresh_hud() -> void:
@@ -1073,7 +1218,7 @@ func _refresh_hud() -> void:
 	elif upgrade_panel.visible:
 		var bid: int = field.buildings[selected_cell]
 		var lv: int = field.levels[selected_cell]
-		upgrade_title.text = "%s Lv %d%s" % [Balance.BUILDINGS[bid]["name"], lv, " · " + Balance.UNITS[Balance.MILITARY[bid]["units"][lv - 1]]["name"] if Balance.MILITARY.has(bid) else ""]
+		upgrade_title.text = "%s Lv %d" % [Balance.BUILDINGS[bid]["name"], lv]
 		upgrade_effect.text = Balance.effect_text(bid, lv, GameState.researched)
 		if bid == Balance.TRADING_POST and not field.is_post_open(selected_cell):
 			upgrade_effect.text += "\n⚠ 물가가 막혀 NPC가 오지 못합니다"
@@ -1101,11 +1246,12 @@ func _refresh_hud() -> void:
 			upgrade_effect.text += "\n" + _damage_text(selected_cell)
 			upgrade_button.disabled = true
 			upgrade_button.tooltip_text = "수리해야 강화·진화할 수 있습니다"
+	_refresh_squads()
 	var s: String
 	if not started:
 		s = "첫 도시를 세울 평원을 클릭하세요 (평원 %d칸 이상인 섬, 하늘색) · 화면 가장자리 이동 · 좌클릭 드래그 회전 · 휠 확대/축소" % Balance.START_ISLAND_PLAINS
 	elif build_id != 0:
 		s = "%s 건설: 좌클릭 배치 · 우클릭/Esc 취소" % Balance.BUILDINGS[build_id]["name"]
 	else:
-		s = battle.summary() + " · 우클릭: 병사 이동"
+		s = battle.summary() + " · 숫자키: 분대 · 우클릭: 이동"
 	status.text = (_note + "\n" if _note != "" else "") + s

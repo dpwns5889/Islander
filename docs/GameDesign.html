@@ -56,7 +56,7 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 </nav><main><h1 id="biomedefender">BiomeDefender (가칭) — 기획서</h1>
 <ul>
 <li>최종 수정: 2026-11-28</li>
-<li>게임 버전: 0.2.04</li>
+<li>게임 버전: 0.2.05</li>
 <li>엔진: Godot 4.7.2, GDScript, 3D (로우폴리), PC 마우스 전용</li>
 </ul>
 <h2 id="1">1. 개요</h2>
@@ -673,7 +673,7 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <li><strong>거래 창</strong>: NPC가 있는 동안 상단에 "교역 NPC 방문! (남은 n초)" 버튼이 떠서 거래 창을 연다. 창을 닫아도 버튼은 남아 몇 번이든 다시 열 수 있다. 창을 열어도 시간은 흐른다.</li>
 <li><strong>떠남</strong>: 온 지 <strong>60초</strong> 뒤 NPC와 버튼이 사라진다(<code>TRADE_STAY</code>).</li>
 <li><strong>유물 구매 (기획 변경, 미구현)</strong>: 거래 창의 고정 거래를 <strong>없애고</strong>, NPC에게 <strong>골드를 내고 유물을 얻는</strong> 방식으로 바꾼다. 유물은 <strong>무작위 효과</strong>를 주는 영구 보너스이고, 구매할 때까지 어떤 효과가 나올지 모른다. <strong>식량은 거래에 쓰지 않는다</strong>. 가격·유물 종류·효과 수치·방문당 구매 횟수·중복 규칙은 9.1에서 정한다.</li>
-<li>지금 동작(구현 전까지): 방문할 때마다 골드 60 → 연구포인트 1, 골드 30 → 경비병 +2(바로 첫 도시에 나온다)를 방문당 한 번씩 살 수 있다. 조각 구매는 조각이 없어져 삭제한다. 수비병 거래는 R3에서 분대 규칙에 맞게 정리한다(9.1).</li>
+<li>지금 동작(구현 전까지): 방문할 때마다 골드 60 → 연구포인트 1을 한 번 살 수 있다. 조각 구매는 조각이 없어져, 경비병 거래는 분대 수 상한과 맞지 않아 삭제했다.</li>
 </ul>
 <h2 id="6">6. 전투</h2>
 <h3 id="_4">병사와 분대</h3>
@@ -681,7 +681,7 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 <li><strong>분대</strong>: 병영에서 한 번 생산하면 <strong>분대 하나</strong>가 나온다. 근접 분대는 3명, 원거리 분대는 2명이고 한 분대는 한 병종이다.</li>
 <li><strong>번호</strong>: 분대는 비어 있는 <strong>가장 작은 번호(1~9)</strong>를 자동으로 받는다. 시작 경비병 2명이 1번이다. 분대원이 모두 죽으면 그 번호가 비고 다음에 생산한 분대가 받는다. 분대를 합치거나 나누는 기능은 없다.</li>
 <li><strong>분대 수 상한</strong>(컨트롤 수 제한): 처음 <strong>3분대</strong>(시작 경비병 포함)이고 도시가 하나 늘 때마다 +1, 최대 9분대다: min(9, 3 + (살아 있는 도시 수 − 1))(<code>SQUAD_CAP_BASE</code>, <code>SQUAD_CAP_PER_CITY</code>). 대기열에 든 분대도 센다. 상한에 닿으면 생산 버튼이 비활성이다. 늘어나는 기준은 나중에 연구·건물로 바꿀 수 있다.</li>
-<li><strong>생산</strong>: 병영 패널의 "근접 분대"·"원거리 분대" 버튼으로 비용을 내고 대기열에 넣는다. 병영마다 대기열 <strong>3칸</strong>, 한 분대에 <strong>30초</strong>, 대기열을 취소하면 비용을 모두 돌려준다. 다 만들어지면 병영 옆에 나온다. 원거리 분대는 연구 "궁술"이 필요하다. 병종은 생산을 시작할 때의 병영 레벨로 정하고, 레벨을 올려도 이미 나온 분대의 병종은 바뀌지 않는다.</li>
+<li><strong>생산</strong>: 병영 패널의 "근접 분대"·"원거리 분대" 버튼으로 비용을 내고 대기열에 넣는다. 병영마다 대기열 <strong>3칸</strong>, 한 분대에 <strong>30초</strong>, 대기열을 취소하거나 병영이 무너지면 비용을 모두 돌려준다. 맨 앞의 분대만 만들어지고 나머지는 기다린다. 다 만들어지면 병영 옆에 나온다. 원거리 분대는 연구 "궁술"이 필요하다. 병종은 생산을 시작할 때의 병영 레벨로 정하고, 레벨을 올려도 이미 나온 분대의 병종은 바뀌지 않는다.</li>
 </ul>
 <table>
 <thead>
@@ -709,7 +709,7 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 </table>
 <ul>
 <li><strong>충원</strong>: 분대원 일부가 죽은 분대가 병영 2칸 안에 있으면, 분대를 고른 상태에서 하단 분대 줄의 "충원" 버튼으로 빈 인원을 바로 채운다. 1명당 근접 골드 10·식량 5, 원거리 골드 15·식량 5이고, 충원 병사는 분대의 원래 병종이다(<code>REINFORCE_COST</code>, <code>REINFORCE_RANGE</code>).</li>
-<li><strong>지휘</strong>: 숫자키(또는 하단 분대 아이콘 클릭)로 분대를 고르고 <strong>우클릭</strong>으로 이동시킨다. Shift+숫자로 여러 분대를 함께 고른다. 숫자키를 <strong>두 번 빠르게</strong> 누르면 카메라가 그 분대로 간다. 이동하는 동안 병사는 <strong>2.5칸 안의 적만</strong> 상대하고 계속 가며, 클릭한 칸 0.6칸 안에 도착하면 그 자리가 분대의 <strong>새 집</strong>이 된다. 클릭한 곳이 다른 섬이면 같은 섬의 항구에서 보트로 건넌다. 클릭한 자리에 잠깐 표시가 퍼진다.</li>
+<li><strong>지휘</strong>: 숫자키(또는 하단 분대 아이콘 클릭)로 분대를 고르고 <strong>우클릭</strong>으로 이동시킨다. Shift+숫자로 여러 분대를 함께 고른다. 숫자키를 <strong>두 번 빠르게</strong>(0.4초 안, <code>SQUAD_DOUBLE_TAP</code>) 누르면 카메라가 그 분대로 간다. 고른 분대가 없으면 우클릭은 아무 일도 하지 않는다. 분대가 아닌 곳(건물·빈 땅)을 좌클릭해도 분대 선택은 그대로다. 이동하는 동안 병사는 <strong>2.5칸 안의 적만</strong> 상대하고 계속 가며, 클릭한 칸 0.6칸 안에 도착하면 그 자리가 분대의 <strong>새 집</strong>이 된다. 클릭한 곳이 다른 섬이면 같은 섬의 항구에서 보트로 건넌다. 클릭한 자리에 잠깐 표시가 퍼진다.</li>
 <li><strong>집</strong>: 갓 나온 분대의 집은 만든 병영, 시작 경비병의 집은 도시다. 이동 명령으로 바뀌고, 보트로 다른 섬에 내리면 내린 자리가 새 집이다.</li>
 <li><strong>수비 AI</strong>: 명령이 없는 병사는 집의 <strong>수비 반경</strong>(근접 4칸, 원거리 5칸, <code>LEASH_MELEE</code>·<code>LEASH_RANGED</code>) 안의 가장 가까운 적을 먼저 상대한다. 반경 안에 적이 없으면 <strong>지원 범위</strong>(반경 ×2) 안의 가까운 적에게 가고, 그 안에도 없으면 집으로 돌아가 대기한다. 땅 위로만 이동한다.</li>
 <li>같은 섬에 적이 있으면 병사는 섬을 건너지 않는다. <strong>같은 섬에 적이 없을 때만</strong> 이동 명령을 받으면 항구·보트로 다른 섬으로 간다(명령 없이 섬을 건너지는 않는다).</li>
@@ -974,11 +974,6 @@ docs/          기획서 (.gdignore)
 </thead>
 <tbody>
 <tr>
-<td><strong>R3 분대</strong></td>
-<td>병영 분대 생산(근접·원거리, 대기열·환불), 사격장 숨김, 분대 번호·상한, 숫자키·우클릭 이동·두 번 눌러 카메라, 충원, 하단 분대 줄</td>
-<td>분대를 뽑아 숫자키로 골라 원하는 곳을 지킨다</td>
-</tr>
-<tr>
 <td><strong>R4 개척자와 도시</strong></td>
 <td>개척자 생산·이동·정착(4칸, 비용 증가), 도시 수에 따른 분대 상한, 도시 목록</td>
 <td>개척자로 두 번째 도시를 세우고 상한과 배율이 오른다</td>
@@ -1007,7 +1002,6 @@ docs/          기획서 (.gdignore)
 </table>
 <h3 id="91">9.1 정해야 할 것 (해당 마일스톤 시작 전, 추천안 포함)</h3>
 <p><strong>실시간 개편 (R1~R5)</strong>
-- <strong>교역 수비병 거래 (R3)</strong>: 추천 삭제(분대 상한과 맞지 않는다).
 - <strong>개척자 (R4)</strong>: 추천 체력 20, 속도 1.5칸/초. 4칸 거리는 체비쇼프 거리(대각선도 1칸). 선택은 개척자 좌클릭, 이동은 우클릭, 정착은 패널의 "도시 세우기" 버튼(조건이 안 맞으면 비활성과 이유 툴팁).</p>
 <p><strong>모델링·렌더링 (M9)</strong>
 - <strong>모델 규칙</strong>: 지금은 가로·세로 0.6(레벨 1)·0.75(레벨 2~3), 높이 0.8 이하, 원점 바닥 가운데, 팔레트 텍스처 최근접, 레벨·번호별 폴더에 정상·<code>dmg1</code>·<code>dmg2</code>(7.2). 추천: 이 규칙을 7.2에 확정하고 건물마다 4종류를 갖춘다(병영은 지금 2종류).
@@ -1031,8 +1025,8 @@ docs/          기획서 (.gdignore)
 </ol>
 <h3 id="93">9.3 알아 둘 것</h3>
 <ul>
-<li>테스트와 화면 확인 방법은 <code>CLAUDE.md</code>의 "실행과 테스트"에 있다. R1·R2 점검은 <code>tests/r1_check.gd</code>(맵 생성·시작 자리·배율)와 <code>tests/r1_flow.gd</code>(시작 위치·카메라·경비병), <code>tests/r2_flow.gd</code>(실시간 루프)다. 남은 옛 점검은 테스트용 작은 섬을 <code>Field.place</code>로 깐다(<code>Piece</code>는 이제 지형 상수와 이 용도만 남았다). 라운드제를 전제로 했던 옛 점검은 실시간 구조(<code>setup</code> + <code>launch_wave</code>, <code>call_wave</code>·<code>advance</code>, 남은 적 0이면 웨이브를 막은 것)로 다시 썼다. <code>tests/screenshot.gd</code>의 모드는 start·menu·npc·defense·prep(없으면 전투)이다.</li>
-<li><strong>R3 전까지의 임시 상태</strong>: 시간은 처음부터 끝까지 흐른다(전투 시뮬레이션 <code>Battle</code>이 첫 도시를 세울 때 만들어져 판 내내 돈다). 병영·사격장은 지을 때와 웨이브가 올 때마다 정원(3명·2명)을 무료로 채우고, 우클릭 이동 명령은 모든 병사에게 간다. 시작 경비병 2명은 한 번만 나온다. 유적지는 R5까지 없고, 해적선은 아직 무작위 가장자리에서 온다.</li>
+<li>테스트와 화면 확인 방법은 <code>CLAUDE.md</code>의 "실행과 테스트"에 있다. R1~R3 점검은 <code>tests/r1_check.gd</code>(맵 생성·시작 자리·배율), <code>tests/r1_flow.gd</code>(시작 위치·카메라·경비병), <code>tests/r2_flow.gd</code>(실시간 루프), <code>tests/r3_check.gd</code>(분대 생산·번호·상한·충원)와 <code>tests/r3_flow.gd</code>(분대 줄·숫자키·병영 패널)다. 남은 옛 점검은 테스트용 작은 섬을 <code>Field.place</code>로 깐다(<code>Piece</code>는 이제 지형 상수와 이 용도만 남았다). 라운드제를 전제로 했던 옛 점검은 실시간 구조(<code>setup</code> + <code>launch_wave</code>, <code>call_wave</code>·<code>advance</code>, 남은 적 0이면 웨이브를 막은 것)로 다시 썼다. <code>tests/screenshot.gd</code>의 모드는 start·menu·npc·defense·prep(없으면 전투)이다.</li>
+<li><strong>R4 전까지의 임시 상태</strong>: 시간은 처음부터 끝까지 흐른다(전투 시뮬레이션 <code>Battle</code>이 첫 도시를 세울 때 만들어져 판 내내 돈다). 분대(<code>Battle.squads</code>, 병사의 <code>squad</code> 번호)와 병영 대기열(<code>Battle.queues</code>)도 <code>Battle</code>이 관리한다. 개척자가 없어 도시는 하나뿐이라 분대 수 상한은 3이다. 유적지는 R5까지 없고, 해적선은 아직 무작위 가장자리에서 온다.</li>
 <li>실시간 흐름 점검은 <code>tests/r2_flow.gd</code>다. 게임 시간은 <code>main.advance(초)</code>로 흘려 볼 수 있다.</li>
 <li>무작위에 영향을 받아 한 번씩 실패한 적이 있는 점검이 셋 있었다(<code>m14_flow.gd</code>, <code>m3_check.gd</code>, <code>m9_flow.gd</code>). 개편 때 지우거나 고치면서 시드를 고정한다.</li>
 <li>사용자가 Godot 에디터를 켜 두는 경우가 많아서 Godot 프로세스를 강제로 종료하지 않는다(에디터가 같이 꺼진다).</li>
@@ -1387,6 +1381,11 @@ docs/          기획서 (.gdignore)
 <td>0.2.04</td>
 <td>2026-11-28</td>
 <td><strong>R2 마무리</strong><br>- 버그 수정: 같은 칸 안에서 사거리 밖으로 떨어진 병사와 해적이 서로 멈춰 싸우지 않던 문제(경로가 비어 움직이지 않음). 같은 칸이면 곧장 다가간다<br>- 라운드제를 전제로 한 옛 점검 25개를 실시간 구조로 다시 씀</td>
+</tr>
+<tr>
+<td>0.2.05</td>
+<td>2026-11-28</td>
+<td><strong>R3 분대</strong><br>- 병영은 생산만: 패널의 "근접 분대"(3명, 골드 30·식량 15)·"원거리 분대"(2명, 골드 30·식량 10, 궁술 필요), 30초, 병영마다 대기열 3칸, 취소·병영 붕괴 때 전액 환불. 병종은 생산을 시작할 때의 병영 레벨. 지을 때·웨이브마다 무료로 채우던 임시 규칙 삭제<br>- 분대는 비어 있는 가장 작은 번호(1~9). 시작 경비병 2명이 1번. 분대 수 상한 3 + (도시 − 1), 대기열 포함<br>- 숫자키로 고르고 Shift+숫자로 더하기, 0.4초 안에 두 번 누르면 카메라가 분대로. 우클릭은 고른 분대만 이동(고른 분대가 없으면 무시)<br>- 하단 가운데 분대 줄(번호·병종·인원, 고른 분대 밝게)과 충원 버튼(병영 2칸 안, 1명당 근접 10G·식량 5, 원거리 15G·식량 5)<br>- 사격장을 건설 목록에서 숨김, 교역 NPC의 경비병 거래 삭제(거래는 연구포인트 하나)</td>
 </tr>
 </tbody>
 </table></main></body></html>

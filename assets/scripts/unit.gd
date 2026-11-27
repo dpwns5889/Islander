@@ -16,7 +16,7 @@ var landing: Vector3
 var crew: int = 0 ## 해적선이 태운 적 수
 var crew_kinds: Array[int] = [] ## 해적선이 태운 적 종류(강한 적이 먼저)
 var crew_mult: float = 1.0 ## 해적선이 태운 적의 체력·공격 배율(웨이브가 올 때의 도시 수로 정한다) (기획서 6장)
-var src: Vector2i = Vector2i(-1, -1) ## 병사를 낸 병영 칸 (R3 전까지 웨이브마다 정원을 채운다)
+var squad: int = 0 ## 병사가 속한 분대 번호(1~9), 0이면 분대 없음 (기획서 6장)
 ## 이동: 경로 칸 목록과 다음 경로 계산까지 남은 시간
 var path: Array[Vector2i] = []
 var repath: float = 0.0

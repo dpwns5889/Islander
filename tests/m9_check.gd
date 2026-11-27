@@ -50,17 +50,16 @@ func _initialize() -> void:
 	gsb.gold = 1000
 	gsb.food = 1000
 	var f2: Field = _island()
-	f2.build(Balance.SHOOTING_RANGE, Vector2i(6, 6))
+	f2.build(Balance.BARRACKS, Vector2i(6, 6))
 	var b: Battle = Battle.new()
 	b.setup(f2, gsb)
-	b.launch_wave(1)
+	b._new_squad("ranged", Balance.U_ARCHER, Balance.SQUADS["ranged"]["count"], Vector2i(6, 6)) # 생산 과정은 r3_check
 	var archers: int = 0
 	for s in b.soldiers:
 		if s.kind == Balance.U_ARCHER:
 			archers += 1
 			fails += _check(s.reach == 2.0 and s.hp == 20.0 and s.atk == 3.0, "궁수 능력치")
-	fails += _check(archers == 2, "사격장이 궁수를 2명 만든다 (%d)" % archers)
-	fails += _check(gsb.gold == 1000 and gsb.food == 1000, "병사 생산은 골드·식량을 쓰지 않는다")
+	fails += _check(archers == 2, "원거리 분대는 궁수 2명 (%d)" % archers)
 	# 궁수는 사거리 2칸에서 쏜다 (다가가지 않는다)
 	var archer: Unit = b.soldiers[b.soldiers.size() - 1]
 	var pirate: Unit = b._add_unit(Balance.U_PIRATE, archer.position + Vector3(1.8, 0.0, 0.0), 1.0)
@@ -73,13 +72,12 @@ func _initialize() -> void:
 	# 레벨 3: 기사(속도 2.0), 쇠뇌병
 	var f3: Field = _island()
 	f3.build(Balance.BARRACKS, Vector2i(6, 6))
-	f3.build(Balance.SHOOTING_RANGE, Vector2i(7, 6))
-	for c in [Vector2i(6, 6), Vector2i(7, 6)]:
-		f3.upgrade(c)
-		f3.upgrade(c)
+	f3.upgrade(Vector2i(6, 6))
+	f3.upgrade(Vector2i(6, 6))
 	var b3: Battle = Battle.new()
 	b3.setup(f3, gsb)
-	b3.launch_wave(1)
+	for type: String in ["melee", "ranged"]:
+		b3._new_squad(type, Balance.SQUADS[type]["units"][2], Balance.SQUADS[type]["count"], Vector2i(6, 6))
 	var knight: Unit = null
 	var arbalest: Unit = null
 	for s in b3.soldiers:

@@ -32,7 +32,7 @@ func _initialize() -> void:
 	for c: Vector2i in f.territory_of[f.hq]:
 		if not built and main.try_build(c):
 			built = true
-	fails += _check(built and b.soldiers.size() == Balance.HQ_GUARDS + 3, "병영을 지으면 바로 정원 3명 (병사 %d)" % b.soldiers.size())
+	fails += _check(built and b.soldiers.size() == Balance.HQ_GUARDS, "전투 중에도 지을 수 있다 (병영은 생산만, R3)")
 	# 첫 웨이브
 	main.advance(Balance.WAVE_FIRST_DELAY - main.game_time + 0.1)
 	fails += _check(gs.wave == 2 and b.enemies_left() > 0 and main.wave_timer > Balance.WAVE_INTERVAL - 1.0, "3분이 지나면 1웨이브가 오고 다음은 2분 뒤 (남은 적 %d)" % b.enemies_left())

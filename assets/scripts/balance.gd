@@ -48,7 +48,7 @@ const BUILDINGS: Dictionary = {
 ## 건설 메뉴 카테고리 (아래에서 위로 펼쳐지는 드롭다운). 진화 건물은 목록에 없고 진화로만 얻는다 (기획서 5.2.1, 7.2)
 const CATEGORIES: Array = [
 	{"name": "생산", "ids": [HOUSE, FARM, FISHERY, MINE]},
-	{"name": "군사·해상", "ids": [BARRACKS, SHOOTING_RANGE, PORT, TOWER]},
+	{"name": "군사·해상", "ids": [BARRACKS, PORT, TOWER]}, # 사격장은 보류: 원거리 분대도 병영이 만든다 (기획서 5.1)
 	{"name": "상업", "ids": [MARKET, TRADING_POST]},
 	{"name": "과학", "ids": [LIBRARY, OBSERVATORY]},
 ]
@@ -115,12 +115,20 @@ const ATTACK_INTERVAL: float = 1.0
 const PIRATES_PER_SHIP: int = 3
 const MIN_PIRATES_PER_SHIP: int = 2 ## 해적선 한 척의 최소 인원. 한 명만 타고 오는 배는 없다 (기획서 6장)
 const SHIP_SPAWN_TIME: float = 2.0 ## 모든 해적선이 이 시간(초) 안에 나타난다 (기획서 6장)
-const HQ_GUARDS: int = 2 ## 시작 경비병 수 (기획서 2장). R3 전까지는 웨이브 시작 때마다 첫 도시에서 나온다
-## 병영·사격장: 레벨이 병종을 정하고 인원은 고정이다 (기획서 5.1, 6장)
-const MILITARY: Dictionary = {
-	BARRACKS: {"units": [U_GUARD, U_SPEAR, U_PIKE], "count": 3},
-	SHOOTING_RANGE: {"units": [U_ARCHER, U_LONGBOW, U_ARBALEST], "count": 2},
+const HQ_GUARDS: int = 2 ## 시작 경비병 수. 첫 도시를 세울 때 한 번만 1번 분대로 나온다 (기획서 2장)
+## 분대: 병영에서 한 번 생산하면 한 분대. 병종은 생산을 시작할 때의 병영 레벨로 정한다 (기획서 6장)
+## reinforce: 충원 1명당 [골드, 식량]
+const SQUADS: Dictionary = {
+	"melee": {"name": "근접 분대", "units": [U_GUARD, U_SPEAR, U_PIKE], "count": 3, "gold": 30, "food": 15, "reinforce": [10, 5]},
+	"ranged": {"name": "원거리 분대", "units": [U_ARCHER, U_LONGBOW, U_ARBALEST], "count": 2, "gold": 30, "food": 10, "tech": "archery", "reinforce": [15, 5]},
 }
+const SQUAD_TIME: float = 30.0 ## 한 분대 생산 시간(게임 초)
+const SQUAD_QUEUE: int = 3 ## 병영마다 대기열 칸 수
+const SQUAD_CAP_BASE: int = 3 ## 첫 도시일 때 분대 수 상한(시작 경비병 포함)
+const SQUAD_CAP_PER_CITY: int = 1 ## 도시가 하나 늘 때마다 상한 +1
+const SQUAD_CAP_MAX: int = 9 ## 숫자키 1~9
+const REINFORCE_RANGE: float = 2.0 ## 분대원이 병영에서 이 거리(칸) 안이면 충원할 수 있다
+const SQUAD_DOUBLE_TAP: float = 0.4 ## 숫자키를 이 시간(초) 안에 두 번 누르면 카메라가 분대로 간다
 const LV3_TECH: String = "ironwork" ## 병영·사격장 레벨 3 강화에 필요한 연구
 ## 실시간 진행 (기획서 2장). 모두 게임 시간(초)이라 배속을 따른다
 const PRODUCTION_TICK: float = 10.0 ## 이 간격마다 골드·식량·연구수치를 받는다
@@ -214,10 +222,9 @@ const FISH_MAX: int = 9
 const TRADE_FIRST_DELAY: float = 120.0 ## 교역소를 지은 뒤 거래 NPC가 처음 오기까지(초) (기획서 5.6)
 const TRADE_INTERVAL: float = 360.0 ## 그 뒤 방문 간격(초)
 const TRADE_STAY: float = 60.0 ## 한 번 오면 머무는 시간(초)
-const TRADE_OFFERS_LV: Array[int] = [2, 2, 2] ## 교역소 레벨별 거래 수 (거래 풀이 2종, 식량 거래 없음) (기획서 5.6)
+const TRADE_OFFERS_LV: Array[int] = [1, 1, 1] ## 교역소 레벨별 거래 수 (거래 풀이 1종, M8 유물 교역에서 바뀐다) (기획서 5.6)
 const TRADES: Array = [
 	{"id": "gold_rp", "name": "골드 60 → 연구포인트 1", "gold": 60, "food": 0},
-	{"id": "gold_guards", "name": "골드 30 → 경비병 +2 (바로 도시에 나온다)", "gold": 30, "food": 0},
 ]
 const FOOD_PER_PLAINS: int = 1
 const MARKET_HOUSE_BONUS_LV: Array[float] = [0.25, 0.4, 0.6] ## 시장과 4방향으로 붙은 집의 정산 골드 보너스 (기획서 5.1)
@@ -367,8 +374,10 @@ static func effect_text(id: int, level: int, techs: Dictionary = {}) -> String:
 		return "식량 +%d" % FARM_FOOD_LV[i]
 	if id == FARMSTEAD:
 		return "식량 +%d" % FARMSTEAD_FOOD_LV[i]
-	if MILITARY.has(id):
-		return "웨이브 시작 %s %d명" % [UNITS[MILITARY[id]["units"][i]]["name"], MILITARY[id]["count"]]
+	if id == BARRACKS:
+		return "분대 생산: %s %d명 · %s %d명" % [UNITS[SQUADS["melee"]["units"][i]]["name"], SQUADS["melee"]["count"], UNITS[SQUADS["ranged"]["units"][i]]["name"], SQUADS["ranged"]["count"]]
+	if id == SHOOTING_RANGE:
+		return "보류 (원거리 분대는 병영이 만든다)"
 	if id == PORT:
 		return "보트 탑승 %d명%s" % [PORT_CAPACITY_LV[i], ", 보트 속도 +30%" if level == MAX_LEVEL else ""]
 	if id == MARKET:
@@ -482,6 +491,11 @@ static func new_enemy_kinds(wave: int) -> Array[int]:
 ## 해적선은 한 척에 최대 PIRATES_PER_SHIP명을 태운다 (기획서 6장)
 static func ship_count(wave: int, run_seed: int = 0) -> int:
 	return ceili(pirate_count(wave, run_seed) / float(PIRATES_PER_SHIP))
+
+
+## 분대 수 상한: min(9, 3 + (도시 수 − 1)) (기획서 6장)
+static func squad_cap(cities: int) -> int:
+	return mini(SQUAD_CAP_MAX, SQUAD_CAP_BASE + SQUAD_CAP_PER_CITY * maxi(cities - 1, 0))
 
 
 ## 해적 체력·공격 배율: 살아 있는 도시 수에 비례 (기획서 6장)
