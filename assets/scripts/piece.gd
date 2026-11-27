@@ -1,113 +1,26 @@
 class_name Piece
 extends RefCounted
-## 지형 조각: 칸 좌표와 칸별 지형 (기획서 4장)
+## 지형 값과 땅 묶음. 조각 퍼즐은 0.2.01에서 삭제했고(기획서 1장), 지금은 지형 상수와 테스트가 땅을 깔 때만 쓴다
+## shortcut: 이름이 옛 "조각"이다. 테스트를 R2~R3에서 다시 쓸 때 Terrain으로 바꾼다
 
-const SEA: int = 0 ## 바다 칸: 놓으면 그 칸이 물 타일로 차지된다 (기획서 4장)
+const SEA: int = 0
 const PLAINS: int = 1
 const SAND: int = 2
 const FOREST: int = 3 ## 숲: 이동 느림, 식량 0 (기획서 3장)
-const MOUNTAIN: int = 4 ## 산: 이동 불가, 방어탑만 (기획서 3장)
+const MOUNTAIN: int = 4 ## 산: 이동 불가 (기획서 3장)
 
 const SEVEN: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1), Vector2i(0, 2)]
-## 4~7칸 모양 18종 (기획서 4장)
-const SHAPES: Array = [
-	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)], # I4
-	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1)], # O
-	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(1, 1)], # T4
-	[Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1)], # S
-	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1), Vector2i(2, 1)], # Z
-	[Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(1, 2)], # L4
-	[Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(0, 2)], # J4
-	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0), Vector2i(4, 0)], # I5
-	[Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3), Vector2i(1, 3)], # L5
-	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(0, 2)], # P
-	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(1, 1), Vector2i(1, 2)], # T5
-	[Vector2i(0, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1)], # U
-	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(1, 1), Vector2i(1, 2), Vector2i(2, 2)], # Z5
-	[Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1), Vector2i(1, 2)], # X
-	[Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(1, 2), Vector2i(2, 2)], # V
-	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(2, 1)], # 2x3
-	[Vector2i(0, 0), Vector2i(0, 1), Vector2i(0, 2), Vector2i(0, 3), Vector2i(0, 4), Vector2i(1, 4)], # L6
-	SEVEN,
-]
-## 바다 타일용 3칸 모양: 일자, ㄱ자
-const SEA_SHAPES_3: Array = [
-	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)],
-	[Vector2i(0, 0), Vector2i(1, 0), Vector2i(0, 1)],
-]
-## 평원 위주 / 모래 위주 / 반반 (모래가 될 확률)
-const SAND_CHANCE: Array[float] = [0.15, 0.85, 0.5]
 
 var cells: Array[Vector2i] = []
 var terrain: Array[int] = []
-var hq_index: int = -1 ## 본부가 올라가는 칸 번호, 없으면 -1
+var hq_index: int = -1 ## 도시가 세워지는 칸 번호, 없으면 -1
 
 
-static func random_piece(rng: RandomNumberGenerator, with_sea: bool = false) -> Piece:
-	if with_sea and rng.randf() < Balance.SEA_TILE_CHANCE:
-		return sea_piece(rng)
-	var p: Piece = Piece.new()
-	p.cells.assign(SHAPES[rng.randi() % SHAPES.size()])
-	var sand: float = SAND_CHANCE[rng.randi() % SAND_CHANCE.size()]
-	for _c in p.cells:
-		p.terrain.append(SAND if rng.randf() < sand else PLAINS)
-	var specials: int = 0 # 숲·산은 조각당 최대 SPECIAL_MAX칸. 시작·본부 조각에는 없다 (기획서 4장)
-	for _i in Balance.SPECIAL_MAX:
-		if rng.randf() < Balance.SPECIAL_CHANCE:
-			specials += 1
-	for _k in specials:
-		p.terrain[rng.randi() % p.cells.size()] = MOUNTAIN if rng.randf() < Balance.MOUNTAIN_SHARE else FOREST
-	return p
-
-
-## 온전히 바다 칸만 있는 3~5칸 조각 (기획서 4장)
-static func sea_piece(rng: RandomNumberGenerator) -> Piece:
-	var n: int = 3 + rng.randi() % 3
-	var shapes: Array = SEA_SHAPES_3 if n == 3 else SHAPES.filter(func(s: Array) -> bool: return s.size() == n)
-	var p: Piece = Piece.new()
-	p.cells.assign(shapes[rng.randi() % shapes.size()])
-	for _c in p.cells:
-		p.terrain.append(SEA)
-	return p
-
-
-func has_sea() -> bool:
-	return terrain.has(SEA)
-
-
-## 시작 조각: 7칸, 평원 위주, 무작위 평원 칸 1개가 본부 (기획서 2장)
+## 테스트용 7칸 평원 묶음, 무작위 칸 1개가 도시
 static func start_piece(rng: RandomNumberGenerator) -> Piece:
 	var p: Piece = Piece.new()
 	p.cells.assign(SEVEN)
 	for _c in p.cells:
-		p.terrain.append(SAND if rng.randf() < SAND_CHANCE[0] else PLAINS)
+		p.terrain.append(PLAINS)
 	p.hq_index = rng.randi() % p.cells.size()
-	p.terrain[p.hq_index] = PLAINS
-	return p
-
-
-func size() -> Vector2i:
-	var s: Vector2i = Vector2i.ZERO
-	for c in cells:
-		s = Vector2i(maxi(s.x, c.x + 1), maxi(s.y, c.y + 1))
-	return s
-
-
-## 커서가 조각 중앙에 오도록 한 원점 (좌상단 칸)
-func origin_for(hover: Vector2i) -> Vector2i:
-	return hover - size() / 2
-
-
-## 시계 방향 90도 회전한 새 조각 (기획서 4장, 뒤집기는 없음)
-func rotated() -> Piece:
-	var p: Piece = Piece.new()
-	p.terrain.assign(terrain)
-	p.hq_index = hq_index
-	var min_v: Vector2i = Vector2i(1000, 1000)
-	for c in cells:
-		var r: Vector2i = Vector2i(-c.y, c.x)
-		p.cells.append(r)
-		min_v = Vector2i(mini(min_v.x, r.x), mini(min_v.y, r.y))
-	for i in p.cells.size():
-		p.cells[i] -= min_v
 	return p

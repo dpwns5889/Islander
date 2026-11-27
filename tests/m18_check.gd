@@ -4,21 +4,6 @@ extends SceneTree
 
 func _initialize() -> void:
 	var fails: int = 0
-	# 1. 조각 생성: 숲·산은 조각당 최대 2칸, 시작·본부 조각에는 없다
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	rng.seed = 7
-	var forests: int = 0
-	var mountains: int = 0
-	var max_special: int = 0
-	for _i in 400:
-		var p: Piece = Piece.random_piece(rng)
-		var n: int = p.terrain.count(Piece.FOREST) + p.terrain.count(Piece.MOUNTAIN)
-		max_special = maxi(max_special, n)
-		forests += p.terrain.count(Piece.FOREST)
-		mountains += p.terrain.count(Piece.MOUNTAIN)
-	fails += _check(max_special <= Balance.SPECIAL_MAX and forests > 0 and mountains > 0 and forests > mountains, "숲·산이 섞이고 조각당 2칸 이하, 숲이 더 많다 (숲 %d, 산 %d)" % [forests, mountains])
-	var sp: Piece = Piece.start_piece(rng)
-	fails += _check(not sp.terrain.has(Piece.FOREST) and not sp.terrain.has(Piece.MOUNTAIN), "시작·본부 조각에는 숲·산이 없다")
 	# 2. 건설 조건: 숲은 집·도서관·방어탑, 산은 방어탑만
 	var f: Field = _field()
 	fails += _check(f.can_build(Balance.HOUSE, Vector2i(5, 5)) and f.can_build(Balance.LIBRARY, Vector2i(5, 5)) and f.can_build(Balance.TOWER, Vector2i(5, 5)), "숲: 집·도서관·방어탑")
@@ -66,7 +51,7 @@ func _initialize() -> void:
 
 ## 땅 한 줄(4..8, 5): 숲 (5) · 산 (6) · 평원 (7) 등 (4와 8은 평원)
 func _field() -> Field:
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var terr: Array[int] = [Piece.PLAINS, Piece.FOREST, Piece.MOUNTAIN, Piece.PLAINS, Piece.PLAINS]
 	var p: Piece = Piece.new()
 	for i in 5:

@@ -98,12 +98,9 @@ const TOWER_RANGE_LV: Array[float] = [3.0, 3.5, 4.0]
 const FORTRESS_ATK_LV: Array[float] = [11.0, 13.0, 16.0] ## 요새 (기획서 5.2.1)
 const FORTRESS_RANGE_LV: Array[float] = [4.5, 4.75, 5.0]
 const TOWER_INTERVAL: float = 1.0
-const HQ_ATK: float = 3.0 ## 본부의 약한 자동 공격 (레벨과 무관) (기획서 6장)
-const HQ_RANGE: float = 2.5
 const HQ_HP: float = 300.0
 const HQ_MODEL: String = "castle" ## 본부 모델: 레벨 구분 없이 놓을 때 번호를 무작위로 고른다 (기획서 7.2)
 const HQ_MODEL_VARIANTS: int = 3
-const HQ_PIECE_WAVES: Array[int] = [10, 20] ## 이 웨이브(보스)를 이기면 본부 조각을 하나 더 놓아야 한다 (기획서 5.5)
 const HQ_LOSS_RATE: float = 0.3 ## 본부가 파괴될 때마다 줄어드는 골드·식량 비율
 const BUILDING_EDGE: float = 0.5 ## 건물 칸 중심에서 가장자리까지 (건물 공격 거리는 가장자리부터 잰다) (기획서 6장)
 const UNIT_GAP: float = 0.3 ## 유닛끼리 이 거리보다 가까우면 서로 밀어낸다
@@ -118,7 +115,7 @@ const ATTACK_INTERVAL: float = 1.0
 const PIRATES_PER_SHIP: int = 3
 const MIN_PIRATES_PER_SHIP: int = 2 ## 해적선 한 척의 최소 인원. 한 명만 타고 오는 배는 없다 (기획서 6장)
 const SHIP_SPAWN_TIME: float = 2.0 ## 모든 해적선이 이 시간(초) 안에 나타난다 (기획서 6장)
-const HQ_GUARDS: int = 2 ## 웨이브 시작 때 본부가 무료로 내보내는 수비병
+const HQ_GUARDS: int = 2 ## 시작 경비병 수 (기획서 2장). R3 전까지는 웨이브 시작 때마다 첫 도시에서 나온다
 ## 병영·사격장: 레벨이 병종을 정하고 인원은 고정이다 (기획서 5.1, 6장)
 const MILITARY: Dictionary = {
 	BARRACKS: {"units": [U_GUARD, U_SPEAR, U_PIKE], "count": 3},
@@ -126,19 +123,20 @@ const MILITARY: Dictionary = {
 }
 const LV3_TECH: String = "ironwork" ## 병영·사격장 레벨 3 강화에 필요한 연구
 const WAVE_TIME_LIMIT: float = 300.0 ## 적이 막혀 끝나지 않을 때만 쓰는 안전장치(초). 이 시간이 지나면 남은 적을 정리하고 웨이브를 끝낸다
-const COMBAT_PITCH: float = 35.0 ## 전투 시작 기울기(도): 쿼터뷰 (기획서 2장, 7.2)
-const COMBAT_YAW: float = 45.0 ## 전투 시작 좌우 회전(도)
-const CAM_PITCH_MIN: float = 35.0 ## 전투 중 드래그로 기울일 수 있는 범위(도) (기획서 7.2)
+const COMBAT_PITCH: float = 35.0 ## 카메라 시작 기울기(도): 쿼터뷰 하나 (기획서 7.2)
+const COMBAT_YAW: float = 45.0 ## 카메라 시작 좌우 회전(도)
+const CAM_PITCH_MIN: float = 35.0 ## 좌클릭 드래그로 기울일 수 있는 범위(도) (기획서 7.2)
 const CAM_PITCH_MAX: float = 90.0
-const CAM_ROTATE_SENS: float = 0.3 ## 우클릭 드래그 1픽셀당 회전 각도(도)
+const CAM_ROTATE_SENS: float = 0.3 ## 좌클릭 드래그 1픽셀당 회전 각도(도)
+const CAM_DRAG_THRESHOLD: float = 6.0 ## 좌클릭을 이 거리(논리 픽셀) 넘게 끌면 회전, 아니면 클릭 (기획서 7.2)
+const EDGE_PAN_MARGIN: float = 12.0 ## 화면 가장자리 이 폭(논리 픽셀) 안에 마우스가 있으면 카메라가 움직인다 (기획서 7.2, 9.1)
+const EDGE_PAN_SPEED: float = 1.0 ## 가장자리 이동 속도: 1초에 화면 세로 크기의 이 배수만큼
 const PIXEL_HEIGHT: int = 360 ## 도트 화면의 세로 픽셀 수. 1080p는 3배, 1440p는 4배로 정수 배 확대된다 (기획서 7.2)
-const SEA_TILE_WAVE: int = 10 ## 이 웨이브보다 뒤부터 바다 칸이 섞인 타일이 후보에 나온다 (기획서 4장)
-const SEA_TILE_CHANCE: float = 0.4 ## 그때 한 카드가 바다 섞인 타일일 확률
-const PREP_CAM_SIZE: float = 18.0 ## 준비 단계 카메라 크기(작을수록 확대)
-const ZOOM_MIN: float = 0.4 ## 휠 최대 확대 배율 (기획서 2장)
-const ZOOM_MAX: float = 1.3 ## 휠 최대 축소 배율
+const ZOOM_MIN: float = 0.4 ## 휠 최대 확대 배율 (기획서 7.2, 9.1)
+const ZOOM_MAX: float = 3.0 ## 휠 최대 축소 배율 (넓은 맵을 멀리서 본다)
+const ZOOM_START: float = 3.0 ## 시작 위치를 고를 때의 배율
 const ZOOM_STEP: float = 0.9 ## 휠 한 칸당 배율
-const COMBAT_CAM_SIZE: float = 13.5 ## 전투 카메라는 준비 단계보다 더 확대한다 (기획서 7.2)
+const COMBAT_CAM_SIZE: float = 13.5 ## 배율 1일 때 카메라에 세로로 담기는 크기 (기획서 7.2)
 
 const HQ_LEVEL_FOOD: Array[int] = [5, 12, 22, 35, 50, 70, 95, 125, 160, 200, 245, 295, 350, 410, 475, 545, 620, 700, 785] ## 본부 레벨 2~20이 되는 식량 누적량. 그 뒤는 hq_level_food가 이어 계산한다 (기획서 5.3)
 const HQ_LEVEL_FOOD_STEP: int = 5 ## 레벨 20 이후 레벨마다 늘어나는 필요 식량의 증가폭(마지막 구간 85에서 +5씩)
@@ -154,19 +152,20 @@ static func hq_level_food(lv: int) -> int:
 	return last + n * step + HQ_LEVEL_FOOD_STEP * n * (n + 1) / 2
 const TERRITORY_SQUARE_CHANCE: float = 0.6 ## 영역 확장 때 정사각형 우선으로 고를 확률 (나머지는 무작위) (기획서 5.3)
 const TERRITORY_START_RADIUS: int = 1 ## 본부 영역의 시작 크기: 본부 칸 주변 이 거리까지 (3x3) (기획서 5.3)
-const GROW_EVERY: int = 2 ## 이 라운드마다 필드가 4방으로 한 줄씩 넓어진다 (기획서 3장)
 
-const EXPLORE_COST: int = 20 ## 유적지 원정 골드 (기획서 3장)
-const EXPLORE_GOLD_MIN: int = 60
+const EXPLORE_GOLD_MIN: int = 60 ## 유적지 보상 골드 (기획서 3장, R5에서 다시 씀)
 const EXPLORE_GOLD_MAX: int = 100
 const EXPLORE_RP_CHANCE: float = 0.3 ## 골드 대신 연구포인트 +1을 얻을 확률
-const RUIN_CHANCE: float = 0.02 ## 대륙 안쪽 평원 칸이 유적지일 확률
-const CONTINENT_FREQ: float = 0.05 ## 필드 밖 지형 노이즈 주파수(낮을수록 큰 대륙)
-const CONTINENT_LEVEL: float = -0.1 ## 이 값보다 큰 노이즈가 땅
 
-const SPECIAL_MAX: int = 2 ## 보상 타일 한 조각의 숲·산 칸 최대 수 (기획서 4장)
-const SPECIAL_CHANCE: float = 0.3 ## 그 칸이 숲·산이 될 확률(칸마다 따로 굴림)
-const MOUNTAIN_SHARE: float = 0.35 ## 숲·산 중 산일 확률
+## 맵 생성 (기획서 3장, 9.1)
+const MAP_SIZE: int = 96 ## 맵 한 변 칸 수
+const MAP_EDGE_SEA: int = 4 ## 맵 가장자리에서 항상 바다인 폭
+const MAP_LAND_RATIO: float = 0.35 ## 가장자리 안쪽 칸 중 땅 비율
+const MAP_NOISE_FREQ: float = 0.045 ## 섬 노이즈 주파수 (낮을수록 큰 섬)
+const MAP_MIN_ISLAND: int = 10 ## 이보다 작은 섬은 바다로 지운다
+const MAP_FOREST_RATIO: float = 0.15 ## 해안이 아닌 땅 중 숲 비율
+const MAP_MOUNTAIN_RATIO: float = 0.08 ## 해안이 아닌 땅 중 산 비율
+const START_ISLAND_PLAINS: int = 30 ## 첫 도시는 평원이 이만큼 이상인 섬의 평원 칸에만 세운다
 const FOREST_SPEED: float = 0.7 ## 숲 위 이동속도 배율 (아군·적 모두) (기획서 3장)
 const SEA_CROSS_SPEED: float = 0.4 ## 바닷길이 막혔을 때 해적이 바다 칸을 걸어 건너는 속도 배율 (기획서 6장)
 ## 숲·산에 지을 수 있는 건물 (평원은 전부, 모래는 건물의 sand 값) (기획서 3장)
@@ -177,8 +176,7 @@ const SMELTER_GOLD_LV: Array[int] = [67, 82, 96] ## 제련소 정산 골드 (기
 const HQ_BASE_GOLD: int = 20 ## 살아 있는 본부마다 웨이브 정산 때 받는 기본 골드 (기획서 5.1)
 
 const WIN_WAVE: int = 30 ## 이 웨이브를 이기면 승리 화면 (이후 무한 모드로 계속할 수 있다) (기획서 9.1)
-const ENEMY_LAND_RATE: float = 0.035 ## 땅 10칸당 적 체력·공격 증가량 (기획서 6장)
-const ENEMY_EXPAND_RATE: float = 0.07 ## 확장 1회당 적 체력·공격 증가량
+const ENEMY_CITY_RATE: float = 0.15 ## 도시가 하나 늘 때마다 적 체력·공격 증가량 (기획서 6장)
 const START_GOLD: int = 50
 const START_FOOD: int = 20
 
@@ -207,10 +205,9 @@ const FISH_BASE: int = 3
 const FISH_DIV: int = 6
 const FISH_MAX: int = 9
 const TRADE_INTERVAL: int = 3 ## 교역소가 있으면 이 웨이브마다 거래 NPC가 방문한다 (기획서 5.6)
-const TRADE_OFFERS_LV: Array[int] = [3, 3, 3] ## 교역소 레벨별 거래 수 (거래 풀이 3종, 식량 거래 없음) (기획서 5.6)
+const TRADE_OFFERS_LV: Array[int] = [2, 2, 2] ## 교역소 레벨별 거래 수 (거래 풀이 2종, 식량 거래 없음) (기획서 5.6)
 const TRADES: Array = [
 	{"id": "gold_rp", "name": "골드 60 → 연구포인트 1", "gold": 60, "food": 0},
-	{"id": "gold_piece", "name": "골드 40 → 놓을 조각 +1", "gold": 40, "food": 0},
 	{"id": "gold_guards", "name": "골드 30 → 다음 전투 수비병 +2", "gold": 30, "food": 0},
 ]
 const FOOD_PER_PLAINS: int = 1
@@ -478,6 +475,6 @@ static func ship_count(wave: int, run_seed: int = 0) -> int:
 	return ceili(pirate_count(wave, run_seed) / float(PIRATES_PER_SHIP))
 
 
-## 해적 체력·공격 배율: 땅 칸 수와 확장 횟수에 비례 (기획서 6장)
-static func enemy_mult(land_cells: int, expansions: int) -> float:
-	return 1.0 + ENEMY_LAND_RATE * (land_cells / 10.0) + ENEMY_EXPAND_RATE * expansions
+## 해적 체력·공격 배율: 살아 있는 도시 수에 비례 (기획서 6장)
+static func enemy_mult(cities: int) -> float:
+	return 1.0 + ENEMY_CITY_RATE * maxi(cities - 1, 0)

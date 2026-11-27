@@ -23,7 +23,7 @@ func _initialize() -> void:
 
 ## 왼쪽 섬 A(본부)와 오른쪽 섬 B(집 3채). ring이면 바깥에 땅 고리를 둘러 바닷길을 막는다
 func _field(ring: bool) -> Field:
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var a: Piece = Piece.new()
 	for y in 5:
 		for x in 5:
@@ -40,13 +40,14 @@ func _field(ring: bool) -> Field:
 	for y in 3:
 		f.build(Balance.HOUSE, Vector2i(12, 5 + y))
 	if ring:
-		var r: Rect2i = f.bounds.grow(3)
+		var r: Rect2i = Rect2i(0, 0, 15, 15).grow(3) # 옛 필드 둘레에 땅 고리
+		f._ver += 1
 		for x in range(r.position.x, r.end.x):
-			f._outer[Vector2i(x, r.position.y)] = Piece.SAND
-			f._outer[Vector2i(x, r.end.y - 1)] = Piece.SAND
+			f.cells[Vector2i(x, r.position.y)] = Piece.SAND
+			f.cells[Vector2i(x, r.end.y - 1)] = Piece.SAND
 		for y in range(r.position.y, r.end.y):
-			f._outer[Vector2i(r.position.x, y)] = Piece.SAND
-			f._outer[Vector2i(r.end.x - 1, y)] = Piece.SAND
+			f.cells[Vector2i(r.position.x, y)] = Piece.SAND
+			f.cells[Vector2i(r.end.x - 1, y)] = Piece.SAND
 	return f
 
 

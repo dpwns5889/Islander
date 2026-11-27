@@ -42,7 +42,7 @@ func _initialize() -> void:
 
 
 func _island() -> Field:
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var p: Piece = Piece.new()
 	for y in 5:
 		for x in 5:

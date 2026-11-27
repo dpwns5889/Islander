@@ -4,7 +4,7 @@ extends SceneTree
 
 func _initialize() -> void:
 	var fails: int = 0
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var p: Piece = Piece.new()
 	for i in 4:
 		p.cells.append(Vector2i(i, 0))

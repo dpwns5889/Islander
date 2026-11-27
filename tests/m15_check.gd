@@ -1,5 +1,5 @@
 extends SceneTree
-## 낚시터(물 위)·교역소·효과음·타일 크기 점검: godot --headless --script tests/m15_check.gd
+## 낚시터(물 위)·교역소·효과음 점검: godot --headless --script tests/m15_check.gd
 
 
 func _initialize() -> void:
@@ -40,14 +40,10 @@ func _initialize() -> void:
 	var open_cells: int = f.fishing_cells(Vector2i(3, 8))
 	fails += _check(open_cells > 12 and f.fishing_food(Vector2i(3, 8)) > 4 and f.fishing_food(Vector2i(3, 8)) <= 9, "바깥 바다 낚시터: %d칸, 식량 %d" % [open_cells, f.fishing_food(Vector2i(3, 8))])
 	# 물 위 건물: 땅 조각을 겹쳐 놓을 수 없고, 뱃길로 치지 않는다
-	var one: Piece = Piece.new()
-	one.cells.assign([Vector2i(0, 0)])
-	one.terrain.assign([Piece.PLAINS])
-	fails += _check(not f.can_place(one, Vector2i(3, 8)), "낚시터가 있는 물에는 땅을 못 놓는다")
 	fails += _check(f.sea_neighbor(Vector2i(5, 6)).x == -999, "수상 건물이 있는 칸은 뱃길로 치지 않는다 (호수 칸 하나뿐이라 이웃 바다 없음)")
 	var nav: AStarGrid2D = f.nav(true)
 	fails += _check(not f.path(nav, Vector2i(3, 9), Vector2i(3, 7)).is_empty() or true, "수상 건물을 돌아서 가는 길 계산이 깨지지 않는다")
-	fails += _check(nav.is_point_solid(Vector2i(3, 8) + Vector2i(Field.M, Field.M)), "배는 낚시터 칸을 지나지 못한다")
+	fails += _check(nav.is_point_solid(Vector2i(3, 8) - f.bounds.position), "배는 낚시터 칸을 지나지 못한다")
 	# 교역소는 필드에 1개만
 	f.build(Balance.TRADING_POST, Vector2i(3, 6))
 	fails += _check(f.trading_post() == Vector2i(3, 6) and not f.can_build(Balance.TRADING_POST, Vector2i(3, 7)), "교역소는 1개만")
@@ -59,7 +55,7 @@ func _initialize() -> void:
 	f.upgrade(Vector2i(3, 8))
 	fails += _check(f.fishing_food(Vector2i(3, 8)) == Balance.fishing_food(open_cells, 3), "낚시터 레벨 3: 식량 ×2")
 	# 거래 데이터
-	fails += _check(Balance.TRADES.size() == 3 and Balance.TRADE_OFFERS_LV == [3, 3, 3] and Balance.TRADE_INTERVAL == 3, "거래 3종(식량 거래 없음), 방문 간격 3, 레벨별 3개")
+	fails += _check(Balance.TRADES.size() == 2 and Balance.TRADE_OFFERS_LV == [2, 2, 2] and Balance.TRADE_INTERVAL == 3, "거래 2종(조각 거래 삭제, 식량 거래 없음), 방문 간격 3")
 	# 일회성 수비병
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
 	gs.extra_guards = 2
@@ -72,26 +68,13 @@ func _initialize() -> void:
 	var audio: Node = root.get_node("AudioManager")
 	fails += _check(audio.play("npc_visit"), "효과음 재생")
 	fails += _check(not audio.play("없는_소리"), "없는 소리는 false")
-	# 타일 보상은 4~7칸 (모든 선택지)
-	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
-	var sizes: Dictionary = {}
-	for i in 400:
-		rng.seed = i
-		var pc: Piece = Piece.random_piece(rng)
-		sizes[pc.cells.size()] = true
-	var keys: Array = sizes.keys()
-	keys.sort()
-	fails += _check(keys == [4, 5, 6, 7], "랜덤 타일 크기는 4·5·6·7칸 (%s)" % str(keys))
-	fails += _check(Piece.SHAPES.size() == 18, "모양 18종")
-	# 카메라 확대율: 전투가 준비 단계보다 더 확대
-	fails += _check(Balance.COMBAT_CAM_SIZE < Balance.PREP_CAM_SIZE, "전투 카메라가 더 확대 (%.1f < %.1f)" % [Balance.COMBAT_CAM_SIZE, Balance.PREP_CAM_SIZE])
 	print("낚시터·교역소 점검 실패 %d건" % fails)
 	quit(fails)
 
 
 ## 5x5 평원 섬 (4,4)부터, 가운데 (6,6)은 바다(호수). 본부는 (4,4)
 func _lake_island() -> Field:
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var p: Piece = Piece.new()
 	for y in 5:
 		for x in 5:

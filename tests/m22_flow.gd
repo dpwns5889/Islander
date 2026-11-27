@@ -16,10 +16,11 @@ func _initialize() -> void:
 	for n in ["hit", "tower", "landing", "boss", "win", "lose"]:
 		fails += _check(ResourceLoader.exists("res://assets/audio/sfx/%s.wav" % n), "효과음 " + n)
 	var main: Node = load("res://assets/scenes/main.tscn").instantiate()
+	main.edge_pan = false # 마우스 위치로 카메라가 움직이지 않게
 	root.add_child(main)
 	await process_frame
 	var gs: Node = root.get_node("GameState")
-	main.place_current(Vector2i(9, 7))
+	main.found_start(preload("res://tests/coastal_start.gd").pick(main.field))
 	fails += _check(not main.field.sea_blocked(), "기본 필드는 바닷길이 열려 있다")
 	gs.wave = Balance.WIN_WAVE - 1
 	_win(main)
@@ -45,7 +46,6 @@ func _result_btns(main: Node) -> Array[Button]:
 
 
 func _win(main: Node) -> void:
-	main.tiles_required = 0
 	main.start_wave()
 	main.battle._ships_left = 0
 	main.battle._pirates_left = 0

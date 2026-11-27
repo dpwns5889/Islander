@@ -5,11 +5,11 @@ extends SceneTree
 func _initialize() -> void:
 	var fails: int = 0
 	var main: Node = load("res://assets/scenes/main.tscn").instantiate()
+	main.edge_pan = false # 마우스 위치로 카메라가 움직이지 않게
 	root.add_child(main)
 	await process_frame
 	var gs: Node = root.get_node("GameState")
-	main.place_current(Vector2i(9, 7))
-	main.tiles_required = 0
+	main.found_start(preload("res://tests/coastal_start.gd").pick(main.field))
 	gs.gold = 1000
 	# 군사·해상 카테고리에 방어탑이 있다
 	fails += _check(main.dropdown_lists[1].get_child_count() == 4 and main.build_buttons.has(Balance.TOWER) and main.build_buttons.has(Balance.SHOOTING_RANGE), "군사·해상 목록: 병영·사격장·항구·방어탑")

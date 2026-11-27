@@ -4,7 +4,7 @@ extends SceneTree
 
 func _initialize() -> void:
 	var fails: int = 0
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var p: Piece = Piece.new()
 	for i in 8:
 		p.cells.append(Vector2i(i, 0))
@@ -44,16 +44,6 @@ func _initialize() -> void:
 	f.upgrade(fc)
 	f.evolve(fc, Balance.FARMSTEAD)
 	fails += _check(not f.variants.has(fc) and (f._nodes[fc][0] as MeshInstance3D).mesh is BoxMesh, "농장은 상자")
-	# 전투 중에는 건물 이름을 숨긴다
-	f.show_labels(false)
-	var hidden: bool = true
-	for c in f.buildings:
-		hidden = hidden and not (f._nodes[c][1] as Label3D).visible
-	f.show_labels(true)
-	var shown: bool = true
-	for c in f.buildings:
-		shown = shown and (f._nodes[c][1] as Label3D).visible
-	fails += _check(hidden and shown, "건물 이름 글자를 숨기고 다시 보인다")
 	var house: Vector2i = Vector2i(4, 2)
 	f.build(Balance.HOUSE, house)
 	f.upgrade(house)

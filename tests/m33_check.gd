@@ -5,7 +5,7 @@ extends SceneTree
 func _initialize() -> void:
 	var fails: int = 0
 	for wave in [1, 12, 30, 60]: # 60웨이브(무한 모드)는 간격이 계산 한 번(0.1초)보다 짧다
-		var f: Field = Field.new()
+		var f: Field = preload("res://tests/small_field.gd").make()
 		var p: Piece = Piece.new()
 		for y in 5:
 			for x in 5:

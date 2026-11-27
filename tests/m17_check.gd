@@ -167,7 +167,7 @@ func _initialize() -> void:
 
 ## 가로 w, 세로 h 평원 섬 (4,4)부터. 본부는 가운데 왼쪽
 func _island(w: int, h: int) -> Field:
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var p: Piece = Piece.new()
 	for y in h:
 		for x in w:

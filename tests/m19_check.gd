@@ -69,7 +69,7 @@ func _initialize() -> void:
 
 ## 땅 한 줄 (4..4+n-1, 5), 모두 평원
 func _line(n: int) -> Field:
-	var f: Field = Field.new()
+	var f: Field = preload("res://tests/small_field.gd").make()
 	var p: Piece = Piece.new()
 	for i in n:
 		p.cells.append(Vector2i(i, 0))
