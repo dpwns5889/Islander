@@ -11,7 +11,6 @@ var research_progress: int = 0 ## 아직 연구포인트가 못 된 연구수치
 var research_gained: int = 0 ## 연구수치로 얻은 연구포인트 수 (다음 기준을 정한다) (기획서 5.4)
 var researched: Dictionary = {} ## 연구를 마친 항목 id → true (기획서 5.4)
 var run_seed: int = randi() ## 이 판의 적 구성을 정하는 값. 같은 웨이브는 예고와 전투에서 같은 구성이 나온다 (기획서 6장)
-var extra_guards: int = 0 ## 교역 NPC에게 산, 다음 전투의 추가 수비병 (1회성) (기획서 5.6)
 
 
 func reset() -> void:
@@ -22,7 +21,6 @@ func reset() -> void:
 	research_progress = 0
 	research_gained = 0
 	researched.clear()
-	extra_guards = 0
 	run_seed = randi()
 	changed.emit()
 

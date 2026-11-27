@@ -809,6 +809,18 @@ func damage(c: Vector2i, amount: float) -> bool:
 	return false
 
 
+## c의 건물·도시 체력을 최대치의 frac만큼 채운다. 가득 차면 true (수리는 5초에 걸쳐 찬다) (기획서 5.2.2)
+func heal(c: Vector2i, frac: float) -> bool:
+	if hqs.has(c):
+		hqs[c] = minf(Balance.HQ_HP, hqs[c] + Balance.HQ_HP * frac)
+	elif buildings.has(c):
+		hp[c] = minf(max_hp(c), hp[c] + max_hp(c) * frac)
+	else:
+		return true
+	_tint(c)
+	return hp_ratio(c) >= 1.0
+
+
 ## 살아남은 건물·본부를 모두 고친다(전체 수리). 파괴된 건물·본부는 돌아오지 않는다 (기획서 5.2.2)
 func repair_all() -> void:
 	for c in targets():

@@ -19,14 +19,14 @@ func _initialize() -> void:
 		root.get_texture().get_image().save_png(args[0])
 		quit()
 		return
-	var start: Vector2i = f.start_cells().keys()[f.start_cells().size() / 2]
+	var start: Vector2i = preload("res://tests/coastal_start.gd").pick(f) # 평원과 바다가 함께 있는 자리
 	main.found_start(start)
 	gs.gold = 1000
 	if mode == "defense": # 방어탑과 12웨이브 구성으로 전투
 		gs.researched["archery"] = true
 		gs.wave = 12
 		_build(main, [Balance.TOWER, Balance.HOUSE, Balance.HOUSE, Balance.HOUSE])
-		main.start_wave()
+		main.call_wave()
 	elif mode == "menu":
 		gs.researched["math"] = true
 		main._toggle_category(0)
@@ -51,7 +51,7 @@ func _initialize() -> void:
 			main.select_tech("astronomy")
 	else:
 		_build(main, [Balance.BARRACKS, Balance.HOUSE])
-		main.start_wave()
+		main.call_wave()
 	await create_timer(wait).timeout
 	root.get_texture().get_image().save_png(args[0])
 	quit()

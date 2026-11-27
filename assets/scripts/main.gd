@@ -1,6 +1,5 @@
 extends Node3D
-## 시작 위치 고르기, 건설·연구(준비 단계)와 전투 단계 진행 (기획서 2장, 3장, 5장)
-## 준비·전투 단계 구분은 R2에서 실시간으로 바꾼다 (기획서 9장)
+## 시작 위치 고르기와 실시간 진행: 10초 생산 틱, 웨이브 타이머, 일시정지·배속, 건설·연구·수리 (기획서 2장, 3장, 5장)
 
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var field: Field
@@ -38,7 +37,8 @@ var category_buttons: Array[Button] = [] ## 건설 메뉴 카테고리 버튼
 var dropdown_panel: PanelContainer ## 카테고리를 누르면 위로 펼쳐지는 목록
 var dropdown_lists: Array[VBoxContainer] = []
 var open_category: int = -1
-var npc_next_wave: int = -1 ## 교역 NPC가 다음에 방문할 웨이브, 교역소가 없으면 -1 (기획서 5.6)
+var npc_next_time: float = -1.0 ## 교역 NPC가 다음에 올 게임 시간, 교역소가 없으면 -1 (기획서 5.6)
+var npc_leave_time: float = 0.0 ## 와 있는 NPC가 떠날 게임 시간
 var npc_present: bool = false ## 교역 NPC가 와 있는지 (기획서 5.6)
 var npc_node: MeshInstance3D = null
 var trade_offers: Array = []
@@ -48,10 +48,19 @@ var trade_panel: PanelContainer
 var trade_list: VBoxContainer
 var trade_buttons: Dictionary = {}
 var wave_panel: PanelContainer
-var wave_info: Label ## 준비 단계의 이번 웨이브 적 예고
+var wave_info: Label ## 다음 웨이브 적 예고
 var battle_speed_index: int = 0
+var paused: bool = false ## 스페이스로 일시정지 (기획서 2장)
+var pause_button: Button
+var game_time: float = 0.0 ## 첫 도시를 세운 뒤 흐른 게임 시간(초). 배속을 따르고 일시정지 중에는 멈춘다
+var wave_timer: float = 0.0 ## 다음 웨이브까지 남은 게임 시간(초)
+var prod_timer: float = 0.0 ## 다음 생산 틱까지 남은 게임 시간(초)
+var last_wave_time: float = -1.0 ## 마지막(30) 웨이브가 온 게임 시간 (승리 안전장치)
+var victory_shown: bool = false
+var over: bool = false ## 패배해 판이 끝났는지
+var repairing: Dictionary = {} ## 수리 중인 건물·도시 칸 → true (5초에 걸쳐 찬다) (기획서 5.2.2)
 var layer: CanvasLayer
-var battle: Battle = null
+var battle: Battle = null ## 첫 도시를 세우면 만들어져 판 내내 돈다
 ## 카메라는 쿼터뷰 하나다 (기획서 7.2)
 var _zoom: float = Balance.ZOOM_START ## 휠 줌 배율(작을수록 확대)
 var _pitch: float = Balance.COMBAT_PITCH ## 기울기(도)
@@ -62,6 +71,7 @@ var _pressing: bool = false
 var _rotating: bool = false ## 좌클릭을 끌어 회전하는 중 (놓아도 클릭으로 치지 않는다)
 var edge_pan: bool = true ## 화면 가장자리 카메라 이동. 테스트·캡처는 끈다
 var _note: String = ""
+var _hud_timer: float = 0.0
 var _gmats: Dictionary = {}
 
 
@@ -117,12 +127,14 @@ func _build_ui() -> void:
 	layer.add_child(res_bar)
 	res_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE, Control.PRESET_MODE_MINSIZE, 0)
 	wave_button = Button.new()
-	wave_button.text = "웨이브 시작"
-	wave_button.pressed.connect(start_wave)
+	wave_button.pressed.connect(call_wave)
 	row.add_child(wave_button)
+	pause_button = Button.new()
+	pause_button.pressed.connect(toggle_pause)
+	row.add_child(pause_button)
 	speed_button = Button.new()
 	speed_button.pressed.connect(cycle_speed)
-	speed_button.visible = false # 전투 중에만 보인다
+	speed_button.text = "배속 x1"
 	row.add_child(speed_button)
 	trade_button = Button.new()
 	trade_button.text = "교역 NPC 방문!"
@@ -312,14 +324,12 @@ func set_build(id: int) -> void:
 
 ## 건설 메뉴 카테고리를 열고 닫는다 (기획서 7.2)
 func _toggle_category(i: int) -> void:
-	if battle != null:
-		return
 	open_category = -1 if open_category == i else i
 	_update_dropdown()
 
 
 func _update_dropdown() -> void:
-	dropdown_panel.visible = open_category >= 0 and battle == null
+	dropdown_panel.visible = open_category >= 0
 	for j in dropdown_lists.size():
 		dropdown_lists[j].visible = j == open_category
 		category_buttons[j].text = "%s %s" % [Balance.CATEGORIES[j]["name"], "▼" if j == open_category else "▲"]
@@ -339,17 +349,19 @@ func _place_dropdown() -> void:
 	dropdown_panel.position = Vector2(x, btn.global_position.y - dropdown_panel.size.y - 4.0)
 
 
-## 교역 NPC (기획서 5.6)
-func _maybe_visit_npc() -> void:
+## 교역 NPC: 교역소를 지은 지 2분 뒤 처음, 그 뒤 6분마다 와서 60초 머문다 (기획서 5.6)
+func _npc_tick() -> void:
 	var post: Vector2i = field.trading_post()
 	if post.x < 0:
-		npc_next_wave = -1
-	elif npc_next_wave > 0 and GameState.wave >= npc_next_wave:
-		if field.is_post_open(post):
-			spawn_npc(post)
-		else: # 바다가 닫히면 NPC가 오지 못한다. 일정은 3라운드 뒤로 넘어간다 (기획서 5.6)
-			_note += "\n교역소가 바다와 이어지지 않아 교역 NPC가 오지 못했습니다"
-		npc_next_wave = GameState.wave + Balance.TRADE_INTERVAL # 이후 3라운드마다
+		npc_next_time = -1.0
+		if npc_present:
+			_npc_leave()
+		return
+	if npc_present and game_time >= npc_leave_time:
+		_npc_leave()
+	if npc_next_time >= 0.0 and game_time >= npc_next_time:
+		spawn_npc(post)
+		npc_next_time += Balance.TRADE_INTERVAL
 
 
 func spawn_npc(post: Vector2i) -> void:
@@ -382,7 +394,8 @@ func spawn_npc(post: Vector2i) -> void:
 	npc_node.position = field.cell_to_world(post) + Vector3(0.4, Field.BLOCK_H + 0.25, 0.35)
 	add_child(npc_node)
 	AudioManager.play("npc_visit") # 방문 효과음
-	_note += "\n교역 NPC가 방문했습니다! (웨이브를 시작하면 떠납니다)"
+	npc_leave_time = game_time + Balance.TRADE_STAY
+	_note = "교역 NPC가 방문했습니다! (%d초 머뭅니다)" % roundi(Balance.TRADE_STAY)
 
 
 func _npc_leave() -> void:
@@ -419,8 +432,8 @@ func do_trade(id: String) -> bool:
 	trade_sold[id] = true
 	if id == "gold_rp":
 		GameState.add_research(1)
-	elif id == "gold_guards":
-		GameState.extra_guards += 2
+	elif id == "gold_guards" and battle != null:
+		battle.spawn_guards(2, field.hq)
 	_refresh_hud()
 	return true
 
@@ -431,6 +444,13 @@ func found_start(c: Vector2i) -> bool:
 		return false
 	field.found_city(c)
 	started = true
+	battle = Battle.new() # 첫 도시를 세우면 시간이 흐르기 시작한다 (기획서 2장)
+	add_child(battle)
+	battle.setup(field, GameState)
+	battle.finished.connect(_on_battle_finished)
+	battle.speed_scale = _speed()
+	wave_timer = Balance.WAVE_FIRST_DELAY
+	prod_timer = Balance.PRODUCTION_TICK
 	res_bar.visible = true
 	build_panel.visible = true
 	side_panel.visible = true
@@ -447,21 +467,26 @@ func try_build(c: Vector2i) -> bool:
 		return false
 	GameState.spend(_cost_of(build_id))
 	field.build(build_id, c)
-	if build_id == Balance.TRADING_POST: # 설치한 다음 라운드에 첫 방문 (기획서 5.6)
-		npc_next_wave = GameState.wave + 1
+	if build_id == Balance.TRADING_POST: # 지은 지 2분 뒤 첫 방문 (기획서 5.6)
+		npc_next_time = game_time + Balance.TRADE_FIRST_DELAY
+	if battle != null:
+		if build_id == Balance.PORT:
+			battle.add_port(c)
+		if Balance.MILITARY.has(build_id):
+			battle.refill_barracks()
 	set_build(0) # 건물을 하나 지으면 설치 모드가 끝난다
 	return true
 
 
-## 준비 단계에서 건물·본부를 골라 패널을 연다. 둘 다 아니면 선택을 푼다 (기획서 5.2)
+## 건물·도시를 골라 패널을 연다. 둘 다 아니면 선택을 푼다 (기획서 5.2)
 func select_building(c: Vector2i) -> bool:
-	selected_cell = c if battle == null and (field.buildings.has(c) or field.hqs.has(c)) else Vector2i(-1, -1)
+	selected_cell = c if field.buildings.has(c) or field.hqs.has(c) else Vector2i(-1, -1)
 	_refresh_hud()
 	return selected_cell.x >= 0
 
 
 func _toggle_research() -> void:
-	research_panel.visible = not research_panel.visible and battle == null
+	research_panel.visible = not research_panel.visible
 	_refresh_hud()
 
 
@@ -473,7 +498,7 @@ func select_tech(id: String) -> void:
 
 ## 연구포인트로 연구한다 (기획서 5.4)
 func research(id: String) -> bool:
-	if battle != null or not GameState.research(id):
+	if not GameState.research(id):
 		return false
 	_note = "연구 완료: " + Balance.TECHS[id]["name"]
 	_refresh_hud()
@@ -496,24 +521,47 @@ func _can_evolve(c: Vector2i) -> bool:
 	return to > 0 and field.levels[c] >= Balance.MAX_LEVEL and GameState.has_tech(Balance.BUILDINGS[to].get("tech", ""))
 
 
-## 고른 건물·본부를 골드로 가득 고친다 (기획서 5.2.2)
+## 수리할 수 있는지: 파손됐고, 이미 수리 중이 아니고, 3칸 안에 적이 없다 (기획서 5.2.2)
+func can_repair(c: Vector2i) -> bool:
+	return field.repair_cost(c) > 0 and not repairing.has(c) and not (battle != null and battle.enemy_near(c, Balance.REPAIR_ENEMY_RANGE))
+
+
+## 고른 건물·도시를 골드로 고친다: 비용을 내면 5초에 걸쳐 체력이 찬다 (기획서 5.2.2)
 func repair_selected() -> bool:
-	var cost: int = field.repair_cost(selected_cell)
-	if battle != null or cost <= 0 or not GameState.spend(cost):
+	return _start_repair(selected_cell)
+
+
+func _start_repair(c: Vector2i) -> bool:
+	if not can_repair(c) or not GameState.spend(field.repair_cost(c)):
 		return false
-	field.repair(selected_cell)
+	repairing[c] = true
 	_refresh_hud()
 	return true
 
 
-## 파손된 건물·본부를 한 번에 고친다 (기획서 5.2.2)
+## 고칠 수 있는 건물·도시를 한 번에 고친다 (기획서 5.2.2)
 func repair_everything() -> bool:
-	var cost: int = field.total_repair_cost()
-	if battle != null or cost <= 0 or not GameState.spend(cost):
+	var cost: int = _repair_all_cost()
+	if cost <= 0 or GameState.gold < cost:
 		return false
-	field.repair_all()
-	_refresh_hud()
+	for c in field.targets():
+		_start_repair(c)
 	return true
+
+
+func _repair_all_cost() -> int:
+	var total: int = 0
+	for c in field.targets():
+		if can_repair(c):
+			total += field.repair_cost(c)
+	return total
+
+
+## 수리 중인 칸의 체력을 채운다. 다 차거나 건물이 없어지면 끝난다
+func _repair_tick(dt: float) -> void:
+	for c: Vector2i in repairing.keys():
+		if not field.targets().has(c) or field.heal(c, dt / Balance.REPAIR_TIME):
+			repairing.erase(c)
 
 
 func upgrade_selected() -> bool:
@@ -548,37 +596,93 @@ func _build_ok(c: Vector2i) -> bool:
 	return field.can_build(build_id, c)
 
 
-## 준비 단계를 끝내고 전투를 시작한다. 카메라가 대각선으로 기운다 (기획서 2장)
-func start_wave() -> void:
-	if battle != null or not started:
-		return
-	set_build(0)
-	selected_cell = Vector2i(-1, -1)
-	_npc_leave() # 전투가 시작되면 NPC가 떠난다 (기획서 5.6)
-	research_panel.visible = false
-	build_panel.visible = false
-	side_panel.visible = false
-	wave_button.disabled = true
-	field.buildings_lost.clear()
-	battle = Battle.new()
-	add_child(battle)
-	battle.setup(field, GameState, GameState.wave)
-	battle.finished.connect(_on_battle_finished)
-	battle.speed_scale = Balance.BATTLE_SPEEDS[battle_speed_index]
-	speed_button.visible = true
-	speed_button.text = "배속 x%d" % Balance.BATTLE_SPEEDS[battle_speed_index]
+## 지금 배속. 일시정지면 0 (기획서 2장)
+func _speed() -> float:
+	return 0.0 if paused or over else float(Balance.BATTLE_SPEEDS[battle_speed_index])
+
+
+## 웨이브 부르기: 다음 웨이브를 바로 부르고 남은 시간만큼 골드를 받는다 (기획서 2장)
+func call_wave() -> bool:
+	if not started or over:
+		return false
+	var bonus: int = floori(wave_timer * Balance.CALL_WAVE_GOLD)
+	GameState.add(bonus, 0)
+	_launch_wave()
+	_note = "웨이브를 앞당겨 불렀습니다: 골드 +%d" % bonus
 	_refresh_hud()
+	return true
 
 
-## 전투 배속 버튼: x1 → x2 → x4 → x1 (기획서 2장)
+## 다음 웨이브가 온다. 앞 웨이브의 적이 남아 있어도 된다 (기획서 2장, 6장)
+func _launch_wave() -> void:
+	battle.launch_wave(GameState.wave)
+	if GameState.wave == Balance.WIN_WAVE:
+		last_wave_time = game_time
+	GameState.next_wave()
+	wave_timer = Balance.WAVE_INTERVAL
+
+
+## 10초마다: 골드·식량·연구수치를 받고 도시 레벨을 올린다 (기획서 2장, 5.3, 5.4)
+func _production() -> void:
+	var inc: Vector2i = field.income(GameState.researched)
+	GameState.add(inc.x, inc.y)
+	var ups: Dictionary = field.settle_levels(GameState.researched)
+	var rp_gain: int = GameState.add_research_progress(field.research_income(GameState.researched))
+	var parts: Array[String] = []
+	for h in ups:
+		parts.append("도시 %s 레벨 %d!" % [_hq_name(h), field.hq_level[h]])
+	if rp_gain > 0:
+		parts.append("연구포인트 +%d" % rp_gain)
+	if not parts.is_empty():
+		_note = " · ".join(parts)
+
+
+## 게임 시간을 dt만큼 흘린다: 생산 틱, 웨이브, 교역 NPC, 수리, 승리 (기획서 2장)
+func advance(dt: float) -> void:
+	if not started or over or dt <= 0.0:
+		return
+	game_time += dt
+	prod_timer -= dt
+	while prod_timer <= 0.0:
+		prod_timer += Balance.PRODUCTION_TICK
+		_production()
+	wave_timer -= dt
+	if wave_timer <= 0.0:
+		_launch_wave()
+	_npc_tick()
+	_repair_tick(dt)
+	_check_victory()
+
+
+## 30웨이브가 온 뒤 적이 모두 사라지면 승리. 막혀 남은 적은 300초 뒤 정리한다 (기획서 6장, 9.1)
+func _check_victory() -> void:
+	if victory_shown or GameState.wave <= Balance.WIN_WAVE:
+		return
+	if battle.enemies_left() > 0 and game_time - last_wave_time < Balance.VICTORY_SAFETY:
+		return
+	battle.clear_enemies()
+	victory_shown = true
+	SaveManager.record(Balance.WIN_WAVE)
+	_show_victory()
+
+
+## 배속 버튼: x1 → x2 → x4 → x1 (기획서 2장)
 func cycle_speed() -> void:
 	battle_speed_index = (battle_speed_index + 1) % Balance.BATTLE_SPEEDS.size()
 	speed_button.text = "배속 x%d" % Balance.BATTLE_SPEEDS[battle_speed_index]
 	if battle != null:
-		battle.speed_scale = Balance.BATTLE_SPEEDS[battle_speed_index]
+		battle.speed_scale = _speed()
 
 
-## 전투 중 우클릭한 땅으로 병사들이 이동한다 (분대 지휘는 R3) (기획서 6장)
+## 일시정지: 일시정지 중에도 건설·연구·명령은 할 수 있다 (기획서 2장)
+func toggle_pause() -> void:
+	paused = not paused
+	if battle != null:
+		battle.speed_scale = _speed()
+	_refresh_hud()
+
+
+## 우클릭한 땅으로 병사들이 이동한다 (분대 지휘는 R3) (기획서 6장)
 func command_move(c: Vector2i) -> bool:
 	if battle == null or not field.is_walkable(c):
 		return false
@@ -609,41 +713,17 @@ func _ping(c: Vector2i) -> void:
 	tw.chain().tween_callback(m.queue_free)
 
 
+## 모든 도시가 무너지면 패배 (기획서 1장)
 func _on_battle_finished(victory: bool) -> void:
-	battle.queue_free()
-	battle = null
-	speed_button.visible = false
-	if not victory:
-		SaveManager.record(GameState.wave) # 졌어도 도달한 웨이브는 기록한다
-		_show_defeat()
+	if victory:
 		return
-	var inc: Vector2i = field.income(GameState.researched)
-	var cleared: int = GameState.wave
-	GameState.add(inc.x, inc.y)
-	GameState.next_wave()
-	var ups: Dictionary = field.settle_levels(GameState.researched) # 본부마다 자기 영역 식량으로 레벨·영역 상승 (기획서 5.3)
-	var rp_gain: int = GameState.add_research_progress(field.research_income(GameState.researched)) # 도서관·연구소 (기획서 5.4)
-	build_panel.visible = true
-	side_panel.visible = true
-	_note = "웨이브 %d 승리: 골드 +%d · 식량 +%d" % [cleared, inc.x, inc.y]
-	if not field.buildings_lost.is_empty():
-		var parts: Array[String] = []
-		for k in field.buildings_lost:
-			parts.append("%s %d" % [Balance.BUILDINGS[k]["name"], field.buildings_lost[k]])
-		_note += "\n무너진 건물: " + ", ".join(parts)
-	for h in ups:
-		_note += "\n도시 %s 레벨 %d!" % [_hq_name(h), field.hq_level[h]]
-	if rp_gain > 0:
-		_note += "\n연구포인트 +%d" % rp_gain
-	_maybe_visit_npc() # 교역 NPC (시간 기준 방문은 R2) (기획서 5.6)
-	_refresh_hud()
-	SaveManager.record(GameState.wave) # 무한 모드까지 포함한 최고 웨이브 (기획서 9.1)
-	if cleared == Balance.WIN_WAVE:
-		_show_victory()
+	over = true
+	SaveManager.record(GameState.wave - 1) # 졌어도 온 웨이브는 기록한다
+	_show_defeat()
 
 
 func _show_defeat() -> void:
-	_result_panel("패배 — 웨이브 %d에서 도시가 무너졌습니다" % GameState.wave, [["다시 시작", get_tree().reload_current_scene], ["처음으로", _to_menu]])
+	_result_panel("패배 — 웨이브 %d에서 도시가 모두 무너졌습니다" % (GameState.wave - 1), [["다시 시작", get_tree().reload_current_scene], ["처음으로", _to_menu]])
 	status.text = ""
 
 
@@ -769,10 +849,13 @@ func _place_upgrade_panel() -> void:
 
 func _process(delta: float) -> void:
 	_edge_pan(delta)
+	advance(delta * _speed())
 	if upgrade_panel.visible:
 		_place_upgrade_panel() # 줌·창 크기가 바뀌어도 건물을 따라간다
 	cursor.visible = false
-	if battle != null:
+	_hud_timer -= delta
+	if started and _hud_timer <= 0.0: # 맵이 넓어 생산 계산이 무거워 0.1초마다만 갱신한다
+		_hud_timer = 0.1
 		_refresh_hud()
 	if (started and build_id == 0) or _over_ui():
 		return
@@ -805,6 +888,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key == KEY_P and not event.is_echo(): # 도트 화면 켜고 끄기 (기획서 7.2)
 		pixel.set_enabled(not pixel.enabled)
 		return
+	if key == KEY_SPACE and not event.is_echo() and started: # 일시정지 (기획서 2장)
+		toggle_pause()
+		return
 	if mb != null and mb.pressed and (mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN):
 		_wheel_zoom(Balance.ZOOM_STEP if mb.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / Balance.ZOOM_STEP)
 		return
@@ -833,7 +919,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if build_id != 0 and (right or key == KEY_ESCAPE):
 		set_build(0)
-	elif battle != null and right: # 전투 중 우클릭: 병사 이동 (기획서 6장)
+	elif battle != null and right and build_id == 0: # 우클릭: 병사 이동 (기획서 6장)
 		command_move(_hover_cell())
 	elif right or key == KEY_ESCAPE:
 		select_building(Vector2i(-1, -1))
@@ -850,7 +936,7 @@ func click() -> void:
 		found_start(hc)
 	elif build_id != 0:
 		try_build(hc)
-	elif battle == null:
+	else:
 		select_building(hc)
 
 
@@ -924,25 +1010,24 @@ func _refresh_research() -> void:
 
 
 func _refresh_hud() -> void:
-	var inc: Vector2i = field.income(GameState.researched) # 웨이브 정산 때 들어올 생산량 (기획서 7.2)
-	stats.text = "골드 %d (+%d) · 연구포인트 %d (%d/%d, +%d) · 웨이브 %d   " % [GameState.gold, inc.x, GameState.research_points, GameState.research_progress, Balance.research_threshold(GameState.research_gained), field.research_income(GameState.researched), GameState.wave]
+	var per_min: float = 60.0 / Balance.PRODUCTION_TICK # 생산 틱 수치를 분당으로 보여 준다 (기획서 2장, 7.2)
+	var inc: Vector2i = field.income(GameState.researched)
+	stats.text = "골드 %d (+%d/분) · 식량 %d (+%d/분) · 연구포인트 %d (%d/%d, +%d/분)   " % [GameState.gold, roundi(inc.x * per_min), GameState.food, roundi(inc.y * per_min), GameState.research_points, GameState.research_progress, Balance.research_threshold(GameState.research_gained), roundi(field.research_income(GameState.researched) * per_min)]
 	for id in build_buttons:
 		var bb: Button = build_buttons[id]
 		bb.text = "%s %dG · %s" % [Balance.BUILDINGS[id]["name"], _cost_of(id), Balance.effect_text(id, 1, GameState.researched)]
 		var need: String = Balance.BUILDINGS[id].get("tech", "")
 		bb.tooltip_text = "" if _unlocked(id) or need == "" or GameState.has_tech(need) else "필요 연구: " + Balance.TECHS[need]["name"]
 		bb.disabled = not _unlocked(id) or GameState.gold < _cost_of(id)
-	for cbtn in category_buttons:
-		cbtn.disabled = battle != null
-	trade_button.visible = npc_present and battle == null
+	trade_button.visible = npc_present
+	trade_button.text = "교역 NPC 방문! (남은 %d초)" % ceili(maxf(npc_leave_time - game_time, 0.0))
 	for tid in trade_buttons:
 		var tbtn: Button = trade_buttons[tid]
 		tbtn.text = ("✓ 거래 완료 — " if trade_sold.has(tid) else "") + _trade_def(tid)["name"]
 		tbtn.disabled = not _trade_ok(tid)
 	research_toggle.text = "연구 (연구포인트 %d)" % GameState.research_points
 	# 이번 웨이브의 적을 미리 알려 준다. 해적의 세기는 도시 수에 따라 바뀐다 (기획서 6장)
-	wave_info.visible = battle == null
-	wave_panel.visible = started and battle == null
+	wave_panel.visible = started
 	var comp: Dictionary = Balance.enemy_composition(GameState.wave, GameState.run_seed)
 	var comp_parts: Array[String] = []
 	for kind in comp:
@@ -953,18 +1038,12 @@ func _refresh_hud() -> void:
 	for nk in Balance.new_enemy_kinds(GameState.wave): # 새 종류가 처음 나오는 웨이브 안내
 		var info: Dictionary = Balance.UNITS[nk]
 		wave_info.text += "\n새 적: %s (체력 %d · 공격 %d%s)" % [info["name"], info["hp"], info["atk"], (" · 사거리 %.1f칸" % info["reach"]) if info.get("ranged", false) else ""]
-	var plan: Array = Battle.barracks_plan(field)
-	if not plan.is_empty(): # 병영이 웨이브 시작 때 내보낼 병력(병사 생산은 무료)
-		var counts: Dictionary = {}
-		for entry: Dictionary in plan:
-			var unit_name: String = Balance.UNITS[entry["kind"]]["name"]
-			counts[unit_name] = int(counts.get(unit_name, 0)) + 1
-		var parts: Array[String] = []
-		for unit_name in counts:
-			parts.append("%s %d" % [unit_name, counts[unit_name]])
-		wave_info.text += "\n병영 병력 %d명 (%s)" % [plan.size(), ", ".join(parts)]
 	wave_button.visible = started
-	wave_button.disabled = battle != null or not started
+	wave_button.disabled = over
+	wave_button.text = "웨이브 %d/%d · 다음까지 %d:%02d · 부르기 (+%dG)" % [GameState.wave - 1, Balance.WIN_WAVE, int(wave_timer) / 60, int(wave_timer) % 60, floori(wave_timer * Balance.CALL_WAVE_GOLD)]
+	pause_button.visible = started
+	pause_button.text = "▶ 계속 (Space)" if paused else "❚❚ 일시정지 (Space)"
+	speed_button.visible = started
 	if research_panel.visible:
 		_refresh_research()
 	var lines: Array[String] = []
@@ -974,18 +1053,19 @@ func _refresh_hud() -> void:
 		if field.hp_ratio(h) < 1.0:
 			lines[-1] += " · 체력 %d/%d" % [ceili(field.hqs[h]), Balance.HQ_HP]
 	town_label.text = "\n".join(lines)
-	var all_cost: int = field.total_repair_cost()
+	var all_cost: int = _repair_all_cost()
 	repair_all_button.visible = all_cost > 0
 	repair_all_button.text = "전체 수리 %dG" % all_cost
 	repair_all_button.disabled = GameState.gold < all_cost
 	field.refresh_hq_bars() # 도시 옆 레벨업 바 (기획서 5.3)
 	if selected_cell.x >= 0 and not field.buildings.has(selected_cell) and not field.hqs.has(selected_cell):
 		selected_cell = Vector2i(-1, -1)
-	upgrade_panel.visible = selected_cell.x >= 0 and battle == null
+	upgrade_panel.visible = selected_cell.x >= 0
 	var fix: int = field.repair_cost(selected_cell)
 	repair_button.visible = fix > 0
-	repair_button.text = "수리 %dG" % fix
-	repair_button.disabled = GameState.gold < fix
+	repair_button.text = "수리 중…" if repairing.has(selected_cell) else "수리 %dG" % fix
+	repair_button.disabled = GameState.gold < fix or not can_repair(selected_cell)
+	repair_button.tooltip_text = "3칸 안에 적이 있으면 수리할 수 없습니다" if fix > 0 and not repairing.has(selected_cell) and not can_repair(selected_cell) else ""
 	upgrade_button.visible = not field.hqs.has(selected_cell)
 	if upgrade_panel.visible and field.hqs.has(selected_cell): # 본부는 강화하지 않고 수리만 한다 (기획서 5.3)
 		upgrade_title.text = "도시 %s Lv %d" % [_hq_name(selected_cell), field.hq_level[selected_cell]]
@@ -998,7 +1078,7 @@ func _refresh_hud() -> void:
 		if bid == Balance.TRADING_POST and not field.is_post_open(selected_cell):
 			upgrade_effect.text += "\n⚠ 물가가 막혀 NPC가 오지 못합니다"
 		if bid == Balance.FISHERY or bid == Balance.FISH_VILLAGE: # 이 낚시터의 실제 생산량
-			upgrade_effect.text = "정산 식량 +%d (이어진 물가 %d칸)" % [field.fishing_food(selected_cell), field.fishing_cells(selected_cell)]
+			upgrade_effect.text = "식량 +%d (이어진 물가 %d칸)" % [field.fishing_food(selected_cell), field.fishing_cells(selected_cell)]
 		if field.can_upgrade(selected_cell):
 			var cost: int = GameState.upgrade_discounted(Balance.upgrade_cost(bid, lv + 1))
 			upgrade_button.text = "레벨 %d로 강화 %dG" % [lv + 1, cost]
@@ -1022,12 +1102,10 @@ func _refresh_hud() -> void:
 			upgrade_button.disabled = true
 			upgrade_button.tooltip_text = "수리해야 강화·진화할 수 있습니다"
 	var s: String
-	if battle != null:
-		s = battle.summary() + "\n우클릭한 땅으로 병사가 이동합니다\n화면 가장자리 이동 · 좌클릭 드래그 회전 · 휠 확대/축소"
-	elif not started:
+	if not started:
 		s = "첫 도시를 세울 평원을 클릭하세요 (평원 %d칸 이상인 섬, 하늘색) · 화면 가장자리 이동 · 좌클릭 드래그 회전 · 휠 확대/축소" % Balance.START_ISLAND_PLAINS
 	elif build_id != 0:
 		s = "%s 건설: 좌클릭 배치 · 우클릭/Esc 취소" % Balance.BUILDINGS[build_id]["name"]
 	else:
-		s = "건물을 짓거나 웨이브를 시작하세요"
+		s = battle.summary() + " · 우클릭: 병사 이동"
 	status.text = (_note + "\n" if _note != "" else "") + s

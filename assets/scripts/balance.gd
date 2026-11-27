@@ -122,7 +122,14 @@ const MILITARY: Dictionary = {
 	SHOOTING_RANGE: {"units": [U_ARCHER, U_LONGBOW, U_ARBALEST], "count": 2},
 }
 const LV3_TECH: String = "ironwork" ## 병영·사격장 레벨 3 강화에 필요한 연구
-const WAVE_TIME_LIMIT: float = 300.0 ## 적이 막혀 끝나지 않을 때만 쓰는 안전장치(초). 이 시간이 지나면 남은 적을 정리하고 웨이브를 끝낸다
+## 실시간 진행 (기획서 2장). 모두 게임 시간(초)이라 배속을 따른다
+const PRODUCTION_TICK: float = 10.0 ## 이 간격마다 골드·식량·연구수치를 받는다
+const WAVE_FIRST_DELAY: float = 180.0 ## 첫 웨이브가 오기까지
+const WAVE_INTERVAL: float = 120.0 ## 그 뒤 웨이브 간격
+const CALL_WAVE_GOLD: float = 0.5 ## 웨이브를 앞당겨 부르면 남은 1초당 받는 골드(내림) (기획서 9.1)
+const VICTORY_SAFETY: float = 300.0 ## 마지막 웨이브가 온 뒤 적이 막혀 남아도 이 시간이 지나면 정리하고 승리 (기획서 9.1)
+const REPAIR_TIME: float = 5.0 ## 수리하면 이 시간에 걸쳐 체력이 찬다 (기획서 5.2.2)
+const REPAIR_ENEMY_RANGE: float = 3.0 ## 이 거리(칸) 안에 적이 있으면 수리할 수 없다
 const COMBAT_PITCH: float = 35.0 ## 카메라 시작 기울기(도): 쿼터뷰 하나 (기획서 7.2)
 const COMBAT_YAW: float = 45.0 ## 카메라 시작 좌우 회전(도)
 const CAM_PITCH_MIN: float = 35.0 ## 좌클릭 드래그로 기울일 수 있는 범위(도) (기획서 7.2)
@@ -204,11 +211,13 @@ const FISH_CAP: int = 40
 const FISH_BASE: int = 3
 const FISH_DIV: int = 6
 const FISH_MAX: int = 9
-const TRADE_INTERVAL: int = 3 ## 교역소가 있으면 이 웨이브마다 거래 NPC가 방문한다 (기획서 5.6)
+const TRADE_FIRST_DELAY: float = 120.0 ## 교역소를 지은 뒤 거래 NPC가 처음 오기까지(초) (기획서 5.6)
+const TRADE_INTERVAL: float = 360.0 ## 그 뒤 방문 간격(초)
+const TRADE_STAY: float = 60.0 ## 한 번 오면 머무는 시간(초)
 const TRADE_OFFERS_LV: Array[int] = [2, 2, 2] ## 교역소 레벨별 거래 수 (거래 풀이 2종, 식량 거래 없음) (기획서 5.6)
 const TRADES: Array = [
 	{"id": "gold_rp", "name": "골드 60 → 연구포인트 1", "gold": 60, "food": 0},
-	{"id": "gold_guards", "name": "골드 30 → 다음 전투 수비병 +2", "gold": 30, "food": 0},
+	{"id": "gold_guards", "name": "골드 30 → 경비병 +2 (바로 도시에 나온다)", "gold": 30, "food": 0},
 ]
 const FOOD_PER_PLAINS: int = 1
 const MARKET_HOUSE_BONUS_LV: Array[float] = [0.25, 0.4, 0.6] ## 시장과 4방향으로 붙은 집의 정산 골드 보너스 (기획서 5.1)
@@ -349,15 +358,15 @@ static func science_bonus(techs: Dictionary) -> int:
 static func effect_text(id: int, level: int, techs: Dictionary = {}) -> String:
 	var i: int = level - 1
 	if id == HOUSE or id == MANSION:
-		return "정산 골드 +%d (모래 위 +%d)" % [house_gold(level, false, id), house_gold(level, true, id)]
+		return "골드 +%d (모래 위 +%d)" % [house_gold(level, false, id), house_gold(level, true, id)]
 	if id == MINE:
-		return "산 위에만 · 정산 골드 +%d" % MINE_GOLD_LV[i]
+		return "산 위에만 · 골드 +%d" % MINE_GOLD_LV[i]
 	if id == SMELTER:
-		return "산 위에만 · 정산 골드 +%d" % SMELTER_GOLD_LV[i]
+		return "산 위에만 · 골드 +%d" % SMELTER_GOLD_LV[i]
 	if id == FARM:
-		return "정산 식량 +%d" % FARM_FOOD_LV[i]
+		return "식량 +%d" % FARM_FOOD_LV[i]
 	if id == FARMSTEAD:
-		return "정산 식량 +%d" % FARMSTEAD_FOOD_LV[i]
+		return "식량 +%d" % FARMSTEAD_FOOD_LV[i]
 	if MILITARY.has(id):
 		return "웨이브 시작 %s %d명" % [UNITS[MILITARY[id]["units"][i]]["name"], MILITARY[id]["count"]]
 	if id == PORT:
@@ -365,15 +374,15 @@ static func effect_text(id: int, level: int, techs: Dictionary = {}) -> String:
 	if id == MARKET:
 		return "붙어 있는 집의 정산 골드 +%d%%" % roundi(MARKET_HOUSE_BONUS_LV[i] * 100.0)
 	if id == LIBRARY:
-		return "정산 연구수치 +%d (첫 %d점부터 연구포인트 1)" % [LIBRARY_RESEARCH_LV[i] + science_bonus(techs), RESEARCH_FIRST]
+		return "연구수치 +%d (첫 %d점부터 연구포인트 1)" % [LIBRARY_RESEARCH_LV[i] + science_bonus(techs), RESEARCH_FIRST]
 	if id == LAB:
-		return "정산 연구수치 +%d (첫 %d점부터 연구포인트 1)" % [LAB_RESEARCH_LV[i] + science_bonus(techs), RESEARCH_FIRST]
+		return "연구수치 +%d (첫 %d점부터 연구포인트 1)" % [LAB_RESEARCH_LV[i] + science_bonus(techs), RESEARCH_FIRST]
 	if id == OBSERVATORY:
-		return "산 위에만 · 정산 연구수치 +%d" % OBSERVATORY_RESEARCH_LV[i]
+		return "산 위에만 · 연구수치 +%d" % OBSERVATORY_RESEARCH_LV[i]
 	if id == FISHERY or id == FISH_VILLAGE:
-		return "물 위에 설치 · 정산 식량 +%d~%d (이어진 물가가 넓을수록)" % [fishing_food(0, level, id), fishing_food(FISH_CAP, level, id)]
+		return "물 위에 설치 · 식량 +%d~%d (이어진 물가가 넓을수록)" % [fishing_food(0, level, id), fishing_food(FISH_CAP, level, id)]
 	if id == TRADING_POST:
-		return "%d웨이브마다 거래 NPC 방문 · 거래 %d개 · 1개만" % [TRADE_INTERVAL, TRADE_OFFERS_LV[i]]
+		return "%d분마다 거래 NPC 방문 · 거래 %d개 · 1개만" % [roundi(TRADE_INTERVAL / 60.0), TRADE_OFFERS_LV[i]]
 	if is_tower(id):
 		return "해적 자동 공격 %d · 사거리 %s칸" % [roundi(tower_atk(id, level)), str(tower_range(id, level))]
 	return ""
