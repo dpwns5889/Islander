@@ -52,7 +52,8 @@ func _initialize() -> void:
 	var f2: Field = _island()
 	f2.build(Balance.SHOOTING_RANGE, Vector2i(6, 6))
 	var b: Battle = Battle.new()
-	b.setup(f2, gsb, 1)
+	b.setup(f2, gsb)
+	b.launch_wave(1)
 	var archers: int = 0
 	for s in b.soldiers:
 		if s.kind == Balance.U_ARCHER:
@@ -77,7 +78,8 @@ func _initialize() -> void:
 		f3.upgrade(c)
 		f3.upgrade(c)
 	var b3: Battle = Battle.new()
-	b3.setup(f3, gsb, 1)
+	b3.setup(f3, gsb)
+	b3.launch_wave(1)
 	var knight: Unit = null
 	var arbalest: Unit = null
 	for s in b3.soldiers:
@@ -91,13 +93,15 @@ func _initialize() -> void:
 	var gs4: Node = load("res://assets/scripts/game_state.gd").new()
 	gs4.researched["furnace"] = true
 	var b4: Battle = Battle.new()
-	b4.setup(_island(), gs4, 1)
+	b4.setup(_island(), gs4)
+	b4.launch_wave(1)
 	fails += _check(absf(b4.soldiers[0].hp - 36.0) < 0.01 and absf(b4.soldiers[0].atk - 6.0) < 0.01, "용광로: 경비병 체력 36, 공격 6")
 	# 보트는 항구당 1척, 탑승은 항구 레벨로만 정해진다 (항해 연구 삭제)
 	var f5: Field = _island()
 	f5.build(Balance.PORT, Vector2i(4, 5))
 	var b6: Battle = Battle.new()
-	b6.setup(f5, load("res://assets/scripts/game_state.gd").new(), 1)
+	b6.setup(f5, load("res://assets/scripts/game_state.gd").new())
+	b6.launch_wave(1)
 	fails += _check(b6.boats.size() == 1 and b6.boat_capacity(b6.boats[0]) == 4, "보트 1척, 탑승 4명")
 	# 부서진 사격장은 복구되지 않는다
 	f2.build(Balance.SHOOTING_RANGE, Vector2i(7, 7))

@@ -27,9 +27,9 @@ func _initialize() -> void:
 	fails += _check(not main.upgrade_selected(), "최고 레벨에서는 더 못 올린다")
 	fails += _check(not main.select_building(Vector2i(-50, -50)) and not main.upgrade_panel.visible, "빈 곳을 누르면 선택 해제")
 	# 전투를 돌리고 나서도 레벨이 유지된다
-	main.start_wave()
-	for _i in 3000:
-		if main.battle == null:
+	main.call_wave()
+	for _i in 6000: # 넓은 맵이라 먼 곳에 내린 해적까지 잡는 데 오래 걸릴 수 있다
+		if main.battle.enemies_left() == 0 or main.over: # 실시간이라 웨이브를 다 막아도 전투는 이어진다 (기획서 2장)
 			break
 		main.battle.tick(0.1)
 	fails += _check(main.field.buildings.has(cell) and main.field.levels[cell] == 3, "웨이브 뒤에도 집 레벨 3")

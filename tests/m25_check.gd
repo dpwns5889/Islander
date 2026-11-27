@@ -23,7 +23,8 @@ func _initialize() -> void:
 	f.build(Balance.HOUSE, Vector2i(12, 5))
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
 	var bt: Battle = Battle.new()
-	bt.setup(f, gs, 3)
+	bt.setup(f, gs)
+	bt.launch_wave(3)
 	for s in bt.ships:
 		s.hp = 0.0
 	bt._prune(bt.ships)

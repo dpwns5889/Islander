@@ -55,8 +55,8 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 </div>
 </nav><main><h1 id="biomedefender">BiomeDefender (가칭) — 기획서</h1>
 <ul>
-<li>최종 수정: 2026-11-27</li>
-<li>게임 버전: 0.2.03</li>
+<li>최종 수정: 2026-11-28</li>
+<li>게임 버전: 0.2.04</li>
 <li>엔진: Godot 4.7.2, GDScript, 3D (로우폴리), PC 마우스 전용</li>
 </ul>
 <h2 id="1">1. 개요</h2>
@@ -974,11 +974,6 @@ docs/          기획서 (.gdignore)
 </thead>
 <tbody>
 <tr>
-<td><strong>R2 마무리: 옛 점검 다시 쓰기</strong></td>
-<td>라운드제를 전제로 한 옛 점검 25개를 실시간 구조로 고친다: <code>Battle.setup(필드, 상태, 웨이브)</code> → <code>setup(필드, 상태)</code> + <code>launch_wave(웨이브)</code>, <code>main.start_wave()</code> → <code>call_wave()</code>/<code>advance(초)</code>, "전투가 끝나면" → <code>battle.enemies_left() == 0</code>, 교역 NPC는 <code>npc_next_time</code>. 목록: check m3·m4·m7·m9·m10·m11·m12·m14·m15·m17·m18·m19·m21·m25·m26·m33, flow m5·m7·m9·m10·m11·m15·m17·m22·m31</td>
-<td><code>tests/</code>의 모든 점검 0건 (그 뒤 R2 PR의 Draft를 푼다)</td>
-</tr>
-<tr>
 <td><strong>R3 분대</strong></td>
 <td>병영 분대 생산(근접·원거리, 대기열·환불), 사격장 숨김, 분대 번호·상한, 숫자키·우클릭 이동·두 번 눌러 카메라, 충원, 하단 분대 줄</td>
 <td>분대를 뽑아 숫자키로 골라 원하는 곳을 지킨다</td>
@@ -1036,7 +1031,7 @@ docs/          기획서 (.gdignore)
 </ol>
 <h3 id="93">9.3 알아 둘 것</h3>
 <ul>
-<li>테스트와 화면 확인 방법은 <code>CLAUDE.md</code>의 "실행과 테스트"에 있다. R1 점검은 <code>tests/r1_check.gd</code>(맵 생성·시작 자리·배율)와 <code>tests/r1_flow.gd</code>(시작 위치·카메라·경비병)다. 남은 옛 점검은 테스트용 작은 섬을 <code>Field.place</code>로 깐다(<code>Piece</code>는 이제 지형 상수와 이 용도만 남았다). 준비 단계를 전제로 한 점검은 R2에서 다시 쓴다. <code>tests/screenshot.gd</code>의 모드는 start·menu·npc·defense·prep(없으면 전투)이다.</li>
+<li>테스트와 화면 확인 방법은 <code>CLAUDE.md</code>의 "실행과 테스트"에 있다. R1·R2 점검은 <code>tests/r1_check.gd</code>(맵 생성·시작 자리·배율)와 <code>tests/r1_flow.gd</code>(시작 위치·카메라·경비병), <code>tests/r2_flow.gd</code>(실시간 루프)다. 남은 옛 점검은 테스트용 작은 섬을 <code>Field.place</code>로 깐다(<code>Piece</code>는 이제 지형 상수와 이 용도만 남았다). 라운드제를 전제로 했던 옛 점검은 실시간 구조(<code>setup</code> + <code>launch_wave</code>, <code>call_wave</code>·<code>advance</code>, 남은 적 0이면 웨이브를 막은 것)로 다시 썼다. <code>tests/screenshot.gd</code>의 모드는 start·menu·npc·defense·prep(없으면 전투)이다.</li>
 <li><strong>R3 전까지의 임시 상태</strong>: 시간은 처음부터 끝까지 흐른다(전투 시뮬레이션 <code>Battle</code>이 첫 도시를 세울 때 만들어져 판 내내 돈다). 병영·사격장은 지을 때와 웨이브가 올 때마다 정원(3명·2명)을 무료로 채우고, 우클릭 이동 명령은 모든 병사에게 간다. 시작 경비병 2명은 한 번만 나온다. 유적지는 R5까지 없고, 해적선은 아직 무작위 가장자리에서 온다.</li>
 <li>실시간 흐름 점검은 <code>tests/r2_flow.gd</code>다. 게임 시간은 <code>main.advance(초)</code>로 흘려 볼 수 있다.</li>
 <li>무작위에 영향을 받아 한 번씩 실패한 적이 있는 점검이 셋 있었다(<code>m14_flow.gd</code>, <code>m3_check.gd</code>, <code>m9_flow.gd</code>). 개편 때 지우거나 고치면서 시드를 고정한다.</li>
@@ -1387,6 +1382,11 @@ docs/          기획서 (.gdignore)
 <td>0.2.03</td>
 <td>2026-11-27</td>
 <td><strong>R2 실시간 루프</strong><br>- 준비·전투 단계와 "웨이브 시작" 삭제: 첫 도시를 세우면 시간이 흐르고 전투 시뮬레이션이 판 내내 돈다(건설·연구·강화·수리를 언제든)<br>- 10초 생산 틱(골드·식량·연구수치·도시 레벨), 상단 자원에 분당 생산량과 식량 표시<br>- 첫 웨이브 3분 뒤, 이후 2분마다, 겹칠 수 있음. "웨이브 부르기"(남은 1초당 골드 0.5)<br>- 일시정지(스페이스·버튼)와 배속 버튼 상시 표시<br>- 수리는 비용을 내면 5초에 걸쳐 차고, 3칸 안에 적이 있으면 불가<br>- 교역 NPC는 교역소를 지은 지 2분 뒤, 이후 6분마다 와서 60초 머묾. 경비병 거래는 바로 도시에 나옴<br>- 30웨이브 뒤 적이 모두 사라지면 승리(300초 안전장치), 계속하기로 무한 모드<br>- 병영·사격장은 지을 때와 웨이브마다 정원을 무료로 채움(R3 분대 생산 전 임시)</td>
+</tr>
+<tr>
+<td>0.2.04</td>
+<td>2026-11-28</td>
+<td><strong>R2 마무리</strong><br>- 버그 수정: 같은 칸 안에서 사거리 밖으로 떨어진 병사와 해적이 서로 멈춰 싸우지 않던 문제(경로가 비어 움직이지 않음). 같은 칸이면 곧장 다가간다<br>- 라운드제를 전제로 한 옛 점검 25개를 실시간 구조로 다시 씀</td>
 </tr>
 </tbody>
 </table></main></body></html>

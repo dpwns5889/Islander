@@ -55,13 +55,14 @@ func _initialize() -> void:
 	f.upgrade(Vector2i(3, 8))
 	fails += _check(f.fishing_food(Vector2i(3, 8)) == Balance.fishing_food(open_cells, 3), "낚시터 레벨 3: 식량 ×2")
 	# 거래 데이터
-	fails += _check(Balance.TRADES.size() == 2 and Balance.TRADE_OFFERS_LV == [2, 2, 2] and Balance.TRADE_INTERVAL == 3, "거래 2종(조각 거래 삭제, 식량 거래 없음), 방문 간격 3")
+	fails += _check(Balance.TRADES.size() == 2 and Balance.TRADE_OFFERS_LV == [2, 2, 2] and Balance.TRADE_INTERVAL == 360.0, "거래 2종(조각 거래 삭제, 식량 거래 없음), 방문 간격 6분")
 	# 일회성 수비병
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
-	gs.extra_guards = 2
+	var lake: Field = _lake_island()
 	var b: Battle = Battle.new()
-	b.setup(_lake_island(), gs, 1)
-	fails += _check(b.soldiers.size() == Balance.HQ_GUARDS + 2 and gs.extra_guards == 0, "추가 수비병 2명이 나오고 1회성이다")
+	b.setup(lake, gs)
+	b.spawn_guards(2, lake.hq)
+	fails += _check(b.soldiers.size() == Balance.HQ_GUARDS + 2, "거래로 산 경비병 2명이 바로 나온다")
 	# 효과음
 	var sfx: AudioStreamWAV = load("res://assets/audio/sfx/npc_visit.wav")
 	fails += _check(sfx != null and sfx.get_length() > 0.5, "방문 효과음 파일이 있다")

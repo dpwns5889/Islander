@@ -25,7 +25,8 @@ func _initialize() -> void:
 	gs.gold = 100
 	gs.food = 20
 	var b2: Battle = Battle.new()
-	b2.setup(_island(5), gs, 1)
+	b2.setup(_island(5), gs)
+	b2.launch_wave(1)
 	b2._ships_left = 1
 	b2._ship_timer = 9999.0
 	fails += _check(b2.soldiers.size() == Balance.HQ_GUARDS, "시작: 수비병 %d명" % Balance.HQ_GUARDS)
@@ -83,7 +84,8 @@ func _battle(f: Field, gold: int, food: int) -> Battle:
 	gs.gold = gold
 	gs.food = food
 	var b: Battle = Battle.new()
-	b.setup(f, gs, 1)
+	b.setup(f, gs)
+	b.launch_wave(1)
 	b._ships_left = 1 # 웨이브가 끝나 버리지 않도록 배 1척을 남겨 둔다
 	b._ship_timer = 9999.0
 	return b

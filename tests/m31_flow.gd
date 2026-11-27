@@ -61,7 +61,8 @@ func _initialize() -> void:
 	# 병영 병사는 건물 체력에 비례
 	f.damage(barracks, 70.0)
 	var b: Battle = Battle.new()
-	b.setup(f, gs, 1)
+	b.setup(f, gs)
+	b.launch_wave(1)
 	var worn: Array = b.soldiers.filter(func(u: Unit) -> bool: return u.home == barracks)
 	fails += _check(worn.size() == 3 and is_equal_approx(worn[0].hp, 30.0 * 0.65) and is_equal_approx(worn[0].atk, 5.0 * 0.65), "병영 30%: 병사 3명, 체력·공격 65%")
 	b.free()
@@ -72,15 +73,16 @@ func _initialize() -> void:
 	var castle_hurt: Mesh = castle.mesh
 	fails += _check(castle_full != null and castle_hurt != castle_full, "본부: 체력 50%면 파손 모델")
 	var left: float = f.hp[house]
-	main.start_wave()
-	main.battle._ships_left = 0
-	main.battle._queue.clear()
-	main.battle.tick(0.1)
-	fails += _check(main.battle == null and f.hp[house] == left and f.hq_hp == 150.0, "웨이브 뒤에도 건물·본부 피해가 남는다")
+	main.call_wave()
+	main.battle.clear_enemies()
+	main.advance(0.1)
+	fails += _check(main.battle.enemies_left() == 0 and f.hp[house] == left and f.hq_hp == 150.0, "웨이브 뒤에도 건물·본부 피해가 남는다")
 	# 본부 선택과 수리
 	gs.gold = 1000
 	fails += _check(main.select_building(f.hq) and main.repair_button.text == "수리 25G" and not main.upgrade_button.visible, "본부 패널: 수리 25G")
-	fails += _check(main.repair_selected() and gs.gold == 975 and f.hq_hp == Balance.HQ_HP, "본부 수리")
+	fails += _check(main.repair_selected() and gs.gold == 975, "본부 수리 시작")
+	main.advance(Balance.REPAIR_TIME + 0.1) # 수리는 5초에 걸쳐 찬다 (기획서 5.2.2)
+	fails += _check(f.hq_hp == Balance.HQ_HP, "5초 뒤 본부 체력이 다 찬다")
 	fails += _check(castle.mesh == castle_full, "본부 수리 뒤 정상 모델")
 	# 골드가 모자라면 못 고친다
 	gs.gold = 0
@@ -88,7 +90,10 @@ func _initialize() -> void:
 	fails += _check(main.repair_all_button.visible and main.repair_all_button.disabled and not main.repair_everything(), "골드가 없으면 전체 수리 불가")
 	gs.gold = 1000
 	var total: int = f.total_repair_cost()
-	fails += _check(main.repair_everything() and gs.gold == 1000 - total and f.total_repair_cost() == 0, "전체 수리 %dG" % total)
+	fails += _check(main.repair_everything() and gs.gold == 1000 - total, "전체 수리 %dG" % total)
+	main.advance(Balance.REPAIR_TIME + 0.1)
+	main._refresh_hud()
+	fails += _check(f.total_repair_cost() == 0, "5초 뒤 모두 고쳐진다")
 	fails += _check(mi.mesh == meshes[0] and not main.repair_all_button.visible, "수리하면 정상 모델, 버튼 숨김")
 	fails += _check(main.select_building(house) and main.upgrade_selected(), "수리 뒤에는 강화 가능")
 	# 무너진 본부 칸에 상자 건물을 지어도 본부 모델 기록이 남지 않는다

@@ -35,7 +35,8 @@ func _crews(wave: int) -> Array[int]:
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
 	gs.run_seed = 0
 	var b: Battle = Battle.new()
-	b.setup(f, gs, wave)
+	b.setup(f, gs)
+	b.launch_wave(wave)
 	b.rng.seed = 2
 	var seen: Dictionary = {}
 	for _i in 600:

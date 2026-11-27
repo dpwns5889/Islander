@@ -47,7 +47,8 @@ func _initialize() -> void:
 		gs.gold = 1000
 		gs.food = 1000
 		var b: Battle = Battle.new()
-		b.setup(f2, gs, 1)
+		b.setup(f2, gs)
+		b.launch_wave(1)
 		fails += _check(b.soldiers.size() == Balance.HQ_GUARDS + 3, "병영 레벨 %d: 병사 3명" % lv)
 	# 항구 레벨: 보트 속도
 	var f3: Field = _island()
@@ -56,7 +57,8 @@ func _initialize() -> void:
 	f3.upgrade(Vector2i(4, 5))
 	var gs3: Node = load("res://assets/scripts/game_state.gd").new()
 	var b3: Battle = Battle.new()
-	b3.setup(f3, gs3, 1)
+	b3.setup(f3, gs3)
+	b3.launch_wave(1)
 	fails += _check(b3.boats.size() == 1 and absf(b3.boats[0].speed - 2.5 * 1.3) < 0.001, "항구 레벨 3: 보트 속도 +30%")
 	print("M7 점검 실패 %d건" % fails)
 	quit(fails)

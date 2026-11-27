@@ -35,7 +35,8 @@ func _initialize() -> void:
 	f.place(p, Vector2i(4, 4))
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
 	var b: Battle = Battle.new()
-	b.setup(f, gs, 1)
+	b.setup(f, gs)
+	b.launch_wave(1)
 	b._ships_left = 1
 	b._ship_timer = 9999.0
 	var pirate: Unit = b._add_unit(Balance.U_PIRATE, b.soldiers[0].position + Vector3(0.6, 0.0, 0.0), 1.0)

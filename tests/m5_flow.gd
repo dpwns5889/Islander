@@ -12,15 +12,16 @@ func _initialize() -> void:
 	main.found_start(preload("res://tests/coastal_start.gd").pick(main.field))
 	gs.gold = 1000
 	gs.researched["math"] = true # 시장은 교역 연구가 있어야 짓는다
-	# 전투를 빠르게 돌려 승리하면 정산·본부 레벨·연구포인트
+	# 웨이브를 막고 생산 틱이 돌면 도시 레벨이 오른다
 	var hq0: Vector2i = main.field.hqs.keys()[0]
 	main.field.hq_food[hq0] = 19 # 정산 식량(평원 칸 수)과 합쳐 기준(5)을 넘게 한다
-	main.start_wave()
-	for _i in 3000:
-		if main.battle == null:
+	main.call_wave()
+	for _i in 6000: # 넓은 맵이라 먼 곳에 내린 해적까지 잡는 데 오래 걸릴 수 있다
+		if main.battle.enemies_left() == 0 or main.over: # 실시간이라 웨이브를 다 막아도 전투는 이어진다 (기획서 2장)
 			break
 		main.battle.tick(0.1)
-	fails += _check(main.battle == null and gs.wave == 2, "웨이브 승리 후 2웨이브")
+	main.advance(Balance.PRODUCTION_TICK) # 식량은 10초 생산 틱에 들어오고 도시 레벨이 오른다 (기획서 2장, 5.3)
+	fails += _check(main.battle.enemies_left() == 0 and gs.wave == 2, "웨이브를 막으면 다음은 2웨이브")
 	fails += _check(main.field.hq_level[hq0] >= 2, "식량 누적으로 본부 레벨 상승 (누적 %d)" % main.field.hq_food[hq0])
 	fails += _check(gs.research_points == 0, "도시 레벨업은 연구포인트를 주지 않는다 (연구포인트 %d)" % gs.research_points)
 	print("M5 흐름 점검 실패 %d건" % fails)

@@ -50,24 +50,23 @@ func _sim(with_port: bool) -> Dictionary:
 	var f: Field = _two_islands(with_port)
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
 	var b: Battle = Battle.new()
-	b.setup(f, gs, 1)
+	b.setup(f, gs)
+	b.launch_wave(1)
 	b.rng.seed = 3
 	var island_b: int = b.islands[Vector2i(12, 5)]
 	var crossed: bool = false
-	var result: Array = []
-	b.finished.connect(func(v: bool) -> void: result.append(v))
 	for _i in 3000:
 		b.tick(0.1)
 		for s in b.soldiers:
 			if s.island == island_b:
 				crossed = true
-		if b.done:
+		if b.done or b.enemies_left() == 0: # 실시간이라 적을 다 잡아도 전투는 끝나지 않는다 (기획서 2장)
 			break
 	var houses: int = 0
 	for c in f.buildings:
 		if f.buildings[c] == Balance.HOUSE:
 			houses += 1
-	return {"crossed": crossed, "victory": result.size() > 0 and result[0], "houses": houses}
+	return {"crossed": crossed, "victory": not b.done and b.enemies_left() == 0, "houses": houses}
 
 
 func _check(ok: bool, msg: String) -> int:

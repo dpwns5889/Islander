@@ -49,7 +49,8 @@ func _initialize() -> void:
 	lf.build(Balance.FISHERY, wcell)
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
 	var b: Battle = Battle.new()
-	b.setup(lf, gs, 1)
+	b.setup(lf, gs)
+	b.launch_wave(1)
 	b._ships_left = 1
 	b._ship_timer = 9999.0
 	for s in b.soldiers.duplicate():

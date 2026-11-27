@@ -78,15 +78,14 @@ func _sim(f: Field, barracks: int, food: int, gold: int = 1000, wave: int = 1) -
 		f.build(Balance.BARRACKS, Vector2i(5 + i, 4))
 	var b: Battle = Battle.new()
 	b.rng.seed = 7
-	b.setup(f, gs, wave)
+	b.setup(f, gs)
+	b.launch_wave(wave)
 	b.rng.seed = 7
-	var result: Array = []
-	b.finished.connect(func(v: bool) -> void: result.append(v))
 	for _i in 3000:
 		b.tick(0.1)
-		if b.done:
+		if b.done or b.enemies_left() == 0: # 실시간이라 적을 다 잡아도 전투는 끝나지 않는다 (기획서 2장)
 			break
-	return {"victory": result.size() > 0 and result[0], "hq": f.hq_hp}
+	return {"victory": not b.done and b.enemies_left() == 0, "hq": f.hq_hp}
 
 
 ## 본부 수비병 2명과 해적 3명을 본부 곁에서 싸우게 한다
@@ -96,7 +95,8 @@ func _duel(seed_i: int) -> Dictionary:
 	gs.food = 0
 	var f: Field = _island(true)
 	var b: Battle = Battle.new()
-	b.setup(f, gs, 1)
+	b.setup(f, gs)
+	b.launch_wave(1)
 	b.rng.seed = seed_i
 	b._ships_left = 1 # 웨이브가 끝나 버리지 않도록 배 1척을 남겨 둔다
 	b._ship_timer = 9999.0

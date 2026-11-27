@@ -23,7 +23,8 @@ func _initialize() -> void:
 	f.build(Balance.TOWER, Vector2i(6, 5))
 	var gs: Node = load("res://assets/scripts/game_state.gd").new()
 	var b: Battle = Battle.new()
-	b.setup(f, gs, 1)
+	b.setup(f, gs)
+	b.launch_wave(1)
 	b._ships_left = 1
 	b._ship_timer = 9999.0
 	for s in b.soldiers.duplicate(): # 병사는 치워 둔다

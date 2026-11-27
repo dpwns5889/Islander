@@ -15,7 +15,8 @@ func _initialize() -> void:
 		f.place(p, Vector2i(4, 4))
 		var gs: Node = load("res://assets/scripts/game_state.gd").new()
 		var b: Battle = Battle.new()
-		b.setup(f, gs, wave)
+		b.setup(f, gs)
+		b.launch_wave(wave)
 		for _i in 20: # 전투 시간 2초
 			b.tick(0.1)
 		fails += _check(b._ships_left == 0 and b._pirates_left == 0, "웨이브 %d: 2초 안에 모두 출발 (남은 배 %d / %d, 남은 적 %d)" % [wave, b._ships_left, Balance.ship_count(wave), b._pirates_left])
