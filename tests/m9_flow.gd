@@ -1,4 +1,5 @@
 extends SceneTree
+const Instant = preload("res://tests/instant.gd") ## 건설·강화 공사를 바로 끝낸다
 ## M9 화면 흐름 점검: godot --headless --script tests/m9_flow.gd
 
 
@@ -15,7 +16,7 @@ func _initialize() -> void:
 	main.set_build(Balance.PORT)
 	var built: bool = false
 	for c in main.field.cells:
-		if main.try_build(c):
+		if Instant.build(main, c):
 			built = true
 			break
 	fails += _check(built and main.field.buildings.values().has(Balance.PORT), "항구는 연구 없이 지을 수 있다")
@@ -25,14 +26,14 @@ func _initialize() -> void:
 	main.set_build(Balance.BARRACKS)
 	var barracks: Vector2i = Vector2i(-1, -1)
 	for c in main.field.cells:
-		if main.try_build(c):
+		if Instant.build(main, c):
 			barracks = c
 			break
 	main.set_build(0)
 	gs.gold = 1000
-	fails += _check(main.select_building(barracks) and main.upgrade_selected(), "병영 레벨 2 강화")
-	fails += _check(not main.upgrade_selected(), "철기 제작 전에는 레벨 3 강화 불가")
-	fails += _check(main.research("ironwork") and main.upgrade_selected() and main.field.levels[barracks] == 3, "철기 제작 뒤에는 레벨 3 강화")
+	fails += _check(main.select_building(barracks) and Instant.upgrade(main), "병영 레벨 2 강화")
+	fails += _check(not Instant.upgrade(main), "철기 제작 전에는 레벨 3 강화 불가")
+	fails += _check(main.research("ironwork") and Instant.upgrade(main) and main.field.levels[barracks] == 3, "철기 제작 뒤에는 레벨 3 강화")
 	# 공학: 레벨업 비용 할인, 건설비는 그대로
 	fails += _check(main.research("tools") and main.research("waterwheel") and main.research("engineering"), "농기구·물레방아·공학 연구")
 	fails += _check(main._cost_of(Balance.HOUSE) == 20 and gs.upgrade_discounted(20) == 16, "공학: 건설 20, 레벨업 20 → 16골드")

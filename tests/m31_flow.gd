@@ -1,4 +1,5 @@
 extends SceneTree
+const Instant = preload("res://tests/instant.gd") ## 건설·강화 공사를 바로 끝낸다
 ## M31 점검: 파손 모델, 남는 피해와 골드 수리, 파손에 따른 성능 감소 godot --headless --script tests/m31_flow.gd
 
 
@@ -56,7 +57,7 @@ func _initialize() -> void:
 	fails += _check(f.repair_cost(house) == 7, "수리비: 20G × 70%% × 50%% = 7 (실제 %d)" % f.repair_cost(house))
 	# 패널: 파손 건물은 수리해야 강화
 	main.select_building(house)
-	fails += _check(main.repair_button.visible and main.repair_button.text == "수리 7G" and main.upgrade_button.disabled and not main.upgrade_selected(), "패널: 수리 버튼, 강화 불가")
+	fails += _check(main.repair_button.visible and main.repair_button.text == "수리 7G" and main.upgrade_button.disabled and not Instant.upgrade(main), "패널: 수리 버튼, 강화 불가")
 	fails += _check("파손 2단계" in main.upgrade_effect.text and "성능 50%" in main.upgrade_effect.text, "패널 설명: " + main.upgrade_effect.text)
 	# 병영 병사는 건물 체력에 비례
 	f.damage(barracks, 70.0)
@@ -95,7 +96,7 @@ func _initialize() -> void:
 	main._refresh_hud()
 	fails += _check(f.total_repair_cost() == 0, "5초 뒤 모두 고쳐진다")
 	fails += _check(mi.mesh == meshes[0] and not main.repair_all_button.visible, "수리하면 정상 모델, 버튼 숨김")
-	fails += _check(main.select_building(house) and main.upgrade_selected(), "수리 뒤에는 강화 가능")
+	fails += _check(main.select_building(house) and Instant.upgrade(main), "수리 뒤에는 강화 가능")
 	# 무너진 본부 칸에 상자 건물을 지어도 본부 모델 기록이 남지 않는다
 	var old: Vector2i = f.hq
 	f.damage(old, 9999.0)

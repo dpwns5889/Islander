@@ -1,4 +1,5 @@
 extends SceneTree
+const Instant = preload("res://tests/instant.gd") ## 건설·강화 공사를 바로 끝낸다
 ## M7 화면 흐름 점검: godot --headless --script tests/m7_flow.gd
 
 
@@ -14,17 +15,17 @@ func _initialize() -> void:
 	var cell: Vector2i = Vector2i(-1, -1)
 	main.set_build(Balance.HOUSE)
 	for c in main.field.cells:
-		if main.try_build(c):
+		if Instant.build(main, c):
 			cell = c
 			break
 	main.set_build(0)
 	fails += _check(gs.gold == 30, "집 20골드 (남은 골드 %d)" % gs.gold)
 	fails += _check(main.select_building(cell) and main.upgrade_panel.visible, "건물을 고르면 레벨업 패널이 열린다")
-	fails += _check(main.upgrade_selected() and main.field.levels[cell] == 2 and gs.gold == 10, "레벨 2: 20골드")
-	fails += _check(not main.upgrade_selected() and main.field.levels[cell] == 2, "골드가 모자라면 레벨업 불가")
+	fails += _check(Instant.upgrade(main) and main.field.levels[cell] == 2 and gs.gold == 10, "레벨 2: 20골드")
+	fails += _check(not Instant.upgrade(main) and main.field.levels[cell] == 2, "골드가 모자라면 레벨업 불가")
 	gs.gold = 100
-	fails += _check(main.upgrade_selected() and main.field.levels[cell] == 3 and gs.gold == 70, "레벨 3: 30골드")
-	fails += _check(not main.upgrade_selected(), "최고 레벨에서는 더 못 올린다")
+	fails += _check(Instant.upgrade(main) and main.field.levels[cell] == 3 and gs.gold == 70, "레벨 3: 30골드")
+	fails += _check(not Instant.upgrade(main), "최고 레벨에서는 더 못 올린다")
 	fails += _check(not main.select_building(Vector2i(-50, -50)) and not main.upgrade_panel.visible, "빈 곳을 누르면 선택 해제")
 	# 전투를 돌리고 나서도 레벨이 유지된다
 	main.call_wave()

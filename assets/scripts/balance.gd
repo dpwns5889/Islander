@@ -146,8 +146,9 @@ const SQUAD_DOUBLE_TAP: float = 0.4 ## 숫자키를 이 시간(초) 안에 두 �
 const LV3_TECH: String = "ironwork" ## 병영·사격장 레벨 3 강화에 필요한 연구
 ## 실시간 진행 (기획서 2장). 모두 게임 시간(초)이라 배속을 따른다
 const PRODUCTION_TICK: float = 10.0 ## 이 간격마다 골드·식량·연구수치를 받는다
-const WAVE_FIRST_DELAY: float = 180.0 ## 첫 웨이브가 오기까지
-const WAVE_INTERVAL: float = 120.0 ## 그 뒤 웨이브 간격
+const WAVE_FIRST_DELAY: float = 60.0 ## 첫 웨이브가 오기까지
+const WAVE_INTERVAL: float = 60.0 ## 그 뒤 웨이브 간격
+const BUILD_TIME: float = 10.0 ## 건설·레벨업·진화 공사 시간 (기획서 5.1.1)
 const CALL_WAVE_GOLD: float = 0.5 ## 웨이브를 앞당겨 부르면 남은 1초당 받는 골드(내림) (기획서 9.1)
 const VICTORY_SAFETY: float = 300.0 ## 마지막 웨이브가 온 뒤 적이 막혀 남아도 이 시간이 지나면 정리하고 승리 (기획서 9.1)
 const REPAIR_TIME: float = 5.0 ## 수리하면 이 시간에 걸쳐 체력이 찬다 (기획서 5.2.2)

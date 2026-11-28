@@ -1,4 +1,5 @@
 extends SceneTree
+const Instant = preload("res://tests/instant.gd") ## 건설·강화 공사를 바로 끝낸다
 ## 방어탑·적 예고 화면 흐름 점검: godot --headless --script tests/m17_flow.gd
 
 
@@ -27,9 +28,9 @@ func _initialize() -> void:
 	main._refresh_hud()
 	fails += _check(not main.build_buttons[Balance.TOWER].disabled, "궁술 뒤에는 방어탑 해금")
 	main.set_build(Balance.TOWER)
-	fails += _check(main.try_build(wall) and main.field.buildings[wall] == Balance.TOWER and gs.gold == 960, "방어탑 40골드, 빈 땅에 바로 설치")
+	fails += _check(Instant.build(main, wall) and main.field.buildings[wall] == Balance.TOWER and gs.gold == 960, "방어탑 40골드, 빈 땅에 바로 설치")
 	main.select_building(wall)
-	fails += _check(main.upgrade_selected() and main.field.levels[wall] == 2 and "공격 6" in main.upgrade_effect.text, "방어탑 레벨 2: " + main.upgrade_effect.text)
+	fails += _check(Instant.upgrade(main) and main.field.levels[wall] == 2 and "공격 6" in main.upgrade_effect.text, "방어탑 레벨 2: " + main.upgrade_effect.text)
 	# 적 예고: 종류별 인원과 새 적 안내
 	gs.wave = 5
 	main._refresh_hud()
