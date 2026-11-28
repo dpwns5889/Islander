@@ -6,7 +6,6 @@ var field: Field
 var pixel: PixelView
 var cursor: MeshInstance3D ## 건설·시작 위치 표시
 var build_id: int = 0 ## 건설 모드의 건물 종류, 0이면 건설 모드 아님
-var started: bool = false ## 첫 도시를 세웠는지 (기획서 2장)
 var top_panel: PanelContainer
 var res_bar: PanelContainer ## 최상단 고정 자원바 (기획서 7.2)
 var build_panel: PanelContainer
@@ -99,8 +98,7 @@ func _ready() -> void:
 	field.generate_map(rng.randi())
 	_build_ui()
 	GameState.changed.connect(_refresh_hud)
-	_update_camera()
-	_refresh_hud()
+	_begin()
 
 
 func _build_world() -> void:
@@ -509,29 +507,49 @@ func do_trade(id: String) -> bool:
 	return true
 
 
-## 시작 위치를 골라 첫 도시를 세운다: 평원이 넉넉한 섬의 평원 칸만 된다 (기획서 2장)
-func found_start(c: Vector2i) -> bool:
-	if started or not field.can_start(c):
-		return false
-	field.found_city(c)
-	started = true
-	battle = Battle.new() # 첫 도시를 세우면 시간이 흐르기 시작한다 (기획서 2장)
+## 판 시작: 안개를 덮고 맵 중심에 가까운 시작 섬에 개척자와 경비병 2명을 둔다. 시간은 처음부터 흐른다 (기획서 2장, 3장)
+func _begin() -> void:
+	var c: Vector2i = field.settler_start()
+	battle = Battle.new()
 	add_child(battle)
 	battle.setup(field, GameState)
 	battle.finished.connect(_on_battle_finished)
 	battle.speed_scale = _speed()
-	field.enable_fog() # 첫 도시를 세우는 순간 안개가 덮인다 (기획서 3장)
-	field.place_ruins(rng, field.territory_of[c]) # 첫 도시 영역 밖 평원에 유적지, 안개 속이면 숨긴다 (기획서 3장)
+	battle.add_guards(c)
+	var s: Unit = battle.add_settler(c)
+	field.enable_fog()
+	var near: Dictionary = {} # 시작 칸 주변 4칸에는 유적지를 두지 않는다 (기획서 3장)
+	for y in range(c.y - 4, c.y + 5):
+		for x in range(c.x - 4, c.x + 5):
+			if Vector2(x - c.x, y - c.y).length() <= Balance.VISION_RANGE:
+				near[Vector2i(x, y)] = true
+	field.place_ruins(rng, near)
 	_explore()
 	_build_minimap()
-	minimap_panel.visible = true
-	wave_timer = Balance.WAVE_FIRST_DELAY
+	for p: Control in [minimap_panel, res_bar, build_panel, side_panel, squad_panel, wave_panel, wave_button, pause_button, speed_button]:
+		p.visible = true
+	wave_timer = Balance.WAVE_FIRST_DELAY # 첫 웨이브 3분은 게임 시작부터 센다 (기획서 2장)
 	prod_timer = Balance.PRODUCTION_TICK
-	res_bar.visible = true
-	build_panel.visible = true
-	side_panel.visible = true
-	squad_panel.visible = true
-	_zoom = 1.0 # 첫 도시를 비춘다
+	_zoom = 1.0 # 시작 개척자를 비춘다
+	_pan = field.cell_to_world(c) - field.center_world()
+	_update_camera()
+	select_settler(s)
+
+
+## 점검·캡처용 지름길: 시작 개척자를 c로 옮겨 바로 첫 도시를 세운다. 첫 도시가 이미 있거나 시작 섬의 평원이 아니면 false
+func found_start(c: Vector2i) -> bool:
+	if not field.can_start(c) or battle.settlers().is_empty():
+		return false
+	var s: Unit = battle.settlers()[0]
+	for u: Unit in [s] + battle.squad_units(1): # 개척자와 시작 경비병이 c에서 시작한 것처럼 옮긴다
+		u.position = Vector3(field.cell_to_world(c).x, u.position.y, field.cell_to_world(c).z)
+		u.home = c
+		u.order = Vector2i(-1, -1)
+		u.path.clear()
+		u.island = battle.islands.get(c, -1)
+	select_settler(s)
+	if not found_with_settler():
+		return false
 	_pan = field.cell_to_world(c) - field.center_world()
 	_update_camera()
 	_note = ""
@@ -677,7 +695,7 @@ func _speed() -> float:
 
 ## 웨이브 부르기: 다음 웨이브를 바로 부르고 남은 시간만큼 골드를 받는다 (기획서 2장)
 func call_wave() -> bool:
-	if not started or over:
+	if over:
 		return false
 	var bonus: int = floori(wave_timer * Balance.CALL_WAVE_GOLD)
 	GameState.add(bonus, 0)
@@ -713,7 +731,7 @@ func _production() -> void:
 
 ## 게임 시간을 dt만큼 흘린다: 생산 틱, 웨이브, 교역 NPC, 수리, 승리 (기획서 2장)
 func advance(dt: float) -> void:
-	if not started or over or dt <= 0.0:
+	if over or dt <= 0.0:
 		return
 	game_time += dt
 	prod_timer -= dt
@@ -805,6 +823,7 @@ func found_with_settler() -> bool:
 	if field.found_block(c) != "":
 		return false
 	field.found_city(c)
+	_explore() # 새 도시 영역을 바로 밝힌다 (기획서 3장)
 	battle.soldiers.erase(selected_settler)
 	selected_settler.queue_free()
 	selected_settler = null
@@ -1070,17 +1089,12 @@ func _process(delta: float) -> void:
 		_place_upgrade_panel() # 줌·창 크기가 바뀌어도 건물을 따라간다
 	cursor.visible = false
 	_hud_timer -= delta
-	if started and _hud_timer <= 0.0: # 맵이 넓어 생산 계산이 무거워 0.1초마다만 갱신한다
+	if _hud_timer <= 0.0: # 맵이 넓어 생산 계산이 무거워 0.1초마다만 갱신한다
 		_hud_timer = 0.1
 		_refresh_hud()
-	if (started and build_id == 0) or _over_ui():
+	if build_id == 0 or _over_ui():
 		return
-	if not started: # 시작 위치 고르기: 세울 수 있는 평원이면 하늘색
-		var hc: Vector2i = _hover_cell()
-		cursor.visible = field.bounds.has_point(hc)
-		cursor.position = field.cell_to_world(hc) + Vector3(0, Field.BLOCK_H + 0.05, 0)
-		cursor.material_override = _cursor_mat(field.can_start(hc))
-	elif build_id != 0:
+	if build_id != 0:
 		var c: Vector2i = _hover_cell()
 		cursor.visible = true
 		cursor.position = field.cell_to_world(c) + Vector3(0, (0.05 if Balance.BUILDINGS.get(build_id, {}).get("on_water", false) else Field.BLOCK_H + 0.05), 0)
@@ -1104,10 +1118,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key == KEY_P and not event.is_echo(): # 도트 화면 켜고 끄기 (기획서 7.2)
 		pixel.set_enabled(not pixel.enabled)
 		return
-	if key == KEY_SPACE and not event.is_echo() and started: # 일시정지 (기획서 2장)
+	if key == KEY_SPACE and not event.is_echo(): # 일시정지 (기획서 2장)
 		toggle_pause()
 		return
-	if key >= KEY_1 and key <= KEY_9 and not event.is_echo() and started: # 숫자키: 분대 고르기, Shift면 더하기 (기획서 6장)
+	if key >= KEY_1 and key <= KEY_9 and not event.is_echo(): # 숫자키: 분대 고르기, Shift면 더하기 (기획서 6장)
 		select_squad(key - KEY_0, (event as InputEventKey).shift_pressed)
 		return
 	if mb != null and mb.pressed and (mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN):
@@ -1151,9 +1165,7 @@ func click() -> void:
 		_update_dropdown()
 		return
 	var hc: Vector2i = _hover_cell()
-	if not started:
-		found_start(hc)
-	elif build_id != 0:
+	if build_id != 0:
 		try_build(hc)
 	elif _settler_at(hc) != null: # 개척자를 누르면 고른다 (기획서 4장)
 		select_settler(_settler_at(hc))
@@ -1307,7 +1319,6 @@ func _refresh_hud() -> void:
 		tbtn.disabled = not _trade_ok(tid)
 	research_toggle.text = "연구 (연구포인트 %d)" % GameState.research_points
 	# 이번 웨이브의 적을 미리 알려 준다. 해적의 세기는 도시 수에 따라 바뀐다 (기획서 6장)
-	wave_panel.visible = started
 	var comp: Dictionary = Balance.enemy_composition(GameState.wave, GameState.run_seed)
 	var comp_parts: Array[String] = []
 	for kind in comp:
@@ -1320,12 +1331,9 @@ func _refresh_hud() -> void:
 	for nk in Balance.new_enemy_kinds(GameState.wave): # 새 종류가 처음 나오는 웨이브 안내
 		var info: Dictionary = Balance.UNITS[nk]
 		wave_info.text += "\n새 적: %s (체력 %d · 공격 %d%s)" % [info["name"], info["hp"], info["atk"], (" · 사거리 %.1f칸" % info["reach"]) if info.get("ranged", false) else ""]
-	wave_button.visible = started
 	wave_button.disabled = over
 	wave_button.text = "웨이브 %d/%d · 다음까지 %d:%02d · 부르기 (+%dG)" % [GameState.wave - 1, Balance.WIN_WAVE, int(wave_timer) / 60, int(wave_timer) % 60, floori(wave_timer * Balance.CALL_WAVE_GOLD)]
-	pause_button.visible = started
 	pause_button.text = "▶ 계속 (Space)" if paused else "❚❚ 일시정지 (Space)"
-	speed_button.visible = started
 	if research_panel.visible:
 		_refresh_research()
 	var cities: Array[Vector2i] = _sorted_hqs()
@@ -1397,8 +1405,8 @@ func _refresh_hud() -> void:
 			upgrade_button.tooltip_text = "수리해야 강화·진화할 수 있습니다"
 	_refresh_squads()
 	var s: String
-	if not started:
-		s = "첫 도시를 세울 평원을 클릭하세요 (평원 %d칸 이상인 섬, 하늘색) · 화면 가장자리 이동 · 좌클릭 드래그 회전 · 휠 확대/축소" % Balance.START_ISLAND_PLAINS
+	if field.hqs.is_empty() and build_id == 0: # 첫 도시 전 안내 (기획서 2장)
+		s = "개척자를 우클릭으로 옮기고 '도시 세우기'로 첫 도시를 세우세요"
 	elif build_id != 0:
 		s = "%s 건설: 좌클릭 배치 · 우클릭/Esc 취소" % Balance.BUILDINGS[build_id]["name"]
 	else:

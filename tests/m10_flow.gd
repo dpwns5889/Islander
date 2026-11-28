@@ -8,7 +8,7 @@ func _initialize() -> void:
 	main.edge_pan = false # 마우스 위치로 카메라가 움직이지 않게
 	root.add_child(main)
 	await process_frame
-	fails += _check(not main.command_move(main.field.start_cells().keys()[0]), "도시를 세우기 전에는 이동 명령을 못 내린다")
+	fails += _check(main.command_move(main.field.start_cells().keys()[0]) and main.selected_settler != null, "첫 도시 전에는 골라져 있는 시작 개척자가 움직인다 (기획서 2장)")
 	main.found_start(preload("res://tests/coastal_start.gd").pick(main.field))
 	var land: Vector2i = main.field.hq
 	fails += _check(not main.build_buttons.has(99), "집결지 버튼은 없다")
