@@ -52,6 +52,7 @@ func _sim(with_port: bool) -> Dictionary:
 	var b: Battle = Battle.new()
 	b.setup(f, gs)
 	b.launch_wave(1)
+	b.target_city = Vector2i(14, 7) # 해적선이 섬 B 쪽(오른쪽) 가장자리에서 와서 B에 상륙하게 한다 (기획서 6장)
 	b.rng.seed = 3
 	var island_b: int = b.islands[Vector2i(12, 5)]
 	var crossed: bool = false

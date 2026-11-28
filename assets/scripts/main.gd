@@ -71,6 +71,11 @@ var selected_settler: Unit = null ## 좌클릭으로 고른 개척자. 분대 �
 var found_button: Button ## 고른 개척자의 "도시 세우기"
 var settler_button: Button ## 도시 패널의 개척자 생산·취소
 var _tap_n: int = 0 ## 숫자키 두 번 누르기 판정
+var minimap_panel: PanelContainer ## 오른쪽 아래 미니맵 (기획서 7.2)
+var minimap: TextureRect
+var _mini_img: Image
+var _mini_terrain: Image ## 지형만 그린 미니맵 바탕 (지형은 판 중에 바뀌지 않는다)
+var _explore_timer: float = 0.0
 var _tap_time: float = -10.0
 ## 카메라는 쿼터뷰 하나다 (기획서 7.2)
 var _zoom: float = Balance.ZOOM_START ## 휠 줌 배율(작을수록 확대)
@@ -194,6 +199,26 @@ func _build_ui() -> void:
 			list.add_child(b)
 		dropdown_lists.append(list)
 		drop_box.add_child(list)
+	minimap = TextureRect.new()
+	minimap.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	minimap.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	minimap.stretch_mode = TextureRect.STRETCH_SCALE
+	minimap.custom_minimum_size = Vector2.ONE * Balance.MINIMAP_SIZE
+	minimap.gui_input.connect(_on_minimap_input)
+	minimap_panel = PanelContainer.new()
+	var frame: StyleBoxFlat = StyleBoxFlat.new() # 안개와 같은 색이라 테두리로 미니맵 자리를 구분한다
+	frame.bg_color = Color(0.05, 0.05, 0.07)
+	frame.set_border_width_all(2)
+	frame.border_color = Color(0.75, 0.75, 0.8)
+	minimap_panel.add_theme_stylebox_override("panel", frame)
+	minimap_panel.add_child(minimap)
+	minimap_panel.visible = false
+	layer.add_child(minimap_panel)
+	minimap_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 10)
+	minimap_panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	minimap_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	minimap_panel.offset_bottom -= 56 # 건설 메뉴 한 줄 위
+	minimap_panel.offset_top -= 56
 	build_panel = PanelContainer.new()
 	build_panel.add_child(bar)
 	build_panel.visible = false
@@ -351,7 +376,7 @@ func _build_ui() -> void:
 
 func _over_ui() -> bool:
 	var mp: Vector2 = get_viewport().get_mouse_position()
-	for c: Control in [top_panel, res_bar, wave_panel, build_panel, side_panel, upgrade_panel, research_panel, dropdown_panel, trade_panel, squad_panel]:
+	for c: Control in [top_panel, res_bar, wave_panel, build_panel, minimap_panel, side_panel, upgrade_panel, research_panel, dropdown_panel, trade_panel, squad_panel]:
 		if c.visible and c.get_global_rect().has_point(mp):
 			return true
 	return false
@@ -494,6 +519,11 @@ func found_start(c: Vector2i) -> bool:
 	battle.setup(field, GameState)
 	battle.finished.connect(_on_battle_finished)
 	battle.speed_scale = _speed()
+	field.enable_fog() # 첫 도시를 세우는 순간 안개가 덮인다 (기획서 3장)
+	field.place_ruins(rng, field.territory_of[c]) # 첫 도시 영역 밖 평원에 유적지, 안개 속이면 숨긴다 (기획서 3장)
+	_explore()
+	_build_minimap()
+	minimap_panel.visible = true
 	wave_timer = Balance.WAVE_FIRST_DELAY
 	prod_timer = Balance.PRODUCTION_TICK
 	res_bar.visible = true
@@ -694,6 +724,11 @@ func advance(dt: float) -> void:
 		_launch_wave()
 	_npc_tick()
 	_repair_tick(dt)
+	_take_ruins()
+	_explore_timer -= dt
+	if _explore_timer <= 0.0: # 밝히기는 0.2초마다면 충분하다
+		_explore_timer = 0.2
+		_explore()
 	_check_victory()
 
 
@@ -1022,6 +1057,9 @@ func _place_upgrade_panel() -> void:
 func _process(delta: float) -> void:
 	_edge_pan(delta)
 	advance(delta * _speed())
+	if battle != null: # 밝히지 않은 곳의 적은 숨긴다: 새로 나온 배가 한 프레임도 보이지 않게 매 프레임 (기획서 3장)
+		for u: Unit in battle.pirates + battle.ships:
+			u.visible = field.is_explored(field.world_to_cell(u.position))
 	if upgrade_panel.visible:
 		_place_upgrade_panel() # 줌·창 크기가 바뀌어도 건물을 따라간다
 	cursor.visible = false
@@ -1269,6 +1307,8 @@ func _refresh_hud() -> void:
 	for kind in comp:
 		comp_parts.append("%s %d명" % [Balance.UNITS[kind]["name"], comp[kind]])
 	wave_info.text = "웨이브 %d 예고: %s (전투력 %d · 해적선 %d척) · 체력·공격 ×%.2f" % [GameState.wave, " · ".join(comp_parts), Balance.wave_power(GameState.wave, GameState.run_seed), Balance.ship_count(GameState.wave, GameState.run_seed), Balance.enemy_mult(field.hqs.size())]
+	if not field.hqs.is_empty(): # 목표 도시 방향: 해적선은 이 도시에서 가장 가까운 가장자리에서 온다 (기획서 6장)
+		wave_info.text += " · %d번 도시 방향" % (Balance.wave_target(GameState.wave, GameState.run_seed, field.hqs.size()) + 1)
 	if field.sea_blocked():
 		wave_info.text += "\n바닷길이 막혀 해적이 걸어서 바다를 건넙니다"
 	for nk in Balance.new_enemy_kinds(GameState.wave): # 새 종류가 처음 나오는 웨이브 안내
@@ -1305,6 +1345,7 @@ func _refresh_hud() -> void:
 	repair_all_button.text = "전체 수리 %dG" % all_cost
 	repair_all_button.disabled = GameState.gold < all_cost
 	field.refresh_hq_bars() # 도시 옆 레벨업 바 (기획서 5.3)
+	_refresh_minimap()
 	if selected_cell.x >= 0 and not field.buildings.has(selected_cell) and not field.hqs.has(selected_cell):
 		selected_cell = Vector2i(-1, -1)
 	upgrade_panel.visible = selected_cell.x >= 0
@@ -1357,3 +1398,77 @@ func _refresh_hud() -> void:
 	else:
 		s = battle.summary() + " · 숫자키: 분대 · 개척자 좌클릭 · 우클릭: 이동"
 	status.text = (_note + "\n" if _note != "" else "") + s
+
+
+## 도시 영역과 유닛(분대·개척자) 주변을 밝힌다 (기획서 3장)
+func _explore() -> void:
+	for h in field.territory_of:
+		field.reveal_cells(field.territory_of[h])
+	if battle == null:
+		return
+	for u in battle.soldiers:
+		field.reveal(field.world_to_cell(u.position), Balance.VISION_RANGE)
+
+
+## 유닛이 유적지 칸에 들어가면 보상: 골드 60~100, 30% 확률로 대신 연구포인트 +1 (기획서 3장)
+func _take_ruins() -> void:
+	for u in battle.soldiers:
+		if not field.take_ruin(field.world_to_cell(u.position)):
+			continue
+		if rng.randf() < Balance.RUIN_RP_CHANCE:
+			GameState.add_research(1)
+			_note = "유적지 발견: 연구포인트 +1"
+		else:
+			var g: int = rng.randi_range(Balance.RUIN_GOLD.x, Balance.RUIN_GOLD.y)
+			GameState.add(g, 0)
+			_note = "유적지 발견: 골드 +%d" % g
+
+
+## 미니맵 바탕(지형)을 한 번 그린다 (기획서 7.2)
+func _build_minimap() -> void:
+	var sz: Vector2i = field.bounds.size # 한 칸 = 한 도트, 왼쪽 위가 bounds.position (안개 텍스처와 같다)
+	_mini_terrain = Image.create(sz.x, sz.y, false, Image.FORMAT_RGBA8)
+	_mini_terrain.fill(Color(0.2, 0.48, 0.82))
+	for c in field.cells:
+		if field.bounds.has_point(c):
+			_mini_terrain.set_pixelv(c - field.bounds.position, Field.color_of(field.cells[c]))
+	_mini_img = Image.create(sz.x, sz.y, false, Image.FORMAT_RGBA8)
+	minimap.texture = ImageTexture.create_from_image(_mini_img)
+	_refresh_minimap()
+
+
+## 지형 위에 안개를 덮고 도시(흰색)·분대(하늘색)·보이는 해적(빨강)을 찍는다 (기획서 7.2)
+func _refresh_minimap() -> void:
+	if _mini_img == null:
+		return
+	_mini_img.copy_from(_mini_terrain)
+	_mini_img.blend_rect(field._fog_img, Rect2i(Vector2i.ZERO, field.bounds.size), Vector2i.ZERO)
+	for h in field.hqs:
+		_mini_img.fill_rect(Rect2i(h - field.bounds.position - Vector2i.ONE, Vector2i(3, 3)), Color.WHITE)
+	if battle != null:
+		for u in battle.soldiers:
+			_mini_dot(u, Color(0.3, 0.95, 1.0))
+		for u in battle.pirates + battle.ships:
+			if u.visible:
+				_mini_dot(u, Color(1.0, 0.15, 0.15))
+	(minimap.texture as ImageTexture).update(_mini_img)
+
+
+func _mini_dot(u: Unit, col: Color) -> void:
+	var c: Vector2i = field.world_to_cell(u.position)
+	if field.bounds.has_point(c):
+		_mini_img.set_pixelv(c - field.bounds.position, col)
+
+
+## 미니맵을 누르면 그곳으로 카메라를 옮긴다 (기획서 7.2)
+func _on_minimap_input(event: InputEvent) -> void:
+	var mb: InputEventMouseButton = event as InputEventMouseButton
+	if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
+		return
+	focus_minimap(mb.position / minimap.size)
+
+
+## 미니맵 위의 비율 위치(0~1)로 카메라를 옮긴다
+func focus_minimap(at: Vector2) -> void:
+	var c: Vector2i = (field.bounds.position + Vector2i((at * Vector2(field.bounds.size)).floor())).clamp(field.bounds.position, field.bounds.end - Vector2i.ONE)
+	focus_city(c)

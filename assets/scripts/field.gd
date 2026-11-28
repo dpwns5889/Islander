@@ -567,7 +567,7 @@ func can_build(id: int, c: Vector2i) -> bool:
 		if data.get("unique", false) and buildings.values().has(id):
 			return false
 		return not data.get("open_sea", false) or is_open_sea(c)
-	if not cells.has(c) or hqs.has(c) or buildings.has(c):
+	if not cells.has(c) or hqs.has(c) or buildings.has(c) or ruins.has(c): # 유적지 칸에는 짓지 못한다 (기획서 3장)
 		return false
 	if cells[c] == Piece.SAND and not data["sand"]:
 		return false
@@ -1065,3 +1065,105 @@ func place(p: Piece, origin: Vector2i) -> void:
 	_draw_land()
 	if p.hq_index >= 0:
 		found_city(origin + p.cells[p.hq_index])
+
+
+## ---- 안개 (기획서 3장) ----
+var fog_on: bool = false ## 첫 도시를 세우면 켠다. 그 전에는 맵 전체가 보인다
+var explored: Dictionary = {} ## 한 번 밝힌 칸 → true (계속 보인다)
+var _fog_img: Image
+var _fog_tex: ImageTexture
+var _fog_dirty: bool = false
+
+
+## 맵 전체를 안개로 덮는다: 칸마다 한 도트인 텍스처를 맵 크기 판에 씌운다
+func enable_fog() -> void:
+	fog_on = true
+	_fog_img = Image.create(bounds.size.x, bounds.size.y, false, Image.FORMAT_RGBA8) # 한 칸 = 한 도트, 왼쪽 위가 bounds.position
+	_fog_img.fill(Balance.FOG_COLOR)
+	for c in explored:
+		_fog_img.set_pixelv(c - bounds.position, Color(0, 0, 0, 0))
+	_fog_tex = ImageTexture.create_from_image(_fog_img)
+	var m: StandardMaterial3D = StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR # 불투명처럼 깊이를 써서 안개 아래 땅의 외곽선이 비치지 않게 한다
+	m.albedo_texture = _fog_tex
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	var pm: PlaneMesh = PlaneMesh.new()
+	pm.size = Vector2(bounds.size)
+	var mi: MeshInstance3D = MeshInstance3D.new()
+	mi.mesh = pm
+	mi.material_override = m
+	mi.position = center_world() + Vector3(0.0, BLOCK_H + 0.03, 0.0)
+	add_child(mi)
+
+
+func is_explored(c: Vector2i) -> bool:
+	return not fog_on or explored.has(c)
+
+
+## center에서 r칸 안을 밝힌다. 새로 밝힌 칸이 있으면 true
+func reveal(center: Vector2i, r: float) -> bool:
+	var changed: bool = false
+	var n: int = ceili(r)
+	for dy in range(-n, n + 1):
+		for dx in range(-n, n + 1):
+			if dx * dx + dy * dy <= r * r:
+				changed = _reveal_cell(center + Vector2i(dx, dy)) or changed
+	return changed
+
+
+func reveal_cells(set: Dictionary) -> void:
+	for c in set:
+		_reveal_cell(c)
+
+
+func _reveal_cell(c: Vector2i) -> bool:
+	if explored.has(c) or not bounds.has_point(c):
+		return false
+	explored[c] = true
+	if _fog_img != null:
+		_fog_img.set_pixelv(c - bounds.position, Color(0, 0, 0, 0))
+		_fog_dirty = true
+	if ruins.has(c):
+		(ruins[c] as Node3D).visible = true
+	return true
+
+
+func _process(_delta: float) -> void:
+	if _fog_dirty: # 한 프레임에 여러 번 밝혀도 텍스처는 한 번만 올린다
+		_fog_dirty = false
+		_fog_tex.update(_fog_img)
+
+
+## ---- 유적지 (기획서 3장) ----
+var ruins: Dictionary = {} ## 유적지 칸 → 표시 노드
+
+
+## 평원 칸 RUIN_COUNT곳에 유적지를 둔다. avoid 칸(첫 도시 영역)은 뺀다
+func place_ruins(rng: RandomNumberGenerator, avoid: Dictionary) -> void:
+	var cands: Array[Vector2i] = []
+	for c in cells:
+		if cells[c] == Piece.PLAINS and not avoid.has(c) and not hqs.has(c) and not buildings.has(c):
+			cands.append(c)
+	for i in mini(Balance.RUIN_COUNT, cands.size()):
+		var j: int = rng.randi_range(i, cands.size() - 1)
+		var c: Vector2i = cands[j]
+		cands[j] = cands[i]
+		var bm: BoxMesh = BoxMesh.new()
+		bm.size = Vector3(0.36, 0.14, 0.36)
+		var mi: MeshInstance3D = MeshInstance3D.new()
+		mi.mesh = bm
+		mi.material_override = _mat(Color(1.0, 0.9, 0.2), true) # 밝은 노란 표시, 빛 3단계 없이 (기획서 7.2)
+		mi.position = cell_to_world(c) + Vector3(0.0, BLOCK_H + 0.07, 0.0)
+		mi.visible = is_explored(c)
+		add_child(mi)
+		ruins[c] = mi
+
+
+## 유적지를 가져간다. 있었으면 true
+func take_ruin(c: Vector2i) -> bool:
+	if not ruins.has(c):
+		return false
+	(ruins[c] as Node).queue_free()
+	ruins.erase(c)
+	return true
