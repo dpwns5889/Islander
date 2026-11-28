@@ -1,4 +1,5 @@
 extends SceneTree
+const Instant = preload("res://tests/instant.gd") ## 건설·강화 공사를 바로 끝낸다
 ## R3 화면 흐름 점검: 분대 줄, 숫자키·Shift·두 번 눌러 카메라, 고른 분대만 우클릭 이동(없으면 무시),
 ## 병영 패널의 분대 생산·대기열 취소, 상한 툴팁, 충원 버튼, 사격장 숨김, 경비병 거래 삭제
 ## godot --headless --script tests/r3_flow.gd
@@ -36,7 +37,7 @@ func _initialize() -> void:
 	main.set_build(Balance.BARRACKS)
 	var bar: Vector2i = Vector2i(-1, -1)
 	for c: Vector2i in f.territory_of[f.hq]:
-		if bar.x < 0 and main.try_build(c):
+		if bar.x < 0 and Instant.build(main, c):
 			bar = c
 	fails += _check(bar.x >= 0 and b.soldiers.size() == Balance.HQ_GUARDS, "병영을 지어도 병사가 공짜로 나오지 않는다")
 	main.select_building(bar)

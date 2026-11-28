@@ -1,4 +1,5 @@
 extends SceneTree
+const Instant = preload("res://tests/instant.gd") ## 건설·강화 공사를 바로 끝낸다
 ## 화면 캡처: godot --script tests/screenshot.gd -- <png 경로> [대기 초] [모드]
 ## 모드 start: 개척자·경비병으로 막 시작한 화면(첫 도시 전), menu: 건설 메뉴 목록, npc: 교역 NPC 거래 창, defense: 방어탑과 12웨이브 전투,
 ## prep: 준비 단계(건물·패널), 뒤에 research를 더 붙이면 연구 패널도 연다. city: 도시 2개·개척자 선택·개척자 생산.
@@ -74,6 +75,6 @@ func _build(main: Node, ids: Array) -> void:
 	for id: int in ids:
 		main.set_build(id)
 		for c: Vector2i in f.territory_of[f.hq]:
-			if main.try_build(c):
+			if Instant.build(main, c):
 				break
 	main.set_build(0)

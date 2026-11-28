@@ -562,10 +562,7 @@ func try_build(c: Vector2i) -> bool:
 		return false
 	GameState.spend(_cost_of(build_id))
 	field.build(build_id, c)
-	if build_id == Balance.TRADING_POST: # 지은 지 2분 뒤 첫 방문 (기획서 5.6)
-		npc_next_time = game_time + Balance.TRADE_FIRST_DELAY
-	if battle != null and build_id == Balance.PORT:
-		battle.add_port(c)
+	field.start_job(c, "build", _cost_of(build_id)) # 10초 공사 뒤에 효과가 난다 (기획서 5.1.1)
 	set_build(0) # 건물을 하나 지으면 설치 모드가 끝난다
 	return true
 
@@ -656,14 +653,21 @@ func _repair_tick(dt: float) -> void:
 			repairing.erase(c)
 
 
+## 건물 패널의 버튼: 공사 중이면 취소(전액 환불), 아니면 진화·레벨업 공사를 시작한다 (기획서 5.1.1, 5.2)
 func upgrade_selected() -> bool:
+	if field.jobs.has(selected_cell):
+		GameState.add(field.cancel_job(selected_cell), 0)
+		_note = "공사를 취소했습니다 (전액 환불)"
+		_refresh_hud()
+		return true
 	if not field.buildings.has(selected_cell) or field.hp_ratio(selected_cell) < 1.0: # 파손되면 먼저 수리한다 (기획서 5.2.2)
 		return false
 	if selected_cell.x >= 0 and _can_evolve(selected_cell):
 		var to: int = Balance.evolve_to(field.buildings[selected_cell])
-		if not GameState.spend(GameState.upgrade_discounted(Balance.evolve_cost(to))):
+		var ecost: int = GameState.upgrade_discounted(Balance.evolve_cost(to))
+		if not GameState.spend(ecost):
 			return false
-		field.evolve(selected_cell, to)
+		field.start_job(selected_cell, "evolve", ecost, to)
 		_note = ""
 		_refresh_hud()
 		return true
@@ -672,7 +676,7 @@ func upgrade_selected() -> bool:
 	var cost: int = GameState.upgrade_discounted(Balance.upgrade_cost(field.buildings[selected_cell], field.levels[selected_cell] + 1))
 	if not GameState.spend(cost):
 		return false
-	field.upgrade(selected_cell)
+	field.start_job(selected_cell, "upgrade", cost)
 	_note = ""
 	_refresh_hud()
 	return true
@@ -743,6 +747,8 @@ func advance(dt: float) -> void:
 		_launch_wave()
 	_npc_tick()
 	_repair_tick(dt)
+	for done: Array in field.tick_jobs(dt):
+		_job_done(done[0], done[1])
 	_take_ruins()
 	_explore_timer -= dt
 	if _explore_timer <= 0.0: # 밝히기는 0.2초마다면 충분하다
@@ -1403,6 +1409,12 @@ func _refresh_hud() -> void:
 			upgrade_effect.text += "\n" + _damage_text(selected_cell)
 			upgrade_button.disabled = true
 			upgrade_button.tooltip_text = "수리해야 강화·진화할 수 있습니다"
+		if field.jobs.has(selected_cell): # 공사 중: 남은 시간과 취소 (기획서 5.1.1)
+			var job: Dictionary = field.jobs[selected_cell]
+			upgrade_effect.text += "\n%s 중 %d초" % [Field.JOB_NAMES[job["kind"]], ceili(job["left"])]
+			upgrade_button.text = "공사 취소 (%dG 환불)" % job["cost"]
+			upgrade_button.disabled = false
+			upgrade_button.tooltip_text = ""
 	_refresh_squads()
 	var s: String
 	if field.hqs.is_empty() and build_id == 0: # 첫 도시 전 안내 (기획서 2장)
@@ -1486,3 +1498,13 @@ func _on_minimap_input(event: InputEvent) -> void:
 func focus_minimap(at: Vector2) -> void:
 	var c: Vector2i = (field.bounds.position + Vector2i((at * Vector2(field.bounds.size)).floor())).clamp(field.bounds.position, field.bounds.end - Vector2i.ONE)
 	focus_city(c)
+
+
+## 공사가 끝났다: 새 항구는 보트를 띄우고, 새 교역소는 NPC 일정을 시작한다 (기획서 5.1.1, 5.6)
+func _job_done(c: Vector2i, kind: String) -> void:
+	if kind != "build":
+		return
+	if field.buildings.get(c, 0) == Balance.TRADING_POST:
+		npc_next_time = game_time + Balance.TRADE_FIRST_DELAY
+	elif field.buildings.get(c, 0) == Balance.PORT and battle != null:
+		battle.add_port(c)

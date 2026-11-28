@@ -1,4 +1,5 @@
 extends SceneTree
+const Instant = preload("res://tests/instant.gd") ## 건설·강화 공사를 바로 끝낸다
 ## 교역 NPC·건설 메뉴 화면 흐름 점검: godot --headless --script tests/m15_flow.gd
 
 
@@ -30,7 +31,7 @@ func _initialize() -> void:
 	var bb: Rect2i = main.field.bounds # 교역소는 물 위에 짓는다
 	for y in range(bb.position.y, bb.end.y):
 		for x in range(bb.position.x, bb.end.x):
-			if post.x < 0 and main.try_build(Vector2i(x, y)):
+			if post.x < 0 and Instant.build(main, Vector2i(x, y)):
 				post = Vector2i(x, y)
 	fails += _check(post.x >= 0 and main.field.trading_post() == post and main.build_id == 0, "교역소 설치, 설치 모드 종료")
 	main.set_build(Balance.TRADING_POST)
@@ -68,7 +69,7 @@ func _initialize() -> void:
 	# 6. 교역소 레벨 2도 거래 1개, 6분 뒤 다시 방문
 	gs.gold = 1000
 	main.select_building(post)
-	fails += _check(main.upgrade_selected() and main.field.levels[post] == 2, "교역소 레벨 2")
+	fails += _check(Instant.upgrade(main) and main.field.levels[post] == 2, "교역소 레벨 2")
 	main.advance(main.npc_next_time - main.game_time + 0.1)
 	fails += _check(main.npc_present and main.trade_offers.size() == 1, "6분 뒤 NPC 다시 방문, 거래 1개")
 	# 7. 교역소가 없으면 방문하지 않는다

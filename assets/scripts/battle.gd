@@ -147,7 +147,7 @@ func squad_units(n: int) -> Array[Unit]:
 ## 병영 c에 분대 생산을 넣는다: 대기열 3칸, 상한, 연구, 비용 (기획서 6장)
 func can_queue(c: Vector2i, type: String) -> bool:
 	var sq: Dictionary = Balance.SQUADS[type]
-	return field.buildings.get(c, 0) == Balance.BARRACKS and (queues.get(c, []) as Array).size() < Balance.SQUAD_QUEUE 		and squad_count() < squad_cap() and (not sq.has("tech") or gs.has_tech(sq["tech"])) 		and gs.gold >= sq["gold"] and gs.food >= sq["food"]
+	return field.buildings.get(c, 0) == Balance.BARRACKS and not field.is_building(c) and (queues.get(c, []) as Array).size() < Balance.SQUAD_QUEUE 		and squad_count() < squad_cap() and (not sq.has("tech") or gs.has_tech(sq["tech"])) 		and gs.gold >= sq["gold"] and gs.food >= sq["food"]
 
 
 func queue_squad(c: Vector2i, type: String) -> bool:

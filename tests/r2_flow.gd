@@ -1,4 +1,5 @@
 extends SceneTree
+const Instant = preload("res://tests/instant.gd") ## 건설·강화 공사를 바로 끝낸다
 ## R2 화면 흐름 점검: 실시간 루프 — 10초 생산 틱, 3분 뒤 첫 웨이브와 2분 간격, 웨이브 부르기 보너스, 겹치는 웨이브,
 ## 일시정지·배속, 5초 수리와 적 근처 금지, 교역 NPC 시간 일정, 30웨이브 승리, 전투 중 건설
 ## godot --headless --script tests/r2_flow.gd
@@ -30,7 +31,7 @@ func _initialize() -> void:
 	main.set_build(Balance.BARRACKS)
 	var built: bool = false
 	for c: Vector2i in f.territory_of[f.hq]:
-		if not built and main.try_build(c):
+		if not built and Instant.build(main, c):
 			built = true
 	fails += _check(built and b.soldiers.size() == Balance.HQ_GUARDS, "전투 중에도 지을 수 있다 (병영은 생산만, R3)")
 	# 첫 웨이브
@@ -51,7 +52,7 @@ func _initialize() -> void:
 	main.set_build(Balance.HOUSE)
 	built = false
 	for c: Vector2i in f.territory_of[f.hq]:
-		if not built and main.try_build(c):
+		if not built and Instant.build(main, c):
 			built = true
 	fails += _check(built, "일시정지 중에도 건설할 수 있다")
 	main.toggle_pause()
@@ -84,7 +85,7 @@ func _initialize() -> void:
 	main.set_build(Balance.TRADING_POST)
 	var post: Vector2i = Vector2i(-1, -1)
 	for c: Vector2i in f.territory_of[f.hq]:
-		if post.x < 0 and main.try_build(c):
+		if post.x < 0 and Instant.build(main, c):
 			post = c
 	fails += _check(post.x >= 0 and is_equal_approx(main.npc_next_time, main.game_time + Balance.TRADE_FIRST_DELAY), "교역소를 지으면 2분 뒤 방문 예정")
 	main.advance(Balance.TRADE_FIRST_DELAY + 0.1)
@@ -92,6 +93,29 @@ func _initialize() -> void:
 	main.advance(Balance.TRADE_STAY)
 	fails += _check(not main.npc_present, "60초 뒤 떠난다")
 	b.clear_enemies()
+	# 공사 10초: 짓는 동안 효과 없음, 취소하면 전액 환불, 레벨업도 10초 동안 이전 레벨 (기획서 5.1.1)
+	gs.gold = 1000
+	main.set_build(Balance.HOUSE)
+	var new_house: Vector2i = Vector2i(-1, -1)
+	for c: Vector2i in f.territory_of[f.hq]:
+		if new_house.x < 0 and main.try_build(c):
+			new_house = c
+	fails += _check(new_house.x >= 0 and f.is_building(new_house) and is_equal_approx(f.performance(new_house), 0.0), "새로 지은 집은 공사 중이고 효과가 없다")
+	main.select_building(new_house)
+	main._refresh_hud()
+	fails += _check("공사 취소" in main.upgrade_button.text and "건설 중 10초" in main.upgrade_effect.text, "패널: 남은 시간과 공사 취소 (%s / %s)" % [main.upgrade_button.text, main.upgrade_effect.text])
+	var g1: int = gs.gold
+	fails += _check(main.upgrade_selected() and not f.buildings.has(new_house) and gs.gold == g1 + int(Balance.BUILDINGS[Balance.HOUSE]["cost"]), "취소하면 집이 사라지고 전액 환불")
+	main.set_build(Balance.HOUSE)
+	main.try_build(new_house)
+	main.advance(Balance.BUILD_TIME - 0.5)
+	fails += _check(f.is_building(new_house), "10초 전에는 아직 공사 중")
+	main.advance(0.6)
+	fails += _check(not f.is_building(new_house) and f.performance(new_house) > 0.0, "10초가 지나면 효과가 난다")
+	main.select_building(new_house)
+	fails += _check(main.upgrade_selected() and f.jobs.has(new_house) and f.levels[new_house] == 1 and f.performance(new_house) > 0.0, "레벨업 공사 중에는 레벨 1 효과를 그대로 낸다")
+	main.advance(Balance.BUILD_TIME + 0.1)
+	fails += _check(not f.jobs.has(new_house) and f.levels[new_house] == 2, "10초 뒤 레벨 2")
 	# 30웨이브 승리
 	gs.wave = Balance.WIN_WAVE
 	main.call_wave()

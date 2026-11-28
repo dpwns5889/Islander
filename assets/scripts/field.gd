@@ -662,7 +662,7 @@ func fishing_food(c: Vector2i) -> int:
 ## 교역소 위치, 없으면 (-1, -1)
 func trading_post() -> Vector2i:
 	for c in buildings:
-		if buildings[c] == Balance.TRADING_POST:
+		if buildings[c] == Balance.TRADING_POST and not is_building(c):
 			return c
 	return Vector2i(-1, -1)
 
@@ -767,8 +767,10 @@ func hp_ratio(c: Vector2i) -> float:
 	return hp[c] / max_hp(c) if hp.has(c) else 1.0
 
 
-## 파손 단계에 따른 건물 성능 배율 (본부에는 쓰지 않는다) (기획서 5.2.2)
+## 파손 단계에 따른 건물 성능 배율 (본부에는 쓰지 않는다) (기획서 5.2.2). 새로 짓는 중이면 0 (기획서 5.1.1)
 func performance(c: Vector2i) -> float:
+	if is_building(c):
+		return 0.0
 	return Balance.DMG_PERF[Balance.damage_stage(hp_ratio(c))]
 
 
@@ -829,14 +831,8 @@ func damage(c: Vector2i, amount: float) -> bool:
 	elif buildings.has(c):
 		hp[c] -= amount
 		if hp[c] <= 0.0: # 파괴되면 빈 땅이 되고 복구되지 않는다. 다시 지어야 한다 (기획서 5.2)
-			for n: Node in _nodes[c]:
-				n.queue_free()
-			_nodes.erase(c)
 			buildings_lost[buildings[c]] = int(buildings_lost.get(buildings[c], 0)) + 1
-			buildings.erase(c)
-			variants.erase(c)
-			hp.erase(c)
-			levels.erase(c)
+			_forget(c)
 		else:
 			_tint(c)
 	return false
@@ -1177,3 +1173,81 @@ func take_ruin(c: Vector2i) -> bool:
 	(ruins[c] as Node).queue_free()
 	ruins.erase(c)
 	return true
+
+
+## 건물을 지운다(노드·체력·레벨). 부서질 때와 건설 취소 때
+func _forget(c: Vector2i) -> void:
+	for n: Node in _nodes[c]:
+		n.queue_free()
+	_nodes.erase(c)
+	buildings.erase(c)
+	variants.erase(c)
+	hp.erase(c)
+	levels.erase(c)
+
+
+## ---- 공사 (기획서 5.1.1) ----
+var jobs: Dictionary = {} ## 공사 중인 칸 → {"kind": "build"/"upgrade"/"evolve", "left": 남은 초, "cost": 낸 골드, "to": 진화할 건물, "label": Label3D}
+const JOB_NAMES: Dictionary = {"build": "건설", "upgrade": "강화", "evolve": "진화"}
+
+
+## c에서 공사를 시작한다. 비용은 부른 쪽이 이미 냈다
+func start_job(c: Vector2i, kind: String, cost: int, to: int = 0) -> void:
+	var label: Label3D = Label3D.new()
+	label.font_size = 48
+	label.pixel_size = 0.004
+	label.outline_size = 12
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.render_priority = 14
+	label.layers = PixelView.LABEL_LAYER
+	label.position = cell_to_world(c) + Vector3(0.0, BLOCK_H + 1.2, 0.0)
+	add_child(label)
+	jobs[c] = {"kind": kind, "left": Balance.BUILD_TIME, "cost": cost, "to": to, "label": label}
+	_job_label(c)
+
+
+## 새로 짓는 중인지(효과 없음)
+func is_building(c: Vector2i) -> bool:
+	return jobs.has(c) and jobs[c]["kind"] == "build"
+
+
+func _job_label(c: Vector2i) -> void:
+	(jobs[c]["label"] as Label3D).text = "%s %d초" % [JOB_NAMES[jobs[c]["kind"]], ceili(jobs[c]["left"])]
+
+
+## 공사를 dt만큼 진행한다. 끝난 공사의 [칸, 종류] 목록. 건물이 부서진 공사는 버린다
+func tick_jobs(dt: float) -> Array:
+	var done: Array = []
+	for c: Vector2i in jobs.keys():
+		var j: Dictionary = jobs[c]
+		if not buildings.has(c):
+			_end_job(c)
+			continue
+		j["left"] -= dt
+		if j["left"] > 0.0:
+			_job_label(c)
+			continue
+		_end_job(c)
+		if j["kind"] == "upgrade":
+			upgrade(c)
+		elif j["kind"] == "evolve":
+			evolve(c, j["to"])
+		done.append([c, j["kind"]])
+	return done
+
+
+## 공사를 취소한다: 새로 짓던 건물은 사라진다. 돌려줄 골드, 공사가 없으면 0
+func cancel_job(c: Vector2i) -> int:
+	if not jobs.has(c):
+		return 0
+	var j: Dictionary = jobs[c]
+	_end_job(c)
+	if j["kind"] == "build":
+		_forget(c)
+	return j["cost"]
+
+
+func _end_job(c: Vector2i) -> void:
+	(jobs[c]["label"] as Node).queue_free()
+	jobs.erase(c)
