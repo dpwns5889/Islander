@@ -1,5 +1,5 @@
 extends SceneTree
-## R5 화면 흐름 점검: 시작 위치를 고르는 동안은 안개 없음 → 첫 도시를 세우면 안개(도시 영역만 밝음)와 유적지 12곳,
+## R5 화면 흐름 점검: 판이 시작될 때부터 안개와 유적지 12곳(시작 칸 4칸 밖) → 첫 도시를 세우면 도시 영역이 밝다,
 ## 유닛이 움직이면 주변 4칸을 밝히고 유적지를 밟으면 보상, 안개 속 해적선은 숨김, 예고의 목표 도시 방향, 미니맵(클릭하면 카메라)
 ## godot --headless --script tests/r5_flow.gd
 
@@ -12,7 +12,12 @@ func _initialize() -> void:
 	await process_frame
 	var gs: Node = root.get_node("GameState")
 	var f: Field = main.field
-	fails += _check(not f.fog_on and f.is_explored(Vector2i(0, 0)) and not main.minimap_panel.visible, "시작 위치를 고르는 동안은 안개가 없다")
+	var s0: Vector2i = f.settler_start()
+	fails += _check(f.fog_on and f.is_explored(s0) and not f.is_explored(Vector2i(0, 0)) and main.minimap_panel.visible, "판이 시작될 때부터 안개, 개척자 주변만 밝다")
+	var far_ok: bool = f.ruins.size() == Balance.RUIN_COUNT
+	for c: Vector2i in f.ruins:
+		far_ok = far_ok and Vector2(c - s0).length() > Balance.VISION_RANGE
+	fails += _check(far_ok, "유적지 12곳은 시작 칸에서 4칸 밖")
 	var start: Vector2i = preload("res://tests/coastal_start.gd").pick(f)
 	main.found_start(start)
 	var b: Battle = main.battle

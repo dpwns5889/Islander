@@ -54,11 +54,21 @@ func setup(f: Field, g: Node) -> void:
 	sea_nav = f.nav(true)
 	islands = f.island_map()
 	rng.randomize()
-	if f.hq.x >= 0: # 시작 경비병 2명이 1번 분대, 집은 도시 (기획서 2장, 6장)
-		_new_squad("melee", Balance.U_GUARD, Balance.HQ_GUARDS, f.hq)
+	if f.hq.x >= 0: # 옛 점검처럼 도시가 이미 있으면 그 도시에 시작 경비병을 둔다
+		add_guards(f.hq)
 	for c in f.buildings:
 		if f.buildings[c] == Balance.PORT:
 			add_port(c)
+
+
+## 시작 경비병 2명(1번 분대)을 c에 둔다. 판이 시작될 때 개척자와 함께 한 번만 (기획서 2장, 6장)
+func add_guards(c: Vector2i) -> void:
+	_new_squad("melee", Balance.U_GUARD, Balance.HQ_GUARDS, c)
+
+
+## c에 개척자를 둔다 (시작 개척자)
+func add_settler(c: Vector2i) -> Unit:
+	return _spawn_unit(Balance.U_SETTLER, c)
 
 
 ## 항구 c의 보트를 띄운다. 항구를 지을 때 부른다
@@ -343,7 +353,8 @@ func tick(dt: float) -> void:
 	_prune(soldiers)
 	_prune(pirates)
 	_prune_squads()
-	if field.hq_hp <= 0.0:
+	# 패배: 도시를 잃어 하나도 없거나, 첫 도시를 세우기 전에 개척자가 모두 죽었다 (기획서 1장)
+	if field.hqs.is_empty() and (field.hq_lost > 0 or settlers().is_empty()):
 		_finish(false)
 
 
@@ -890,6 +901,9 @@ func _pick_landing(from: Vector3) -> Dictionary:
 	var has_target: Dictionary = {}
 	for c in field.targets():
 		has_target[islands.get(c, -1)] = true
+	if has_target.is_empty(): # 건물이 하나도 없으면(첫 도시 전) 아군 유닛이 있는 섬 (기획서 6장)
+		for u in soldiers:
+			has_target[u.island] = true
 	var best: Dictionary = {}
 	var best_d: float = INF
 	for c in islands:

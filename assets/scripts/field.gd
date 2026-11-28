@@ -470,6 +470,16 @@ func start_cells() -> Dictionary:
 	return _start_ok
 
 
+## 시작 개척자가 나올 칸: 시작 섬(평원 START_ISLAND_PLAINS칸 이상)의 평원 중 맵 중심에 가장 가까운 칸 (기획서 2장)
+func settler_start() -> Vector2i:
+	var mid: Vector2 = Vector2(bounds.get_center())
+	var best: Vector2i = Vector2i(-1, -1)
+	for c: Vector2i in start_cells():
+		if best.x < 0 or Vector2(c).distance_squared_to(mid) < Vector2(best).distance_squared_to(mid):
+			best = c
+	return best
+
+
 ## 첫 도시 자리로 고를 수 있는지
 func can_start(c: Vector2i) -> bool:
 	return hqs.is_empty() and start_cells().has(c)

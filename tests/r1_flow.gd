@@ -1,5 +1,5 @@
 extends SceneTree
-## R1 화면 흐름 점검: 시작 위치 고르기 → 첫 도시, 카메라(좌클릭 드래그 회전·짧은 클릭·휠·가장자리), 경비병 2명·도시 공격 없음
+## R1 화면 흐름 점검: 개척자로 시작(맵 중심에 가까운 시작 섬, 경비병 2명과 함께) → 첫 도시, 카메라(좌클릭 드래그 회전·짧은 클릭·휠·가장자리), 경비병 2명·도시 공격 없음
 ## godot --headless --script tests/r1_flow.gd
 
 
@@ -10,14 +10,23 @@ func _initialize() -> void:
 	root.add_child(main)
 	await process_frame
 	var f: Field = main.field
-	fails += _check(not main.started and f.hqs.is_empty() and f.cells.size() > 1000, "시작 전: 도시 없음, 맵이 생성됨 (땅 %d칸)" % f.cells.size())
-	fails += _check(main.top_panel.visible and not main.res_bar.visible and not main.build_panel.visible and not main.wave_button.visible, "시작 전: 안내만 보이고 자원·건설·웨이브 시작은 숨김")
-	fails += _check(main.status.text.contains("첫 도시"), "시작 안내 문구")
-	var bad: Vector2i = Vector2i(0, 0)
-	fails += _check(not main.found_start(bad) and not main.started, "바다에는 세울 수 없다")
+	var b: Battle = main.battle
+	fails += _check(f.hqs.is_empty() and f.cells.size() > 1000 and b != null, "시작: 도시 없이 시간이 흐른다 (땅 %d칸)" % f.cells.size())
+	var mid: Vector2 = Vector2(f.bounds.get_center())
+	var near: Vector2i = f.settler_start()
+	for c: Vector2i in f.start_cells():
+		if Vector2(c).distance_squared_to(mid) < Vector2(near).distance_squared_to(mid):
+			near = Vector2i(-1, -1)
+	fails += _check(near.x >= 0 and f.start_cells().has(near), "시작 칸은 시작 섬 평원 중 맵 중심에 가장 가까운 칸 (%s)" % near)
+	var setl: Array[Unit] = b.settlers()
+	fails += _check(setl.size() == 1 and f.world_to_cell(setl[0].position) == near and main.selected_settler == setl[0], "시작 개척자 1명이 그 칸에 있고 골라져 있다")
+	fails += _check(b.squad_units(1).size() == Balance.HQ_GUARDS and f.world_to_cell(b.squad_units(1)[0].position) == near, "경비병 %d명(1번 분대)이 개척자와 함께 시작한다" % Balance.HQ_GUARDS)
+	fails += _check(main._pan.distance_to(f.cell_to_world(near) - f.center_world()) < 0.01 and is_equal_approx(main._zoom, 1.0), "카메라가 배율 1로 개척자를 비춘다")
+	fails += _check(main.res_bar.visible and main.build_panel.visible and main.wave_button.visible and is_equal_approx(main.wave_timer, Balance.WAVE_FIRST_DELAY), "처음부터 자원·건설·웨이브가 보이고 첫 웨이브까지 3분")
+	fails += _check(main.status.text.contains("첫 도시"), "첫 도시 안내 문구")
+	fails += _check(not main.found_start(Vector2i(0, 0)), "바다에는 세울 수 없다")
 	var start: Vector2i = f.start_cells().keys()[0]
-	fails += _check(main.found_start(start) and main.started and f.hqs.has(start), "평원을 고르면 첫 도시가 선다")
-	fails += _check(main.res_bar.visible and main.build_panel.visible and main.wave_button.visible and not main.wave_button.disabled, "도시를 세우면 자원·건설·웨이브 시작이 보인다")
+	fails += _check(main.found_start(start) and f.hqs.has(start) and b.settlers().is_empty(), "개척자로 첫 도시를 세운다")
 	fails += _check(not main.found_start(f.start_cells().keys()[-1]), "두 번째 시작 자리는 고를 수 없다")
 	fails += _check(main._pan.distance_to(f.cell_to_world(start) - f.center_world()) < 0.01 and is_equal_approx(main._zoom, 1.0), "카메라가 첫 도시를 비춘다")
 	# 카메라: 짧은 좌클릭은 회전하지 않고, 끌면 회전한다
@@ -38,8 +47,7 @@ func _initialize() -> void:
 	main._pan_camera(Vector2(-50, 0))
 	fails += _check(main._pan != pan0, "카메라 이동")
 	# 경비병 2명, 도시는 공격하지 않는다, 우클릭 이동
-	var b: Battle = main.battle
-	fails += _check(b != null and b.soldiers.size() == Balance.HQ_GUARDS, "첫 도시를 세우면 경비병 %d명" % Balance.HQ_GUARDS)
+	fails += _check(b.soldiers.size() == Balance.HQ_GUARDS, "도시를 세운 뒤에는 경비병 %d명만 남는다" % Balance.HQ_GUARDS)
 	var pirate: Unit = b._add_unit(Balance.U_PIRATE, f.cell_to_world(start) + Vector3(1.0, 0.0, 0.0), 1.0)
 	var hp0: float = pirate.hp
 	b._towers_turn(1.0)

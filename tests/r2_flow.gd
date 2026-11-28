@@ -12,12 +12,12 @@ func _initialize() -> void:
 	await process_frame
 	var gs: Node = root.get_node("GameState")
 	var f: Field = main.field
-	fails += _check(main.battle == null and main.game_time == 0.0, "도시를 세우기 전에는 시간이 흐르지 않는다")
-	main.advance(100.0)
-	fails += _check(main.game_time == 0.0, "시작 전 advance는 무시")
-	main.found_start(preload("res://tests/coastal_start.gd").pick(f))
 	var b: Battle = main.battle
-	fails += _check(b != null and is_equal_approx(main.wave_timer, Balance.WAVE_FIRST_DELAY), "첫 도시를 세우면 전투가 돌고 첫 웨이브까지 3분")
+	fails += _check(b != null and is_equal_approx(main.wave_timer, Balance.WAVE_FIRST_DELAY), "판이 시작되면 전투가 돌고 첫 웨이브까지 3분")
+	var gold_start: int = gs.gold
+	main.advance(10.0)
+	fails += _check(is_equal_approx(main.game_time, 10.0) and is_equal_approx(main.wave_timer, Balance.WAVE_FIRST_DELAY - 10.0) and gs.gold == gold_start, "도시 전에도 시간이 흐르고 웨이브 타이머가 줄지만 생산은 없다")
+	main.found_start(preload("res://tests/coastal_start.gd").pick(f))
 	# 생산 틱
 	var g0: int = gs.gold
 	var inc: Vector2i = f.income(gs.researched)

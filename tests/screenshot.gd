@@ -1,6 +1,6 @@
 extends SceneTree
 ## 화면 캡처: godot --script tests/screenshot.gd -- <png 경로> [대기 초] [모드]
-## 모드 start: 시작 위치 고르기(도시 세우기 전), menu: 건설 메뉴 목록, npc: 교역 NPC 거래 창, defense: 방어탑과 12웨이브 전투,
+## 모드 start: 개척자·경비병으로 막 시작한 화면(첫 도시 전), menu: 건설 메뉴 목록, npc: 교역 NPC 거래 창, defense: 방어탑과 12웨이브 전투,
 ## prep: 준비 단계(건물·패널), 뒤에 research를 더 붙이면 연구 패널도 연다. city: 도시 2개·개척자 선택·개척자 생산.
 ## 모드가 없으면 첫 도시를 세우고 전투를 캡처한다
 
