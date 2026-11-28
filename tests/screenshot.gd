@@ -1,7 +1,8 @@
 extends SceneTree
 ## 화면 캡처: godot --script tests/screenshot.gd -- <png 경로> [대기 초] [모드]
 ## 모드 start: 시작 위치 고르기(도시 세우기 전), menu: 건설 메뉴 목록, npc: 교역 NPC 거래 창, defense: 방어탑과 12웨이브 전투,
-## prep: 준비 단계(건물·패널), 뒤에 research를 더 붙이면 연구 패널도 연다. 모드가 없으면 첫 도시를 세우고 전투를 캡처한다
+## prep: 준비 단계(건물·패널), 뒤에 research를 더 붙이면 연구 패널도 연다. city: 도시 2개·개척자 선택·개척자 생산.
+## 모드가 없으면 첫 도시를 세우고 전투를 캡처한다
 
 
 func _initialize() -> void:
@@ -37,6 +38,16 @@ func _initialize() -> void:
 		if f.trading_post().x >= 0:
 			main.spawn_npc(f.trading_post())
 			main._toggle_trade()
+	elif mode == "city": # 도시 2개(도시 목록), 개척자를 고른 상태, 첫 도시 패널의 개척자 생산
+		gs.food = 1000
+		var b: Battle = main.battle
+		for c: Vector2i in f.cells:
+			if f.hqs.size() < 2 and b.islands.get(c, -2) == b.islands.get(f.hq, -1) and f.found_block(c) == "" and maxi(absi(c.x - f.hq.x), absi(c.y - f.hq.y)) >= 6:
+				f.found_city(c)
+		var settler: Unit = b._spawn_unit(Balance.U_SETTLER, f.hq)
+		main.select_settler(settler)
+		main.select_building(f.hq)
+		main.toggle_settler()
 	elif mode == "prep":
 		for t in ["math", "archery"]:
 			gs.researched[t] = true

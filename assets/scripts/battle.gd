@@ -40,6 +40,7 @@ var _ship_gap: float = 0.0 ## 해적선이 나오는 간격(초)
 var speed_scale: float = 1.0 ## 전투 배속
 var _mult: float = 1.0 ## 다음에 나올 해적선이 태울 적의 배율
 var squads: Dictionary = {} ## 분대 번호(1~9) → {"type": "melee"/"ranged", "kind": 병종, "size": 정원} (기획서 6장)
+var settler_jobs: Dictionary = {} ## 도시 칸 → {"left": 남은 생산 시간, "cost": 낸 비용} (도시마다 한 번에 1명) (기획서 4장)
 var queues: Dictionary = {} ## 병영 칸 → 대기열 [{"type", "kind", "left": 남은 생산 시간}], 맨 앞만 만든다
 
 
@@ -246,6 +247,52 @@ func reinforce(n: int) -> bool:
 	return true
 
 
+## 도시 c에서 개척자를 생산한다: 도시마다 한 번에 1명, 비용은 도시 수에 따라 오른다 (기획서 4장)
+func can_settler(c: Vector2i) -> bool:
+	var cost: Vector2i = Balance.settler_cost(field.hqs.size())
+	return field.hqs.has(c) and not settler_jobs.has(c) and gs.gold >= cost.x and gs.food >= cost.y
+
+
+func queue_settler(c: Vector2i) -> bool:
+	if not can_settler(c):
+		return false
+	var cost: Vector2i = Balance.settler_cost(field.hqs.size())
+	gs.spend(cost.x, cost.y)
+	settler_jobs[c] = {"left": Balance.SETTLER_TIME, "cost": cost}
+	return true
+
+
+## 생산 중인 개척자를 취소하고 낸 비용을 돌려준다
+func cancel_settler(c: Vector2i) -> bool:
+	if not settler_jobs.has(c):
+		return false
+	var cost: Vector2i = settler_jobs[c]["cost"]
+	gs.add(cost.x, cost.y)
+	settler_jobs.erase(c)
+	return true
+
+
+## 다 되면 도시 옆에 개척자를 낸다. 도시가 무너지면 환불한다
+func _settler_tick(dt: float) -> void:
+	for c: Vector2i in settler_jobs.keys():
+		if not field.hqs.has(c):
+			cancel_settler(c)
+			continue
+		settler_jobs[c]["left"] -= dt
+		if settler_jobs[c]["left"] <= 0.0:
+			settler_jobs.erase(c)
+			_spawn_unit(Balance.U_SETTLER, c)
+
+
+## 살아 있는 개척자 (보트에 탄 개척자 제외)
+func settlers() -> Array[Unit]:
+	var out: Array[Unit] = []
+	for u in soldiers:
+		if u.kind == Balance.U_SETTLER:
+			out.append(u)
+	return out
+
+
 ## 고른 분대(nums, 비면 모든 병사)가 클릭한 칸으로 이동한다(보트에 탄 병사 포함). 깃발 없이 한 번의 명령이다 (기획서 6장)
 func command_move(cell: Vector2i, nums: Array = []) -> void:
 	for u in soldiers:
@@ -270,6 +317,7 @@ func tick(dt: float) -> void:
 		return
 	time += dt
 	_queue_tick(dt)
+	_settler_tick(dt)
 	_spawn_ships(dt)
 	for s in ships.duplicate():
 		_ship_turn(s, dt)
@@ -482,7 +530,10 @@ func _soldier_turn(u: Unit, dt: float) -> void:
 		u.home = u.order
 		u.order = Vector2i(-1, -1)
 	var ordered: bool = u.order.x >= 0
-	var t: Unit = _nearest(u.position, pirates, u.island) if ordered else _guard_target(u)
+	var settler: bool = u.kind == Balance.U_SETTLER
+	if settler and not ordered: # 개척자는 싸우지 않고, 명령이 없으면 그 자리에 선다 (기획서 4장)
+		return
+	var t: Unit = null if settler else (_nearest(u.position, pirates, u.island) if ordered else _guard_target(u))
 	if t != null and (not ordered or _dist(u.position, t.position) <= Balance.AGGRO_RANGE):
 		if _engage(u, t.position, dt):
 			t.hp -= u.atk
@@ -490,7 +541,7 @@ func _soldier_turn(u: Unit, dt: float) -> void:
 			u.lunge(t.position)
 			_sfx("hit") # 전투 효과음 (기획서 9.1)
 		return
-	var same: Unit = null if ordered else _nearest(u.position, pirates, u.island)
+	var same: Unit = null if ordered or settler else _nearest(u.position, pirates, u.island)
 	if same != null: # 같은 섬에 적이 있어도 지킬 범위 밖이면 집에서 대기 (섬을 건너지 않는다)
 		if _ships_left == 0 and ships.is_empty(): # 남은 해적선이 없으면 대기하지 않고 가장 가까운 적에게 간다 (기획서 6장)
 			if _engage(u, same.position, dt):

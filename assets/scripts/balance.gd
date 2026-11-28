@@ -66,8 +66,9 @@ const U_CAPTAIN: int = 9 ## 선장 (보스 라운드의 적)
 const U_SPEAR: int = 10 ## 창병
 const U_LONGBOW: int = 11 ## 장궁병
 const U_ARBALEST: int = 12 ## 쇠뇌병
+const U_SETTLER: int = 13 ## 개척자: 공격하지 않고 정착해 도시가 된다 (기획서 4장)
 const ENEMY_KINDS: Array[int] = [U_PIRATE, U_CROSSBOW, U_AXE, U_SHIELD, U_CAPTAIN]
-const SOLDIER_KINDS: Array[int] = [U_GUARD, U_SPEAR, U_PIKE, U_ARCHER, U_LONGBOW, U_ARBALEST] ## 아군 병종
+const SOLDIER_KINDS: Array[int] = [U_GUARD, U_SPEAR, U_PIKE, U_ARCHER, U_LONGBOW, U_ARBALEST, U_SETTLER] ## 아군 유닛 (개척자도 병사 목록에 든다)
 const UNITS: Dictionary = {
 	U_GUARD: {"name": "경비병", "hp": 30.0, "atk": 5.0, "speed": 1.5, "reach": 0.7, "color": Color(0.2, 0.4, 1.0)},
 	U_PIRATE: {"name": "해적", "hp": 25.0, "atk": 2.0, "speed": 1.2, "reach": 0.7, "color": Color(0.15, 0.05, 0.1)},
@@ -78,6 +79,7 @@ const UNITS: Dictionary = {
 	U_PIKE: {"name": "파이크병", "hp": 55.0, "atk": 7.0, "speed": 2.0, "reach": 0.7, "color": Color(0.95, 0.55, 0.1)},
 	U_LONGBOW: {"name": "장궁병", "hp": 25.0, "atk": 4.0, "speed": 1.5, "reach": 2.5, "ranged": true, "color": Color(0.3, 0.85, 0.4)},
 	U_ARBALEST: {"name": "쇠뇌병", "hp": 25.0, "atk": 6.0, "speed": 1.5, "reach": 2.5, "ranged": true, "color": Color(0.1, 0.6, 0.45)},
+	U_SETTLER: {"name": "개척자", "hp": 20.0, "atk": 0.0, "speed": 1.5, "reach": 0.7, "color": Color(0.95, 0.85, 0.3)},
 	U_CROSSBOW: {"name": "석궁수", "hp": 18.0, "atk": 3.0, "speed": 1.1, "reach": 1.8, "ranged": true, "color": Color(0.55, 0.15, 0.3)},
 	U_AXE: {"name": "도끼병", "hp": 40.0, "atk": 4.0, "speed": 1.2, "reach": 0.7, "color": Color(0.45, 0.1, 0.1)},
 	U_SHIELD: {"name": "방패병", "hp": 100.0, "atk": 2.0, "speed": 0.9, "reach": 0.7, "color": Color(0.3, 0.3, 0.35)},
@@ -128,6 +130,11 @@ const SQUAD_CAP_BASE: int = 3 ## 첫 도시일 때 분대 수 상한(시작 경�
 const SQUAD_CAP_PER_CITY: int = 1 ## 도시가 하나 늘 때마다 상한 +1
 const SQUAD_CAP_MAX: int = 9 ## 숫자키 1~9
 const REINFORCE_RANGE: float = 2.0 ## 분대원이 병영에서 이 거리(칸) 안이면 충원할 수 있다
+## 개척자 (기획서 4장)
+const SETTLER_COST: Vector2i = Vector2i(30, 30) ## 기본 비용 (골드, 식량)
+const SETTLER_COST_RATE: float = 0.5 ## 도시가 하나 늘 때마다 비용 +50%
+const SETTLER_TIME: float = 30.0 ## 생산 시간(게임 초), 도시마다 한 번에 1명
+const CITY_MIN_DIST: int = 4 ## 다른 도시와 떨어져야 하는 거리(가로·세로 차이 중 큰 값)
 const SQUAD_DOUBLE_TAP: float = 0.4 ## 숫자키를 이 시간(초) 안에 두 번 누르면 카메라가 분대로 간다
 const LV3_TECH: String = "ironwork" ## 병영·사격장 레벨 3 강화에 필요한 연구
 ## 실시간 진행 (기획서 2장). 모두 게임 시간(초)이라 배속을 따른다
@@ -491,6 +498,12 @@ static func new_enemy_kinds(wave: int) -> Array[int]:
 ## 해적선은 한 척에 최대 PIRATES_PER_SHIP명을 태운다 (기획서 6장)
 static func ship_count(wave: int, run_seed: int = 0) -> int:
 	return ceili(pirate_count(wave, run_seed) / float(PIRATES_PER_SHIP))
+
+
+## 개척자 비용 (골드, 식량): 기본 × (1 + 0.5 × (도시 수 − 1)), 반올림 (기획서 4장)
+static func settler_cost(cities: int) -> Vector2i:
+	var k: float = 1.0 + SETTLER_COST_RATE * maxi(cities - 1, 0)
+	return Vector2i(roundi(SETTLER_COST.x * k), roundi(SETTLER_COST.y * k))
 
 
 ## 분대 수 상한: min(9, 3 + (도시 수 − 1)) (기획서 6장)
