@@ -135,6 +135,13 @@ const SETTLER_COST: Vector2i = Vector2i(30, 30) ## 기본 비용 (골드, 식량
 const SETTLER_COST_RATE: float = 0.5 ## 도시가 하나 늘 때마다 비용 +50%
 const SETTLER_TIME: float = 30.0 ## 생산 시간(게임 초), 도시마다 한 번에 1명
 const CITY_MIN_DIST: int = 4 ## 다른 도시와 떨어져야 하는 거리(가로·세로 차이 중 큰 값)
+## 안개·유적지·미니맵 (기획서 3장, 7.2)
+const VISION_RANGE: float = 4.0 ## 유닛(분대·개척자) 주변 이 거리(칸) 안을 밝힌다
+const RUIN_COUNT: int = 12 ## 유적지 수 (평원 칸)
+const RUIN_GOLD: Vector2i = Vector2i(60, 100) ## 유적지 골드 보상 범위
+const RUIN_RP_CHANCE: float = 0.3 ## 골드 대신 연구포인트 +1을 줄 확률
+const FOG_COLOR: Color = Color(0.2, 0.22, 0.28) ## 밝히지 않은 칸
+const MINIMAP_SIZE: float = 200.0 ## 미니맵 한 변(논리 픽셀)
 const SQUAD_DOUBLE_TAP: float = 0.4 ## 숫자키를 이 시간(초) 안에 두 번 누르면 카메라가 분대로 간다
 const LV3_TECH: String = "ironwork" ## 병영·사격장 레벨 3 강화에 필요한 연구
 ## 실시간 진행 (기획서 2장). 모두 게임 시간(초)이라 배속을 따른다
@@ -509,6 +516,11 @@ static func settler_cost(cities: int) -> Vector2i:
 ## 분대 수 상한: min(9, 3 + (도시 수 − 1)) (기획서 6장)
 static func squad_cap(cities: int) -> int:
 	return mini(SQUAD_CAP_MAX, SQUAD_CAP_BASE + SQUAD_CAP_PER_CITY * maxi(cities - 1, 0))
+
+
+## 웨이브의 목표 도시 번호(0부터, 세운 순서). run_seed와 웨이브 번호로 정해 예고와 실제가 같다 (기획서 6장)
+static func wave_target(wave: int, run_seed: int, cities: int) -> int:
+	return posmod(hash([run_seed, wave, "target"]), maxi(cities, 1))
 
 
 ## 해적 체력·공격 배율: 살아 있는 도시 수에 비례 (기획서 6장)

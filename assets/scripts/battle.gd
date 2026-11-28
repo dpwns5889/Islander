@@ -39,6 +39,7 @@ var _ship_timer: float = 0.0
 var _ship_gap: float = 0.0 ## 해적선이 나오는 간격(초)
 var speed_scale: float = 1.0 ## 전투 배속
 var _mult: float = 1.0 ## 다음에 나올 해적선이 태울 적의 배율
+var target_city: Vector2i = NO_CELL ## 마지막 웨이브의 목표 도시: 해적선은 이 도시에서 가장 가까운 가장자리에서 나온다 (기획서 6장)
 var squads: Dictionary = {} ## 분대 번호(1~9) → {"type": "melee"/"ranged", "kind": 병종, "size": 정원} (기획서 6장)
 var settler_jobs: Dictionary = {} ## 도시 칸 → {"left": 남은 생산 시간, "cost": 낸 비용} (도시마다 한 번에 1명) (기획서 4장)
 var queues: Dictionary = {} ## 병영 칸 → 대기열 [{"type", "kind", "left": 남은 생산 시간}], 맨 앞만 만든다
@@ -78,6 +79,9 @@ func launch_wave(w: int) -> void:
 	_ship_gap = Balance.SHIP_SPAWN_TIME / maxi(_ships_left, 1)
 	_ship_timer = 0.0
 	_mult = Balance.enemy_mult(field.hqs.size())
+	var cities: Array = field.hqs.keys() # 세운 순서 = 도시 번호 순서 (기획서 5.3)
+	if not cities.is_empty():
+		target_city = cities[Balance.wave_target(w, gs.run_seed, cities.size())]
 
 
 ## 아직 남은 적: 나올 해적선 + 떠 있는 해적선 + 상륙한 해적
@@ -803,7 +807,7 @@ func _spawn_ship() -> void:
 		if _queue.is_empty():
 			break
 		load.append(_queue.pop_front())
-	var from: Vector2i = _edge_cell()
+	var from: Vector2i = _edge_near(target_city) if target_city != NO_CELL else _edge_cell()
 	var tgt: Dictionary = _pick_landing(field.cell_to_world(from))
 	if tgt.is_empty():
 		return
@@ -833,7 +837,18 @@ func _spawn_ship() -> void:
 	s.crew_mult = _mult
 
 
-## 맵 가장자리의 바다 칸 (기획서 6장)
+## c에서 가장 가까운 맵 가장자리 칸 (가장자리 MAP_EDGE_SEA칸은 항상 바다다) (기획서 6장)
+func _edge_near(c: Vector2i) -> Vector2i:
+	var ext: Rect2i = field.bounds
+	var sides: Array[Vector2i] = [Vector2i(ext.position.x, c.y), Vector2i(ext.end.x - 1, c.y), Vector2i(c.x, ext.position.y), Vector2i(c.x, ext.end.y - 1)]
+	var best: Vector2i = sides[0]
+	for e in sides:
+		if (e - c).length_squared() < (best - c).length_squared():
+			best = e
+	return best
+
+
+## 맵 가장자리의 무작위 바다 칸: 목표 쪽 가장자리에서 길이 막혔을 때 쓴다 (기획서 6장)
 func _edge_cell() -> Vector2i:
 	var ext: Rect2i = field.bounds
 	for _i in 100:
