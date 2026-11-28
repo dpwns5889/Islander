@@ -92,6 +92,7 @@ var _gmats: Dictionary = {}
 
 
 func _ready() -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_CONFINED # 게임 중에는 마우스가 창 밖으로 나가지 않는다 (기획서 7.2)
 	rng.randomize()
 	GameState.reset()
 	_build_world()
@@ -938,6 +939,11 @@ func _show_defeat() -> void:
 func _show_victory() -> void:
 	var pc: PanelContainer = _result_panel("승리! %d웨이브를 지켜 냈습니다\n도시 %d개 · 최고 웨이브 %d" % [Balance.WIN_WAVE, field.hqs.size(), SaveManager.best_wave], [["계속하기 (무한 모드)", Callable()], ["처음으로", _to_menu]])
 	(pc.get_child(0).get_child(1) as Button).pressed.connect(pc.queue_free)
+
+
+## 메뉴로 나가거나 게임 화면이 사라지면 마우스 가두기를 푼다 (기획서 7.2)
+func _exit_tree() -> void:
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
 func _to_menu() -> void:
