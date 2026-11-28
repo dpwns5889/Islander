@@ -475,6 +475,18 @@ func can_start(c: Vector2i) -> bool:
 	return hqs.is_empty() and start_cells().has(c)
 
 
+## 개척자가 c에 도시를 세울 수 있는지. 안 되면 이유, 되면 "" (기획서 4장)
+func found_block(c: Vector2i) -> String:
+	if not [Piece.PLAINS, Piece.SAND].has(cells.get(c, -1)):
+		return "평원·모래 칸에만 세울 수 있습니다"
+	if buildings.has(c) or hqs.has(c):
+		return "건물이 있는 칸에는 세울 수 없습니다"
+	for h in hqs:
+		if maxi(absi(h.x - c.x), absi(h.y - c.y)) < Balance.CITY_MIN_DIST:
+			return "다른 도시와 %d칸 이상 떨어져야 합니다" % Balance.CITY_MIN_DIST
+	return ""
+
+
 ## c에 도시를 세운다: 영역을 받고 성 모델을 놓는다 (기획서 2장, 5.3)
 func found_city(c: Vector2i) -> void:
 	hqs[c] = Balance.HQ_HP

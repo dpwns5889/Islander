@@ -149,12 +149,13 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 </ul>
 <h2 id="4">4. 개척자와 도시 확장</h2>
 <ul>
-<li><strong>생산</strong>: 도시를 클릭하면 패널에 "개척자 생산"이 있다. 비용 <strong>식량 30 + 골드 30</strong>, 생산 <strong>30초</strong>, 도시마다 한 번에 1명(<code>SETTLER_COST</code>, <code>SETTLER_TIME</code>).</li>
+<li><strong>생산</strong>: 도시를 클릭하면 패널에 "개척자 생산"이 있다. 비용 <strong>식량 30 + 골드 30</strong>, 생산 <strong>30초</strong>, 도시마다 한 번에 1명(<code>SETTLER_COST</code>, <code>SETTLER_TIME</code>). 생산 중에 취소하거나 도시가 무너지면 비용을 모두 돌려준다.</li>
 <li><strong>비용 증가</strong>: 비용 = 기본 × (1 + 0.5 × (살아 있는 도시 수 − 1)), 반올림(<code>SETTLER_COST_RATE</code>). 문명5처럼 무한 확장을 견제한다.</li>
-<li><strong>조작</strong>: 개척자는 도시 옆에 나온다. 분대 수 상한에 들어가지 않고 숫자키도 없다. 개척자를 좌클릭해 고르고 우클릭으로 이동하며, 패널의 "도시 세우기"로 정착한다(세부 9.1).</li>
-<li><strong>정착 조건</strong>: 평원·모래 칸이고 다른 도시와 <strong>4칸 이상</strong> 떨어져야 한다(<code>CITY_MIN_DIST</code>). 정착하면 개척자는 사라지고 그 칸이 새 도시가 된다(레벨·영역은 5.3, 경비병은 없다).</li>
+<li><strong>조작</strong>: 개척자는 도시 옆에 나온다. 분대 수 상한에 들어가지 않고 숫자키도 없다. 개척자를 <strong>좌클릭</strong>해 고르고 <strong>우클릭</strong>으로 이동하며, 하단 분대 줄 자리에 뜨는 <strong>"도시 세우기"</strong> 버튼으로 정착한다. 조건이 안 맞으면 버튼이 비활성이고 이유를 툴팁으로 보여 준다. 개척자를 고르면 분대 선택이 풀리고, 숫자키로 분대를 고르면 개척자 선택이 풀린다(우클릭은 고른 쪽만 움직인다). 명령이 없으면 그 자리에 서 있다.</li>
+<li><strong>능력치</strong>: 체력 20, 속도 1.5칸/초, 공격하지 않는다(<code>U_SETTLER</code>).</li>
+<li><strong>정착 조건</strong>: 건물이 없는 평원·모래 칸이고 다른 도시와 <strong>4칸 이상</strong> 떨어져야 한다(<code>CITY_MIN_DIST</code>, 대각선도 1칸으로 세는 거리: 가로·세로 차이 중 큰 값). 정착하면 개척자는 사라지고 그 칸이 새 도시가 된다(레벨·영역은 5.3, 경비병은 없다).</li>
 <li><strong>이동</strong>: 땅 위로만 걷고 다른 섬으로는 항구 보트로 건넌다(6장).</li>
-<li><strong>위험</strong>: 체력이 낮고 해적의 목표가 된다. 죽으면 비용을 돌려받지 못한다(체력 수치는 9.1).</li>
+<li><strong>위험</strong>: 해적은 병사와 똑같이 같은 섬의 가장 가까운 아군 유닛(병사·개척자)을 노린다. 개척자는 반격하지 않는다. 죽으면 비용을 돌려받지 못한다.</li>
 <li><strong>도시가 늘면</strong>: 분대 수 상한 +1(6장), 기본 골드 +20과 연구수치 +1(5장), 적 배율 +0.15(6장), 개척자 비용 증가.</li>
 </ul>
 <h2 id="5">5. 건물, 자원, 연구</h2>
@@ -974,11 +975,6 @@ docs/          기획서 (.gdignore)
 </thead>
 <tbody>
 <tr>
-<td><strong>R4 개척자와 도시</strong></td>
-<td>개척자 생산·이동·정착(4칸, 비용 증가), 도시 수에 따른 분대 상한, 도시 목록</td>
-<td>개척자로 두 번째 도시를 세우고 상한과 배율이 오른다</td>
-</tr>
-<tr>
 <td><strong>R5 안개·유적지·해적 방향·미니맵</strong></td>
 <td>탐험한 곳 안개, 유적지 12곳(밟으면 보상), 목표 도시 쪽 가장자리 출발과 예고, 미니맵</td>
 <td>안개를 걷으며 유적지를 찾고 예고한 방향에서 해적이 온다</td>
@@ -1001,8 +997,7 @@ docs/          기획서 (.gdignore)
 </tbody>
 </table>
 <h3 id="91">9.1 정해야 할 것 (해당 마일스톤 시작 전, 추천안 포함)</h3>
-<p><strong>실시간 개편 (R1~R5)</strong>
-- <strong>개척자 (R4)</strong>: 추천 체력 20, 속도 1.5칸/초. 4칸 거리는 체비쇼프 거리(대각선도 1칸). 선택은 개척자 좌클릭, 이동은 우클릭, 정착은 패널의 "도시 세우기" 버튼(조건이 안 맞으면 비활성과 이유 툴팁).</p>
+<p><strong>실시간 개편 (R5)</strong>: 남은 결정 없음.</p>
 <p><strong>모델링·렌더링 (M9)</strong>
 - <strong>모델 규칙</strong>: 지금은 가로·세로 0.6(레벨 1)·0.75(레벨 2~3), 높이 0.8 이하, 원점 바닥 가운데, 팔레트 텍스처 최근접, 레벨·번호별 폴더에 정상·<code>dmg1</code>·<code>dmg2</code>(7.2). 추천: 이 규칙을 7.2에 확정하고 건물마다 4종류를 갖춘다(병영은 지금 2종류).
 - <strong>모델 순서</strong>: 남은 것은 항구·시장·교역소, 진화 건물(저택·농장·어촌·제련소·요새), 유닛(분대·개척자)이다. 추천: 항구·시장·교역소 → 진화 건물 → 유닛. 진화 건물은 기본 건물보다 크게(0.75).
@@ -1025,8 +1020,8 @@ docs/          기획서 (.gdignore)
 </ol>
 <h3 id="93">9.3 알아 둘 것</h3>
 <ul>
-<li>테스트와 화면 확인 방법은 <code>CLAUDE.md</code>의 "실행과 테스트"에 있다. R1~R3 점검은 <code>tests/r1_check.gd</code>(맵 생성·시작 자리·배율), <code>tests/r1_flow.gd</code>(시작 위치·카메라·경비병), <code>tests/r2_flow.gd</code>(실시간 루프), <code>tests/r3_check.gd</code>(분대 생산·번호·상한·충원)와 <code>tests/r3_flow.gd</code>(분대 줄·숫자키·병영 패널)다. 남은 옛 점검은 테스트용 작은 섬을 <code>Field.place</code>로 깐다(<code>Piece</code>는 이제 지형 상수와 이 용도만 남았다). 라운드제를 전제로 했던 옛 점검은 실시간 구조(<code>setup</code> + <code>launch_wave</code>, <code>call_wave</code>·<code>advance</code>, 남은 적 0이면 웨이브를 막은 것)로 다시 썼다. <code>tests/screenshot.gd</code>의 모드는 start·menu·npc·defense·prep(없으면 전투)이다.</li>
-<li><strong>R4 전까지의 임시 상태</strong>: 시간은 처음부터 끝까지 흐른다(전투 시뮬레이션 <code>Battle</code>이 첫 도시를 세울 때 만들어져 판 내내 돈다). 분대(<code>Battle.squads</code>, 병사의 <code>squad</code> 번호)와 병영 대기열(<code>Battle.queues</code>)도 <code>Battle</code>이 관리한다. 개척자가 없어 도시는 하나뿐이라 분대 수 상한은 3이다. 유적지는 R5까지 없고, 해적선은 아직 무작위 가장자리에서 온다.</li>
+<li>테스트와 화면 확인 방법은 <code>CLAUDE.md</code>의 "실행과 테스트"에 있다. R1~R4 점검은 <code>tests/r1_check.gd</code>(맵 생성·시작 자리·배율), <code>tests/r1_flow.gd</code>(시작 위치·카메라·경비병), <code>tests/r2_flow.gd</code>(실시간 루프), <code>tests/r3_check.gd</code>(분대 생산·번호·상한·충원)와 <code>tests/r3_flow.gd</code>(분대 줄·숫자키·병영 패널), <code>tests/r4_check.gd</code>(개척자 비용·정착 조건·생산)와 <code>tests/r4_flow.gd</code>(개척자 고르기·이동·도시 세우기·도시 목록)다. 남은 옛 점검은 테스트용 작은 섬을 <code>Field.place</code>로 깐다(<code>Piece</code>는 이제 지형 상수와 이 용도만 남았다). 라운드제를 전제로 했던 옛 점검은 실시간 구조(<code>setup</code> + <code>launch_wave</code>, <code>call_wave</code>·<code>advance</code>, 남은 적 0이면 웨이브를 막은 것)로 다시 썼다. <code>tests/screenshot.gd</code>의 모드는 start·menu·npc·defense·prep·city(없으면 전투)이다.</li>
+<li><strong>R5 전까지의 임시 상태</strong>: 시간은 처음부터 끝까지 흐른다(전투 시뮬레이션 <code>Battle</code>이 첫 도시를 세울 때 만들어져 판 내내 돈다). 분대(<code>Battle.squads</code>, 병사의 <code>squad</code> 번호)와 병영 대기열(<code>Battle.queues</code>)도 <code>Battle</code>이 관리한다. 개척자(<code>U_SETTLER</code>)는 병사 목록(<code>Battle.soldiers</code>)에 들어 있어 보트·해적 목표를 병사와 같이 쓰고, 분대 번호는 0이다. 개척자 생산은 <code>Battle.settler_jobs</code>가 관리한다. 유적지는 R5까지 없고, 해적선은 아직 무작위 가장자리에서 온다.</li>
 <li>실시간 흐름 점검은 <code>tests/r2_flow.gd</code>다. 게임 시간은 <code>main.advance(초)</code>로 흘려 볼 수 있다.</li>
 <li>무작위에 영향을 받아 한 번씩 실패한 적이 있는 점검이 셋 있었다(<code>m14_flow.gd</code>, <code>m3_check.gd</code>, <code>m9_flow.gd</code>). 개편 때 지우거나 고치면서 시드를 고정한다.</li>
 <li>사용자가 Godot 에디터를 켜 두는 경우가 많아서 Godot 프로세스를 강제로 종료하지 않는다(에디터가 같이 꺼진다).</li>
@@ -1386,6 +1381,11 @@ docs/          기획서 (.gdignore)
 <td>0.2.05</td>
 <td>2026-11-28</td>
 <td><strong>R3 분대</strong><br>- 병영은 생산만: 패널의 "근접 분대"(3명, 골드 30·식량 15)·"원거리 분대"(2명, 골드 30·식량 10, 궁술 필요), 30초, 병영마다 대기열 3칸, 취소·병영 붕괴 때 전액 환불. 병종은 생산을 시작할 때의 병영 레벨. 지을 때·웨이브마다 무료로 채우던 임시 규칙 삭제<br>- 분대는 비어 있는 가장 작은 번호(1~9). 시작 경비병 2명이 1번. 분대 수 상한 3 + (도시 − 1), 대기열 포함<br>- 숫자키로 고르고 Shift+숫자로 더하기, 0.4초 안에 두 번 누르면 카메라가 분대로. 우클릭은 고른 분대만 이동(고른 분대가 없으면 무시)<br>- 하단 가운데 분대 줄(번호·병종·인원, 고른 분대 밝게)과 충원 버튼(병영 2칸 안, 1명당 근접 10G·식량 5, 원거리 15G·식량 5)<br>- 사격장을 건설 목록에서 숨김, 교역 NPC의 경비병 거래 삭제(거래는 연구포인트 하나)</td>
+</tr>
+<tr>
+<td>0.2.06</td>
+<td>2026-11-28</td>
+<td><strong>R4 개척자와 도시</strong><br>- 도시 패널의 "개척자 생산"(골드·식량 30, 도시가 늘 때마다 +50%, 30초, 도시마다 한 번에 1명, 취소·도시 붕괴 때 환불)<br>- 개척자(체력 20, 속도 1.5, 공격 없음): 좌클릭으로 고르고 우클릭으로 이동, 하단의 "도시 세우기"로 정착(건물 없는 평원·모래, 다른 도시와 4칸, 안 되면 비활성과 이유). 분대 선택과 둘 중 하나만. 해적은 병사와 같이 노린다<br>- 새 도시는 영역을 받고 분대 상한 +1·적 배율 +0.15·기본 골드 +20·연구수치 +1<br>- 왼쪽 도시 목록을 버튼으로(누르면 카메라가 그 도시로), 도시 이름은 세운 순서</td>
 </tr>
 <tr>
 <td>0.2.07</td>

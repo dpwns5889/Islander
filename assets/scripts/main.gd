@@ -11,7 +11,7 @@ var top_panel: PanelContainer
 var res_bar: PanelContainer ## 최상단 고정 자원바 (기획서 7.2)
 var build_panel: PanelContainer
 var side_panel: PanelContainer
-var town_label: Label
+var city_list: VBoxContainer ## 왼쪽 도시 목록: 도시마다 버튼 한 줄, 누르면 카메라가 그 도시로 (기획서 5.3)
 var build_buttons: Dictionary = {}
 var selected_cell: Vector2i = Vector2i(-1, -1) ## 레벨업 패널에 보이는 건물
 var upgrade_panel: PanelContainer
@@ -67,6 +67,9 @@ var squad_buttons: Array[Button] = [] ## 1~9번 분대 아이콘
 var reinforce_button: Button
 var squad_prod_buttons: Dictionary = {} ## "melee"/"ranged" → 병영 패널의 분대 생산 버튼
 var queue_buttons: Array[Button] = [] ## 병영 패널의 대기열(누르면 취소)
+var selected_settler: Unit = null ## 좌클릭으로 고른 개척자. 분대 선택과 둘 중 하나만 (기획서 4장)
+var found_button: Button ## 고른 개척자의 "도시 세우기"
+var settler_button: Button ## 도시 패널의 개척자 생산·취소
 var _tap_n: int = 0 ## 숫자키 두 번 누르기 판정
 var _tap_time: float = -10.0
 ## 카메라는 쿼터뷰 하나다 (기획서 7.2)
@@ -204,8 +207,8 @@ func _build_ui() -> void:
 	layer.add_child(dropdown_panel)
 	# 왼쪽: 본부 레벨, 연구
 	var side: VBoxContainer = VBoxContainer.new()
-	town_label = Label.new()
-	side.add_child(town_label)
+	city_list = VBoxContainer.new()
+	side.add_child(city_list)
 	research_toggle = Button.new()
 	research_toggle.pressed.connect(_toggle_research)
 	side.add_child(research_toggle)
@@ -228,6 +231,9 @@ func _build_ui() -> void:
 	reinforce_button = Button.new()
 	reinforce_button.pressed.connect(reinforce_selected)
 	sbar.add_child(reinforce_button)
+	found_button = Button.new()
+	found_button.pressed.connect(found_with_settler)
+	sbar.add_child(found_button)
 	squad_panel = PanelContainer.new()
 	squad_panel.add_child(sbar)
 	squad_panel.visible = false
@@ -248,6 +254,9 @@ func _build_ui() -> void:
 	repair_button = Button.new()
 	repair_button.pressed.connect(repair_selected)
 	up.add_child(repair_button)
+	settler_button = Button.new() # 도시: 개척자 생산 (기획서 4장)
+	settler_button.pressed.connect(toggle_settler)
+	up.add_child(settler_button)
 	var prod: HBoxContainer = HBoxContainer.new() # 병영: 분대 생산과 대기열 (기획서 6장)
 	for type: String in Balance.SQUADS:
 		var pb: Button = Button.new()
@@ -719,11 +728,73 @@ func toggle_pause() -> void:
 ## 우클릭한 땅으로 병사들이 이동한다 (분대 지휘는 R3) (기획서 6장)
 ## 고른 분대를 클릭한 칸으로 보낸다. 고른 분대가 없으면 아무 일도 없다 (기획서 6장)
 func command_move(c: Vector2i) -> bool:
-	if battle == null or selected_squads.is_empty() or not field.is_walkable(c):
+	if battle == null or not field.is_walkable(c):
 		return false
-	battle.command_move(c, selected_squads)
+	if _settler_alive():
+		selected_settler.order = c
+	elif selected_squads.is_empty():
+		return false
+	else:
+		battle.command_move(c, selected_squads)
 	_ping(c)
 	return true
+
+
+## 개척자를 고른다. 분대 선택은 풀린다 (기획서 4장)
+func select_settler(u: Unit) -> void:
+	selected_settler = u
+	selected_squads.clear()
+	_refresh_hud()
+
+
+func _settler_alive() -> bool:
+	return selected_settler != null and is_instance_valid(selected_settler) and battle.settlers().has(selected_settler)
+
+
+## c 칸에 서 있는 개척자 (없으면 null)
+func _settler_at(c: Vector2i) -> Unit:
+	if battle == null:
+		return null
+	for u in battle.settlers():
+		if field.world_to_cell(u.position) == c:
+			return u
+	return null
+
+
+## 고른 개척자가 서 있는 칸에 도시를 세운다. 개척자는 사라진다 (기획서 4장)
+func found_with_settler() -> bool:
+	if not _settler_alive():
+		return false
+	var c: Vector2i = selected_settler.home # 도착 판정이 0.6칸이라 위치 대신 도착한 칸(집)에 세운다
+	if field.found_block(c) != "":
+		return false
+	field.found_city(c)
+	battle.soldiers.erase(selected_settler)
+	selected_settler.queue_free()
+	selected_settler = null
+	_note = "도시 %s를 세웠습니다! 분대 수 상한 %d" % [_hq_name(c), battle.squad_cap()]
+	_refresh_hud()
+	return true
+
+
+## 고른 도시의 개척자 생산을 넣거나, 생산 중이면 취소한다 (기획서 4장)
+func toggle_settler() -> bool:
+	if battle == null or not field.hqs.has(selected_cell):
+		return false
+	var ok: bool = battle.cancel_settler(selected_cell) or battle.queue_settler(selected_cell)
+	_refresh_hud()
+	return ok
+
+
+func _on_city_button(i: int) -> void:
+	if i < _sorted_hqs().size():
+		focus_city(_sorted_hqs()[i])
+
+
+## 도시 목록을 누르면 카메라가 그 도시로 간다 (기획서 5.3)
+func focus_city(h: Vector2i) -> void:
+	_pan = field.cell_to_world(h) - field.center_world()
+	_update_camera()
 
 
 ## 분대 n을 고른다. add면 고른 분대에 더하고(이미 있으면 뺀다). 0.4초 안에 같은 분대를 다시 고르면 카메라가 그 분대로 간다 (기획서 6장)
@@ -735,6 +806,7 @@ func select_squad(n: int, add: bool = false) -> bool:
 		focus_squad(n)
 	_tap_n = n
 	_tap_time = now
+	selected_settler = null
 	if not add:
 		selected_squads = [n]
 	elif not selected_squads.has(n):
@@ -1022,7 +1094,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if build_id != 0 and (right or key == KEY_ESCAPE):
 		set_build(0)
-	elif battle != null and right and build_id == 0 and not selected_squads.is_empty(): # 우클릭: 고른 분대 이동 (기획서 6장)
+	elif battle != null and right and build_id == 0 and (not selected_squads.is_empty() or _settler_alive()): # 우클릭: 고른 분대·개척자 이동 (기획서 4장, 6장)
 		command_move(_hover_cell())
 	elif right or key == KEY_ESCAPE:
 		select_building(Vector2i(-1, -1))
@@ -1039,6 +1111,8 @@ func click() -> void:
 		found_start(hc)
 	elif build_id != 0:
 		try_build(hc)
+	elif _settler_at(hc) != null: # 개척자를 누르면 고른다 (기획서 4장)
+		select_settler(_settler_at(hc))
 	else:
 		select_building(hc)
 
@@ -1046,14 +1120,13 @@ func click() -> void:
 ## 본부를 위치 순서로 정렬한 목록 (왼쪽 패널 표시용)
 func _sorted_hqs() -> Array[Vector2i]:
 	var out: Array[Vector2i] = []
-	for h in field.hqs:
+	for h in field.hqs: # 세운 순서 (딕셔너리는 넣은 순서를 지킨다)
 		if field.hq_level.has(h):
 			out.append(h)
-	out.sort_custom(func(a: Vector2i, b: Vector2i) -> bool: return a.x < b.x or (a.x == b.x and a.y < b.y))
 	return out
 
 
-## 본부 이름: 위치 순서대로 1, 2, 3 …
+## 도시 이름: 세운 순서대로 1, 2, 3 …
 func _hq_name(h: Vector2i) -> String:
 	return str(_sorted_hqs().find(h) + 1)
 
@@ -1131,6 +1204,24 @@ func _refresh_squads() -> void:
 		var rc: Vector2i = battle.reinforce_cost(target)
 		reinforce_button.text = "충원 %dG · 식량 %d" % [rc.x, rc.y]
 		reinforce_button.disabled = GameState.gold < rc.x or GameState.food < rc.y
+	if selected_settler != null and not _settler_alive():
+		selected_settler = null
+	found_button.visible = selected_settler != null
+	if selected_settler != null:
+		var why: String = field.found_block(selected_settler.home)
+		found_button.text = "개척자: 도시 세우기"
+		found_button.disabled = why != ""
+		found_button.tooltip_text = why
+	var city: bool = upgrade_panel.visible and field.hqs.has(selected_cell)
+	settler_button.visible = city
+	if city:
+		var cost: Vector2i = Balance.settler_cost(field.hqs.size())
+		if battle.settler_jobs.has(selected_cell):
+			settler_button.text = "개척자 생산 중 %d초 (누르면 취소)" % ceili(battle.settler_jobs[selected_cell]["left"])
+			settler_button.disabled = false
+		else:
+			settler_button.text = "개척자 생산 %dG · 식량 %d (%d초)" % [cost.x, cost.y, int(Balance.SETTLER_TIME)]
+			settler_button.disabled = not battle.can_settler(selected_cell)
 	var barracks: bool = upgrade_panel.visible and field.buildings.get(selected_cell, 0) == Balance.BARRACKS
 	for type: String in squad_prod_buttons:
 		var pb: Button = squad_prod_buttons[type]
@@ -1191,13 +1282,24 @@ func _refresh_hud() -> void:
 	speed_button.visible = started
 	if research_panel.visible:
 		_refresh_research()
-	var lines: Array[String] = []
-	for h in _sorted_hqs():
-		var nxt: int = field.next_level_food(h)
-		lines.append("도시 %s Lv %d · 영역 %d칸 · 식량 %d/%d" % [_hq_name(h), field.hq_level[h], field.territory_of[h].size(), field.hq_food[h], nxt])
+	var cities: Array[Vector2i] = _sorted_hqs()
+	while city_list.get_child_count() < cities.size():
+		var cb: Button = Button.new()
+		cb.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var idx: int = city_list.get_child_count()
+		cb.pressed.connect(_on_city_button.bind(idx))
+		city_list.add_child(cb)
+	for i in city_list.get_child_count():
+		var cb: Button = city_list.get_child(i)
+		cb.visible = i < cities.size()
+		if not cb.visible:
+			continue
+		var h: Vector2i = cities[i]
+		cb.text = "도시 %s Lv %d · 영역 %d칸 · 식량 %d/%d" % [_hq_name(h), field.hq_level[h], field.territory_of[h].size(), field.hq_food[h], field.next_level_food(h)]
 		if field.hp_ratio(h) < 1.0:
-			lines[-1] += " · 체력 %d/%d" % [ceili(field.hqs[h]), Balance.HQ_HP]
-	town_label.text = "\n".join(lines)
+			cb.text += " · 체력 %d/%d" % [ceili(field.hqs[h]), Balance.HQ_HP]
+		if battle != null and battle.settler_jobs.has(h):
+			cb.text += " · 개척자 %d초" % ceili(battle.settler_jobs[h]["left"])
 	var all_cost: int = _repair_all_cost()
 	repair_all_button.visible = all_cost > 0
 	repair_all_button.text = "전체 수리 %dG" % all_cost
@@ -1253,5 +1355,5 @@ func _refresh_hud() -> void:
 	elif build_id != 0:
 		s = "%s 건설: 좌클릭 배치 · 우클릭/Esc 취소" % Balance.BUILDINGS[build_id]["name"]
 	else:
-		s = battle.summary() + " · 숫자키: 분대 · 우클릭: 이동"
+		s = battle.summary() + " · 숫자키: 분대 · 개척자 좌클릭 · 우클릭: 이동"
 	status.text = (_note + "\n" if _note != "" else "") + s

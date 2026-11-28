@@ -50,7 +50,7 @@
 - 스크립트 실행 때 `--remote-debug`가 없으면 스크립트 오류가 났을 때 `debug>`에서 멈춘다.
 - 사용자가 Godot 에디터를 켜 둔 경우가 많다. 열린 씬을 고치거나 파일을 옮기기 전에 알린다.
 - 테스트는 gdUnit4 대신 `tests/`의 자체 스크립트다. `mN_check.gd`는 로직 점검, `mN_flow.gd`는 `main.tscn`을 띄워 보는 화면 흐름 점검이고, 끝나면 "점검 실패 N건"을 출력한다. 한 개 실행: `"<Godot 경로>" --headless --path . --remote-debug tcp://127.0.0.1:1 --script tests/m17_check.gd`. 코드를 고친 뒤에는 `tests/`의 모든 `*_check.gd`·`*_flow.gd`를 돌려 0건인지 확인한다(새 스크립트·`class_name`을 추가했으면 먼저 `--headless --path . --import`).
-- 화면 확인: `tests/screenshot.gd`가 `-- <png 경로> <대기 초> <모드>`로 캡처한다(모드 start·menu·npc·defense·prep, 없으면 전투). 에디터를 켠 채로 실행해도 된다.
+- 화면 확인: `tests/screenshot.gd`가 `-- <png 경로> <대기 초> <모드>`로 캡처한다(모드 start·menu·npc·defense·prep·city, 없으면 전투). 에디터를 켠 채로 실행해도 된다.
 - 테스트가 멈춰도 Godot 프로세스를 강제 종료하지 않는다(에디터가 같이 꺼진다). 명령에 `timeout`을 걸어 실행한다.
 
 ## Windows 편집 주의
