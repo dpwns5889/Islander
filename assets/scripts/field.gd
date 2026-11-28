@@ -295,9 +295,15 @@ func refresh_hq_bars(show: bool = true) -> void:
 		var bars: Array = _hq_bars[c]
 		(bars[0] as MeshInstance3D).position = base
 		(bars[1] as MeshInstance3D).position = base
-		(bars[2] as MeshInstance3D).scale = Vector3(maxf(ratio, 0.001), 1.0, 1.0)
-		(bars[2] as MeshInstance3D).position = base + Vector3(-BAR_W * 0.5 * (1.0 - ratio), 0.0, 0.0)
+		# 채움은 메시 안에서 왼쪽 정렬한다: 위치를 월드 X로 밀면 카메라가 돌았을 때 바 밖으로 비껴 나간다
+		var fill: QuadMesh = (bars[2] as MeshInstance3D).mesh
+		fill.size.x = maxf(BAR_W * ratio, 0.001)
+		fill.center_offset.x = -BAR_W * 0.5 * (1.0 - ratio)
+		(bars[2] as MeshInstance3D).position = base
 		(bars[3] as Label3D).text = text
+		# 글자가 바보다 넓으면 줄여서 바 안에 맞춘다 (숫자가 세 자리를 넘으면 넘쳤다)
+		var text_w: float = ThemeDB.fallback_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 64).x
+		(bars[3] as Label3D).pixel_size = minf(0.0033, (BAR_W - 0.06) / text_w)
 		(bars[3] as Label3D).position = base
 		for n: Node3D in bars:
 			n.visible = show # 전투 중에는 숨긴다 (기획서 5.3)
@@ -317,6 +323,7 @@ func _bar_quad(color: Color, w: float, h: float, priority: int) -> MeshInstance3
 	m.no_depth_test = true
 	m.render_priority = priority
 	mi.material_override = m
+	mi.layers = PixelView.LABEL_LAYER # 글자와 같은 원래 해상도 화면에 그려 도트·외곽선에 깨지지 않게 한다 (기획서 7.2)
 	add_child(mi)
 	return mi
 
@@ -501,18 +508,22 @@ func _draw_land() -> void:
 		if not by_kind.has(cells[c]):
 			by_kind[cells[c]] = []
 		by_kind[cells[c]].append(c)
+	# 블록 위에 윗면 판을 살짝 띄워 한 겹 더 덮는다: 칸 경계에 걸린 도트에서 옆면 윗변이 윗면과 깊이가 같아 어두운 점으로 이기는 것을 막는다 (기획서 7.2)
+	var top: PlaneMesh = PlaneMesh.new()
+	top.size = Vector2(1.0, 1.0)
 	for kind in by_kind:
-		var mm: MultiMesh = MultiMesh.new()
-		mm.transform_format = MultiMesh.TRANSFORM_3D
-		mm.mesh = block_mesh
-		mm.instance_count = by_kind[kind].size()
-		for i in mm.instance_count:
-			mm.set_instance_transform(i, Transform3D(Basis(), cell_to_world(by_kind[kind][i]) + Vector3(0, BLOCK_H / 2.0, 0)))
-		var mmi: MultiMeshInstance3D = MultiMeshInstance3D.new()
-		mmi.multimesh = mm
-		mmi.material_override = _mat(color_of(kind), false)
-		add_child(mmi)
-		_land_nodes.append(mmi)
+		for part: Array in [[block_mesh, BLOCK_H / 2.0], [top, BLOCK_H + 0.002]]:
+			var mm: MultiMesh = MultiMesh.new()
+			mm.transform_format = MultiMesh.TRANSFORM_3D
+			mm.mesh = part[0]
+			mm.instance_count = by_kind[kind].size()
+			for i in mm.instance_count:
+				mm.set_instance_transform(i, Transform3D(Basis(), cell_to_world(by_kind[kind][i]) + Vector3(0, part[1], 0)))
+			var mmi: MultiMeshInstance3D = MultiMeshInstance3D.new()
+			mmi.multimesh = mm
+			mmi.material_override = _mat(color_of(kind), false)
+			add_child(mmi)
+			_land_nodes.append(mmi)
 
 
 ## "본부 2/3 · 체력 300·120 · 영구 손실 1" (기획서 5.5)
