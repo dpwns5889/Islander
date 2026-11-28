@@ -56,7 +56,7 @@ pre{background:#f4f4f4;padding:1rem;overflow:auto}code{background:#f4f4f4;paddin
 </nav><main><h1 id="biomedefender">BiomeDefender (가칭) — 기획서</h1>
 <ul>
 <li>최종 수정: 2026-11-28</li>
-<li>게임 버전: 0.2.08</li>
+<li>게임 버전: 0.2.09</li>
 <li>엔진: Godot 4.7.2, GDScript, 3D (로우폴리), PC 마우스 전용</li>
 </ul>
 <h2 id="1">1. 개요</h2>
@@ -922,6 +922,7 @@ docs/          기획서 (.gdignore)
 <li><strong>화면 설정</strong>: 기본 해상도 <strong>1920x1080</strong>, UI는 약 1.67배(<code>stretch/scale</code>)로 키워 1152x648 기준 배치를 유지한다. 실행하면 <strong>전체화면</strong>이고 창 모드 전환 키는 없다(게임 중 종료는 Alt+F4). <strong>스플래시 이미지는 없다</strong>(배경 검정).</li>
 <li>Camera3D 하나, <strong>쿼터뷰 하나</strong>(시작 기울기 35° <code>COMBAT_PITCH</code>, 좌우 회전 45° <code>COMBAT_YAW</code>). 단계 전환은 없다.</li>
 <li><strong>이동</strong>: 마우스를 <strong>화면 가장자리 12픽셀</strong>(논리 화면) 안에 대면 그 방향으로 1초에 화면 세로 크기만큼 옮긴다(<code>EDGE_PAN_MARGIN</code>, <code>EDGE_PAN_SPEED</code>). 화면 중앙은 맵 안까지이고, 창에 초점이 없으면 움직이지 않는다.</li>
+<li><strong>마우스 가두기</strong>: 게임 화면에 있는 동안 마우스는 <strong>창 밖으로 나가지 않는다</strong>(<code>MOUSE_MODE_CONFINED</code>, 여러 모니터에서도 가장자리 이동이 끊기지 않게). Alt+Tab 등으로 창 초점을 잃으면 풀리고, 메인 메뉴로 나가면 해제한다.</li>
 <li><strong>회전</strong>: <strong>좌클릭을 누른 채 끌면</strong> 회전한다. 가로는 좌우 360°, 세로는 기울기(아래로 끌수록 위에서 본다, 35~90°). 감도는 논리 화면 1픽셀당 0.3°(<code>CAM_ROTATE_SENS</code>). 누른 자리에서 <strong>6픽셀</strong>(<code>CAM_DRAG_THRESHOLD</code>) 넘게 끌면 회전이고, 그보다 짧으면 놓을 때 선택·건설 클릭이 된다.</li>
 <li><strong>확대</strong>: 휠, 중심은 화면 중앙. 배율 0.4~3배(배율 1에서 세로 13.5칸)이고, 시작 위치를 고를 때는 3배(가장 멀리)에서 시작해 첫 도시를 세우면 1배로 그 도시를 비춘다. 미니맵(R5)을 클릭하면 그곳으로 간다.</li>
 <li><strong>도트 화면</strong>: 3D를 낮은 해상도로 그려 정수 배로 확대해 도트처럼 보이게 한다(<code>PixelView</code>, 셰이더는 <code>assets/shaders/</code>).</li>
@@ -1392,6 +1393,11 @@ docs/          기획서 (.gdignore)
 <td>0.2.08</td>
 <td>2026-11-28</td>
 <td><strong>R5 안개·유적지·해적 방향·미니맵</strong><br>- 첫 도시를 세우면 안개가 덮이고, 도시 영역과 유닛(분대·개척자) 주변 4칸을 한 번 밝히면 계속 보인다. 밝히지 않은 곳의 해적·해적선·유적지는 숨긴다<br>- 유적지 12곳(첫 도시 영역 밖 평원, 밝은 노란 표시): 유닛이 밟으면 골드 60~100 또는 30% 확률로 연구포인트 +1, 그 칸엔 건물을 못 짓는다<br>- 웨이브마다 <code>run_seed</code>·웨이브 번호로 목표 도시를 정하고, 해적선은 그 도시에서 가장 가까운 가장자리에서 나온다. 예고에 "n번 도시 방향"<br>- 오른쪽 아래 미니맵(지형·안개·도시·분대·해적, 클릭하면 카메라 이동)<br>- <code>tests/m4_check.gd</code>는 해적선이 섬 B 쪽에서 오도록 목표를 지정</td>
+</tr>
+<tr>
+<td>0.2.09</td>
+<td>2026-11-28</td>
+<td><strong>마우스 가두기</strong><br>- 게임 화면에 있는 동안 마우스가 창 밖으로 나가지 않는다(<code>MOUSE_MODE_CONFINED</code>). 창 초점을 잃으면 풀리고, 메인 메뉴로 나가면 해제</td>
 </tr>
 </tbody>
 </table></main></body></html>
